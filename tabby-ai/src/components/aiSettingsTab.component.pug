@@ -1,0 +1,31 @@
+h3.mb-3(translate) AI CLI
+
+.form-line
+    .header
+        .title(translate) Detected CLIs
+        .description(translate) Scan the machine for installed AI coding CLIs
+    button.btn.btn-secondary((click)='rescan()', [disabled]='scanner.scanning$ | async')
+        span(*ngIf='!(scanner.scanning$ | async)', translate) Rescan
+        span(*ngIf='scanner.scanning$ | async', translate) Scanning…
+
+.form-line(*ngFor='let entry of registry')
+    .header
+        .title {{entry.name}}
+        .description(*ngIf='isDetected(entry)')
+            span(translate) Detected
+            span(*ngIf='versionFor(entry)')  · {{versionFor(entry)}}
+        .description(*ngIf='!isDetected(entry)', translate) Not found
+    toggle(
+        [ngModel]='isEnabled(entry)',
+        (ngModelChange)='setEnabled(entry, $event)',
+    )
+
+.form-line
+    .header
+        .title(translate) Additional search paths
+        .description(translate) One directory per line, scanned besides PATH
+    textarea.form-control(
+        rows='3',
+        [(ngModel)]='extraPathsText',
+        (blur)='saveExtraPaths()',
+    )

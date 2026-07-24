@@ -2579,3 +2579,67 @@ msgstr "缩小"
 msgctxt "[Dynamic] port forwarding"
 msgid "id.port-forwarding.dynamic"
 msgstr "动态端口转发"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:44
+msgid "Home"
+msgstr "主页"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:3
+msgid "Sessions"
+msgstr "会话"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:8
+msgid "Untracked"
+msgstr "未监听"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:22
+msgid "Launch only · no event monitoring yet"
+msgstr "仅启动 · 暂无事件监听"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:25
+msgid "No running AI sessions — pick a CLI below to start one."
+msgstr "没有运行中的 AI 会话 —— 从下方选择一个 CLI 开始。"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:28
+msgid "Available CLIs"
+msgstr "可用 CLI"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:31
+msgid "Rescan"
+msgstr "重新扫描"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:32
+msgid "Scanning…"
+msgstr "扫描中…"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:47
+msgid "No AI CLIs found on this machine."
+msgstr "本机未发现 AI CLI。"
+
+#: tabby-ai/src/hotkeys.ts:14
+msgid "Open the AI dashboard"
+msgstr "打开 AI 仪表盘"
+
+#: tabby-ai/src/settings.ts:12
+msgid "AI CLI"
+msgstr "AI CLI"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:5
+msgid "Detected CLIs"
+msgstr "已发现的 CLI"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:6
+msgid "Scan the machine for installed AI coding CLIs"
+msgstr "扫描本机已安装的 AI 编程 CLI"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:15
+msgid "Detected"
+msgstr "已发现"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:26
+msgid "Additional search paths"
+msgstr "额外搜索路径"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:27
+msgid "One directory per line, scanned besides PATH"
+msgstr "每行一个目录，在 PATH 之外额外扫描"
