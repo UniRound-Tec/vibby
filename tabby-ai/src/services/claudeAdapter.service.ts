@@ -34,6 +34,7 @@ const EXIT_GRACE_MS = 1500
 @Injectable({ providedIn: 'root' })
 export class ClaudeAdapterService {
     private sessionIds = new WeakMap<TerminalTabComponent, string>()
+    private panes = new Map<string, TerminalTabComponent>()
     private armed = new WeakSet<TerminalTabComponent>()
     private watchedSplits = new WeakSet<SplitTabComponent>()
     private injectDir = path.join(os.tmpdir(), INJECT_DIR_NAME)
@@ -62,6 +63,11 @@ export class ClaudeAdapterService {
     /** Dashboard join: which bus session does this pane report as */
     sessionIdForPane (pane: BaseTabComponent): string | null {
         return pane instanceof TerminalTabComponent ? this.sessionIds.get(pane) ?? null : null
+    }
+
+    /** Reverse lookup for notification click-through */
+    paneForSessionId (sessionId: string): TerminalTabComponent | null {
+        return this.panes.get(sessionId) ?? null
     }
 
     private visit (tab: BaseTabComponent): void {
@@ -123,6 +129,7 @@ export class ClaudeAdapterService {
         tab.profile.options.args = args
 
         this.sessionIds.set(tab, sessionId)
+        this.panes.set(sessionId, tab)
 
         tab.sessionChanged$.subscribe(session => {
             console.debug(`[tabby-ai] adapter [${sessionId.slice(0, 8)}] sessionChanged: ${session ? 'live' : 'null'}`)
@@ -135,6 +142,7 @@ export class ClaudeAdapterService {
             try {
                 fs.unlinkSync(settingsPath)
             } catch { /* already gone */ }
+            this.panes.delete(sessionId)
             this.zone.run(() => this.bus.dropSession(sessionId))
         })
     }

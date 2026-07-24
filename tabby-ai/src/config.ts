@@ -12,6 +12,10 @@ export class AiConfigProvider extends ConfigProvider {
                 extraPaths: [],
                 hidden: [],
             },
+            events: {
+                notifications: true,
+                notifyOnIdle: false,
+            },
         },
         hotkeys: {
             'toggle-dashboard': ['Ctrl-Shift-H'],

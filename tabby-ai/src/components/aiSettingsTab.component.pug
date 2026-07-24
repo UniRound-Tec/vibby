@@ -29,3 +29,23 @@ h3.mb-3(translate) AI CLI
         [(ngModel)]='extraPathsText',
         (blur)='saveExtraPaths()',
     )
+
+h3.mt-4.mb-3(translate) Notifications
+
+.form-line
+    .header
+        .title(translate) Attention notifications
+        .description(translate) Desktop notification when a session needs you or fails
+    toggle(
+        [(ngModel)]='config.store.aiCli.events.notifications',
+        (ngModelChange)='config.save()',
+    )
+
+.form-line
+    .header
+        .title(translate) Also notify when a turn completes
+        .description(translate) Quiet notification on every finished turn
+    toggle(
+        [(ngModel)]='config.store.aiCli.events.notifyOnIdle',
+        (ngModelChange)='config.save()',
+    )

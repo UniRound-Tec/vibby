@@ -14,6 +14,7 @@ import { CliScannerService } from './services/cliScanner.service'
 import { DashboardService } from './services/dashboard.service'
 import { HookIngressService } from './services/hookIngress.service'
 import { ClaudeAdapterService } from './services/claudeAdapter.service'
+import { AiAttentionService } from './services/attention.service'
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
 
@@ -44,12 +45,14 @@ export default class AiModule {
         hotkeys: HotkeysService,
         ingress: HookIngressService,
         claudeAdapter: ClaudeAdapterService,
+        attention: AiAttentionService,
     ) {
         scanner.ensureScanned()
         ingress.start().then(() => {
             console.debug(`[tabby-ai] ingress endpoint template: ${ingress.endpointFor('SESSION')}`)
         }).catch(() => null)
         claudeAdapter.activate()
+        attention.activate()
         this.injectMiniTabStyles()
 
         hotkeys.hotkey$.subscribe(hotkey => {
