@@ -7,4 +7,5 @@ import config from '../webpack.plugin.config.mjs'
 export default () => config({
     name: 'ai',
     dirname: __dirname,
+    externals: ['http', 'crypto'],
 })

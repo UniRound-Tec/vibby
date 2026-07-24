@@ -12,6 +12,7 @@ import { AiHotkeyProvider } from './hotkeys'
 import { AiSettingsTabProvider } from './settings'
 import { CliScannerService } from './services/cliScanner.service'
 import { DashboardService } from './services/dashboard.service'
+import { HookIngressService } from './services/hookIngress.service'
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
 
@@ -40,8 +41,12 @@ export default class AiModule {
         config: ConfigService,
         dashboard: DashboardService,
         hotkeys: HotkeysService,
+        ingress: HookIngressService,
     ) {
         scanner.ensureScanned()
+        ingress.start().then(() => {
+            console.debug(`[tabby-ai] ingress endpoint template: ${ingress.endpointFor('SESSION')}`)
+        }).catch(() => null)
         this.injectMiniTabStyles()
 
         hotkeys.hotkey$.subscribe(hotkey => {
