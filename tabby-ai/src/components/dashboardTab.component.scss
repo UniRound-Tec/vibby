@@ -1,6 +1,9 @@
+// tab-body inserts tabs dynamically, so its `>*` flex rule can't reach us —
+// each tab component must claim its own space (same as settingsTab does)
 :host {
     display: block;
-    height: 100%;
+    flex: auto;
+    min-width: 0;
     overflow-y: auto;
 }
 
