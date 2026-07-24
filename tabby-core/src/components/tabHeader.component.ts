@@ -25,6 +25,8 @@ export class TabHeaderComponent extends BaseComponent {
     @Input() progress: number|null
     Platform = Platform
 
+    @HostBinding('class.mini') get miniHeader (): boolean { return this.tab['miniHeader'] ?? false }
+
     constructor (
         public app: AppService,
         public config: ConfigService,

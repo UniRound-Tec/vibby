@@ -20,6 +20,9 @@ export interface AiSessionRow {
     styleUrls: ['./dashboardTab.component.scss'],
 })
 export class DashboardTabComponent extends BaseTabComponent {
+    /** Renders the tab header as a compact icon-only tab (tabHeader.component.ts hook) */
+    miniHeader = true
+
     rows: AiSessionRow[] = []
     clis: DetectedCli[] = []
     scanning = false

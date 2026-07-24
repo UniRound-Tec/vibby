@@ -2,13 +2,12 @@
 import { NgModule } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
-import TabbyCorePlugin, { AppService, CLIHandler, ConfigProvider, ConfigService, HotkeyProvider, ProfileProvider, ToolbarButtonProvider } from 'tabby-core'
+import TabbyCorePlugin, { AppService, CLIHandler, ConfigProvider, ConfigService, HotkeyProvider, HotkeysService, ProfileProvider } from 'tabby-core'
 import { SettingsTabProvider } from 'tabby-settings'
 
 import { AiConfigProvider } from './config'
 import { AiCliProfileProvider } from './profiles'
 import { OpenDashboardCLIHandler } from './cli'
-import { ButtonProvider } from './buttonProvider'
 import { AiHotkeyProvider } from './hotkeys'
 import { AiSettingsTabProvider } from './settings'
 import { CliScannerService } from './services/cliScanner.service'
@@ -26,7 +25,6 @@ import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
         { provide: ConfigProvider, useClass: AiConfigProvider, multi: true },
         { provide: ProfileProvider, useClass: AiCliProfileProvider, multi: true },
         { provide: CLIHandler, useClass: OpenDashboardCLIHandler, multi: true },
-        { provide: ToolbarButtonProvider, useClass: ButtonProvider, multi: true },
         { provide: HotkeyProvider, useClass: AiHotkeyProvider, multi: true },
         { provide: SettingsTabProvider, useClass: AiSettingsTabProvider, multi: true },
     ],
@@ -41,8 +39,16 @@ export default class AiModule {
         app: AppService,
         config: ConfigService,
         dashboard: DashboardService,
+        hotkeys: HotkeysService,
     ) {
         scanner.ensureScanned()
+        this.injectMiniTabStyles()
+
+        hotkeys.hotkey$.subscribe(hotkey => {
+            if (hotkey === 'toggle-dashboard') {
+                dashboard.open()
+            }
+        })
 
         app.ready$.subscribe(() => {
             app.tabsChanged$.subscribe(() => {
@@ -51,6 +57,40 @@ export default class AiModule {
                 }
             })
         })
+    }
+
+    /** Compact icon-only header for the pinned dashboard tab (targets tab-header.mini) */
+    private injectMiniTabStyles (): void {
+        const homeIcon: string = require('./icons/home.svg')
+        const mask = `url("data:image/svg+xml,${encodeURIComponent(homeIcon)}") center / contain no-repeat`
+        const style = document.createElement('style')
+        style.textContent = `
+            tab-header.mini {
+                width: 52px !important;
+                flex: 0 0 52px !important;
+                min-width: 52px !important;
+            }
+            tab-header.mini .index,
+            tab-header.mini .pin-indicator,
+            tab-header.mini .buttons,
+            tab-header.mini .name { display: none !important; }
+            tab-header.mini::after {
+                content: '';
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: 14px;
+                height: 14px;
+                transform: translate(-50%, -50%);
+                background: currentColor;
+                opacity: .6;
+                -webkit-mask: ${mask};
+                mask: ${mask};
+                pointer-events: none;
+            }
+            tab-header.mini.active::after { opacity: 1; }
+        `
+        document.head.appendChild(style)
     }
 }
 

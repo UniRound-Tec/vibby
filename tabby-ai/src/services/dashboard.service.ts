@@ -15,7 +15,8 @@ export class DashboardService {
         if (existing) {
             this.app.selectTab(existing)
         } else {
-            this.app.openNewTabRaw({ type: DashboardTabComponent })
+            const tab = this.app.openNewTabRaw({ type: DashboardTabComponent })
+            this.app.pinTab(tab)
         }
     }
 }

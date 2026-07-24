@@ -48,7 +48,7 @@
 
 .srow {
     display: grid;
-    grid-template-columns: 96px 240px 1fr;
+    grid-template-columns: 96px minmax(0, 240px) 1fr;
     align-items: center;
     gap: 18px;
     padding: 15px 10px 15px 4px;
@@ -203,4 +203,44 @@
     font-family: var(--ai-mono);
     font-size: 12.5px;
     opacity: .5;
+}
+
+// ---- responsive ----
+
+@media (max-width: 900px) {
+    .ai-dashboard {
+        padding: 20px 18px;
+    }
+
+    .srow {
+        grid-template-columns: 84px minmax(0, 1fr);
+        gap: 12px;
+
+        .caption { display: none; }
+    }
+
+    .board-head .counters {
+        flex-wrap: wrap;
+        gap: 16px;
+
+        .counter .n { font-size: 22px; }
+    }
+}
+
+@media (max-width: 560px) {
+    .ai-dashboard {
+        padding: 14px 12px;
+    }
+
+    .srow {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 12px 6px;
+
+        .stword { font-size: 11px; }
+    }
+
+    .chip {
+        flex: 1 1 100%;
+    }
 }
