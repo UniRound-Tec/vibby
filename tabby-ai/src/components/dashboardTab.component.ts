@@ -1,16 +1,33 @@
 import { Component, ElementRef, Injector } from '@angular/core'
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser'
+import { interval } from 'rxjs'
 import { BaseTabComponent, AppService, ConfigService, ProfilesService, SplitTabComponent, TranslateService } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
 import { DetectedCli } from '../api'
+import { AiEvent, AiSessionSnapshot } from '../events'
 import { AI_CLI_REGISTRY } from '../registry'
 import { CliScannerService } from '../services/cliScanner.service'
+import { AiEventBusService } from '../services/eventBus.service'
+import { ClaudeAdapterService } from '../services/claudeAdapter.service'
+
+export type AiRowState = 'needs-you' | 'working' | 'idle' | 'error' | 'untracked'
 
 export interface AiSessionRow {
     topTab: BaseTabComponent
     pane: TerminalTabComponent
     kind: string|null
+    sessionId: string|null
+    snapshot: AiSessionSnapshot|null
+    state: AiRowState
+}
+
+const STATE_RANK: Record<AiRowState, number> = {
+    'needs-you': 0,
+    working: 1,
+    idle: 2,
+    error: 3,
+    untracked: 4,
 }
 
 /** @hidden */
@@ -24,9 +41,12 @@ export class DashboardTabComponent extends BaseTabComponent {
     miniHeader = true
 
     rows: AiSessionRow[] = []
+    counters: { state: AiRowState, count: number }[] = []
     clis: DetectedCli[] = []
     scanning = false
+    now = Date.now()
 
+    private snapshots: ReadonlyMap<string, AiSessionSnapshot> = new Map()
     private watchedSplits = new Set<SplitTabComponent>()
     private iconCache = new Map<string, SafeHtml>()
 
@@ -36,16 +56,23 @@ export class DashboardTabComponent extends BaseTabComponent {
         private configService: ConfigService,
         private profilesService: ProfilesService,
         private scanner: CliScannerService,
+        private bus: AiEventBusService,
+        private adapter: ClaudeAdapterService,
         private sanitizer: DomSanitizer,
         private host: ElementRef,
-        translate: TranslateService,
+        private translate: TranslateService,
     ) {
         super(injector)
         this.setTitle(translate.instant('Home'))
         this.subscribeUntilDestroyed(this.app.tabsChanged$, () => this.refreshRows())
+        this.subscribeUntilDestroyed(this.bus.snapshots$, snapshots => {
+            this.snapshots = snapshots
+            this.refreshRows()
+        })
         this.subscribeUntilDestroyed(this.scanner.scanResults$, clis => this.clis = clis)
         this.subscribeUntilDestroyed(this.scanner.scanning$, scanning => this.scanning = scanning)
         this.subscribeUntilDestroyed(this.configService.changed$, () => this.applyThemeVars())
+        this.subscribeUntilDestroyed(interval(5000), () => this.now = Date.now())
         this.refreshRows()
         this.scanner.ensureScanned()
     }
@@ -65,15 +92,70 @@ export class DashboardTabComponent extends BaseTabComponent {
             }
             for (const pane of panes) {
                 if (pane instanceof TerminalTabComponent && pane.profile?.type === 'ai-cli') {
+                    const sessionId = this.adapter.sessionIdForPane(pane)
+                    const snapshot = sessionId ? this.snapshots.get(sessionId) ?? null : null
                     rows.push({
                         topTab,
                         pane,
                         kind: pane.profile.options?.['aiCli']?.kind ?? null,
+                        sessionId,
+                        snapshot,
+                        state: snapshot?.state ?? 'untracked',
                     })
                 }
             }
         }
+        rows.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state])
         this.rows = rows
+
+        const counts = new Map<AiRowState, number>()
+        for (const row of rows) {
+            counts.set(row.state, (counts.get(row.state) ?? 0) + 1)
+        }
+        this.counters = [...counts.entries()]
+            .sort((a, b) => STATE_RANK[a[0]] - STATE_RANK[b[0]])
+            .map(([state, count]) => ({ state, count }))
+    }
+
+    stateLabel (state: AiRowState): string {
+        switch (state) {
+            case 'needs-you': return this.translate.instant('Needs you')
+            case 'working': return this.translate.instant('Working')
+            case 'idle': return this.translate.instant('Idle')
+            case 'error': return this.translate.instant('Error')
+            case 'untracked': return this.translate.instant('Untracked')
+        }
+    }
+
+    captionFor (row: AiSessionRow): string {
+        if (!row.snapshot) {
+            return this.translate.instant('Launch only · no event monitoring yet')
+        }
+        return row.snapshot.lastEvent?.summary ?? ''
+    }
+
+    durationFor (row: AiSessionRow): string {
+        if (!row.snapshot) {
+            return ''
+        }
+        const seconds = Math.max(0, Math.floor((this.now - row.snapshot.since) / 1000))
+        if (seconds < 60) {
+            return `${seconds}s`
+        }
+        const minutes = Math.floor(seconds / 60)
+        if (minutes < 60) {
+            return `${minutes}m ${seconds % 60}s`
+        }
+        return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+    }
+
+    feedFor (row: AiSessionRow): AiEvent[] {
+        return row.sessionId ? this.bus.feedFor(row.sessionId) : []
+    }
+
+    feedTime (event: AiEvent): string {
+        const d = new Date(event.ts)
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     }
 
     focusRow (row: AiSessionRow): void {

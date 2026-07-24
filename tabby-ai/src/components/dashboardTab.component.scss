@@ -30,7 +30,7 @@
     .counters {
         display: flex;
         align-items: baseline;
-        gap: 26px;
+        gap: 18px;
         font-family: var(--ai-mono);
 
         .counter {
@@ -38,9 +38,17 @@
             align-items: baseline;
             gap: 8px;
 
-            .n { font-size: 28px; font-weight: 700; line-height: 1; opacity: .5; }
+            .n { font-size: 28px; font-weight: 700; line-height: 1; }
             .l { font-size: 12px; opacity: .6; }
+
+            &.needs-you .n { color: var(--ai-yellow); }
+            &.working .n { color: var(--ai-blue); }
+            &.idle .n { color: var(--ai-green); }
+            &.error .n { color: var(--ai-red); }
+            &.untracked .n { opacity: .35; }
         }
+
+        .sep { font-size: 20px; opacity: .25; }
     }
 }
 
@@ -50,8 +58,9 @@
 }
 
 .srow {
+    position: relative;
     display: grid;
-    grid-template-columns: 96px minmax(0, 240px) 1fr;
+    grid-template-columns: 96px minmax(0, 240px) 1fr 84px;
     align-items: center;
     gap: 18px;
     padding: 15px 10px 15px 4px;
@@ -64,9 +73,69 @@
     }
 
     .stword {
-        font-size: 13px;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: .3em;
+    }
+
+    // the only animated element on the whole board (design §2.5)
+    &.needs-you {
+        background: linear-gradient(90deg, color-mix(in srgb, var(--ai-yellow) 8%, transparent), transparent 60%);
+
+        .stword {
+            color: var(--ai-yellow);
+            animation: ai-word-breathe 2.2s ease-in-out infinite;
+        }
+
+        &:hover, &:focus-visible {
+            background: linear-gradient(90deg, color-mix(in srgb, var(--ai-yellow) 12%, transparent), rgba(128, 128, 128, .12) 60%);
+        }
+    }
+
+    &.working .stword { color: var(--ai-blue); }
+    &.idle .stword { color: var(--ai-green); }
+    &.error .stword { color: var(--ai-red); }
+
+    &.untracked .stword {
+        font-size: 12px;
+        font-weight: 400;
         letter-spacing: .12em;
         opacity: .45;
+    }
+
+    .dur {
+        font-family: var(--ai-mono);
+        font-size: 12px;
+        opacity: .45;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    .feed {
+        display: none;
+        position: absolute;
+        left: 96px;
+        right: 84px;
+        top: calc(100% - 4px);
+        z-index: 10;
+        background: var(--body-bg, #1a1a1a);
+        border: 1px solid rgba(128, 128, 128, .4);
+        border-radius: 6px;
+        padding: 10px 16px;
+        font-family: var(--ai-mono);
+        font-size: 12px;
+        line-height: 2;
+        opacity: .95;
+        box-shadow: 0 14px 34px rgba(0, 0, 0, .35);
+
+        .t {
+            opacity: .45;
+            margin-right: 12px;
+        }
+    }
+
+    &:hover .feed, &:focus-visible .feed {
+        display: block;
     }
 
     .who {
@@ -208,6 +277,11 @@
     opacity: .5;
 }
 
+@keyframes ai-word-breathe {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .45; }
+}
+
 // ---- responsive ----
 
 @media (max-width: 900px) {
@@ -216,10 +290,11 @@
     }
 
     .srow {
-        grid-template-columns: 84px minmax(0, 1fr);
+        grid-template-columns: 84px minmax(0, 1fr) 64px;
         gap: 12px;
 
         .caption { display: none; }
+        .feed { left: 0; right: 0; }
     }
 
     .board-head .counters {
@@ -240,7 +315,9 @@
         gap: 4px;
         padding: 12px 6px;
 
-        .stword { font-size: 11px; }
+        .stword { font-size: 12px; }
+        .dur { display: none; }
+        .feed { display: none !important; }
     }
 
     .chip {

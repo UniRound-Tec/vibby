@@ -2,24 +2,32 @@
     .board-head
         .eyebrow(translate) Sessions
         .counters(*ngIf='rows.length')
-            .counter
-                .n {{rows.length}}
-                .l(translate) Untracked
+            ng-container(*ngFor='let c of counters; let last = last')
+                .counter([ngClass]='c.state')
+                    .n {{c.count}}
+                    .l {{stateLabel(c.state)}}
+                .sep(*ngIf='!last') /
 
     .board(*ngIf='rows.length')
         .srow(
             *ngFor='let row of rows',
+            [ngClass]='row.state',
             (click)='focusRow(row)',
             tabindex='0',
             (keyup.enter)='focusRow(row)',
         )
-            .stword(translate) Untracked
+            .stword {{stateLabel(row.state)}}
             .who
                 .cli-tag
                     .cli-icon(*ngIf='iconForKind(row.kind)', [innerHTML]='iconForKind(row.kind)')
                     span {{row.kind}}
                 .name {{row.pane.title}}
-            .caption(translate) Launch only · no event monitoring yet
+            .caption {{captionFor(row)}}
+            .dur {{durationFor(row)}}
+            .feed(*ngIf='feedFor(row).length')
+                .feed-line(*ngFor='let event of feedFor(row)')
+                    span.t {{feedTime(event)}}
+                    span {{event.summary}}
 
     .empty-board(*ngIf='!rows.length')
         span(translate) No running AI sessions — pick a CLI below to start one.
