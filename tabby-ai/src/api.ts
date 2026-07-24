@@ -25,6 +25,12 @@ export interface AiCliRegistryEntry {
     docsUrl?: string
 }
 
+export interface AiCliMetadata {
+    /** Registry entry id, e.g. 'claude-code' */
+    kind: string | null
+    version: string | null
+}
+
 export interface DetectedCli {
     entry: AiCliRegistryEntry
 

@@ -21,6 +21,8 @@ export class CliScannerService {
     private results = new BehaviorSubject<DetectedCli[]>([])
     private scanning = new BehaviorSubject<boolean>(false)
     private npmGlobalBin: string|null|undefined = undefined
+    private currentScan: Promise<DetectedCli[]>|null = null
+    private firstScan: Promise<DetectedCli[]>|null = null
     private logger: Logger
 
     constructor (
@@ -30,10 +32,23 @@ export class CliScannerService {
         this.logger = log.create('aiCliScanner')
     }
 
+    /** Resolves once the first scan has completed; starts one if needed */
+    ensureScanned (): Promise<DetectedCli[]> {
+        return this.firstScan ?? this.scan()
+    }
+
     async scan (): Promise<DetectedCli[]> {
-        if (this.scanning.value) {
-            return this.results.value
+        if (this.currentScan) {
+            return this.currentScan
         }
+        this.currentScan = this.performScan().finally(() => {
+            this.currentScan = null
+        })
+        this.firstScan ??= this.currentScan
+        return this.currentScan
+    }
+
+    private async performScan (): Promise<DetectedCli[]> {
         await this.config.ready$.toPromise()
         this.scanning.next(true)
         try {
