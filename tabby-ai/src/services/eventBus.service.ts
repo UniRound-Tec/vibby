@@ -44,6 +44,7 @@ export class AiEventBusService {
         feed.push(event)
         this.feeds.set(event.sessionId, feed.slice(-FEED_LENGTH))
 
+        console.debug(`[tabby-ai] event [${event.sessionId.slice(0, 8)}] ${event.kind}: ${event.summary} → ${next.state}`)
         this.events.next(event)
         if (isAttentionTransition(prev?.state ?? null, next.state)) {
             this.attention.next({

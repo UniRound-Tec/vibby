@@ -95,7 +95,6 @@ export class HookIngressService {
             if (event) {
                 // http callbacks run outside Angular — re-enter for change detection
                 this.zone.run(() => this.bus.publish(event))
-                console.debug(`[tabby-ai] hook event ${event.kind}: ${event.summary}`)
             }
         })
     }

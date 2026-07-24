@@ -112,6 +112,13 @@ export interface AiSessionSnapshot {
 - 不过则停：若 `--settings` 合并行为与预期不符（覆盖用户 hooks / 需交互确认），备选方案见 §7 风险表，改完再继续。
 - Commit：`feat(ai): claude code hooks adapter`。
 
+#### 闸门记录（2026-07-24 实施后回写）
+
+- **注入缝定稿**：`app.tabOpened$` 同步发射（addTabRaw 内），PTY spawn 迟至 `onFrontendReady`——tabOpened 订阅者改 `tab.profile.options` 必然赶在 spawn 前；新开/恢复/复制三条路径统一覆盖，`--settings` 不进 profile 存储。恢复 token 确实会带走注入后的 args（getRecoveryToken 存 tab.profile），幂等剥离因此是必需项。
+- **V4 通过**（真实 claude v2.1.218 全链路）：session-started→ready；prompt-submitted→working；PreToolUse 字幕滚动（`bash: git status`、`edit: <file>`）；permission-request（"Claude needs your permission"）与 60s 空闲 notification 双双验证 needs-you；Stop→idle；`/exit`→SessionEnd（reason=prompt_input_exit）状态定格。`--settings` 与用户 settings 为叠加合并，注入文件只含 hooks 键、不碰用户配置。
+- **V5 通过（含一次真实失败与修复）**：恢复的 split 子 pane **不发 `tabAdded$`**（recoverContainer 直调 attachTabView，绕过 onAfterTabAdded）——首测 stale `--settings` 复活。修复：visit split 时等 `initialized$` 后全量 sweep + `tabsChanged$` 兜底 sweep（armed WeakSet 保幂等）。复测：两个 claude 进程命令行各恰好 1 个 `--settings`，全指向当前 pid 的新文件；双会话 sessionId 独立不串线。恢复 profile 是 ConfigProxy，实证可写。
+- **error 路径降级为尽力而为（已知限制）**：Windows ConPTY 下外部硬杀 claude 时，若其子进程（MCP server 等）仍挂在 console 上，pty 不报 exit → `destroyed$` 不发射 → error 状态无法翻转（上游 Tabby 对普通 shell 行为相同）。干净退出（SessionEnd 先行）与 tab 关闭清理均正确。§8-4 验收按此限制解读：kill 后行保持最后已知状态，不误报。macOS/Linux 无此问题（SIGKILL 即关 pty）。
+
 ### WP3 Dashboard 实况化
 - 会话行接 snapshots$（状态字/排序/时长）、字幕列接 lastEvent、hover feed 浮层、计数器分态、needs-you 动效。行数据源从"扫 tabs"改为"扫 tabs ⋈ snapshots"（无 snapshot 的 ai-cli 行 = 未监听态，未监听 CLI 的既有展示不变）。
 - 完成判据：与 demo V3 满载态逐项对照（状态色、排序、动效唯一性）；两会话并发时字幕各自滚动；会话关闭行消失、计数即时更新。
