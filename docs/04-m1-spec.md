@@ -184,6 +184,27 @@ appRoot/StartPage 仍零改动（§7 出场机制旁路）。~~tabby-local autoO
 8. 中英 locale 切换无硬编码汉字；zh-CN.po 含全部新词条；
 9. `yarn build` 全量通过；与 upstream/master 合并演练冲突面仅限 §9 清单。
 
+## 10.5 实现完成记录（2026-07-24，WP0–WP5 已提交）
+
+实测结论与偏差：
+
+- **V1 通过**：node-pty 的 `argsToCommandLine` 会给含空格参数自动加引号，数组形式 `['/c', shimPath, ...]` 对空格路径、`(x86)` 括号路径、真实 npm `claude.cmd` 全部工作。（排障记录：早期三轮"失败"均为测试脚本反斜杠被转义损坏产生的换页符假警报，非引号问题。）
+- **V2 静态通过**：恢复链路 `recoveryProvider → getConfigProxyForProfile → providerForProfile('ai-cli') → 我们的 configDefaults`，`aiCli` 元数据键已声明故可保全；动态回归见下方清单。
+- 扫描器需 `await config.ready$`（模块构造早于配置加载，已修）。
+- cliChip 未拆独立组件——两处场景同属 dashboard 模板，内联即可，少一层抽象。
+- dev 模式下 electron argv 偏移使 `tabby profile <name>` 二次实例测试无效（会开新窗口），chip 启动链路依赖上游 `launchProfile`（与选择器同路径）。
+- 本机验证环境仅装有 claude-code（原生 exe）与 opencode；`.cmd` shim 路线经 node-pty 直测验证。
+- 界面已在浅色主题 + zh-CN/en 双语言下截图验证。
+
+**待人工回归清单**（需要 UI 交互，交付前过一遍）：
+
+- [ ] 点击 Claude Code chip → 打开运行中的 claude 会话，Dashboard 出现对应行，点行跳转
+- [ ] 会话 split 后行数与聚焦正确
+- [ ] 关闭全部标签 → Dashboard 自动重开；`Ctrl-Shift-H` 呼出
+- [ ] 重启后恢复的 AI 会话保留 `aiCli` 元数据（V2 动态部分）
+- [ ] 设置页：重扫/隐藏开关/额外路径三个交互
+- [ ] `tabby <路径>` 与二次实例行为不受影响（打包版验证）
+
 ## 11. 实现顺序
 
 1. 包骨架 + 构建接入（空模块加载成功）
