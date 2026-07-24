@@ -1,0 +1,206 @@
+:host {
+    display: block;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.ai-dashboard {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 30px 36px;
+}
+
+// theme-agnostic tints derived from currentColor / gray overlays;
+// ANSI accents arrive via --ai-* custom properties set from the terminal color scheme
+.board-head {
+    margin-bottom: 22px;
+
+    .eyebrow {
+        font-family: var(--ai-mono);
+        font-size: 11px;
+        letter-spacing: .22em;
+        text-transform: uppercase;
+        opacity: .45;
+        margin-bottom: 10px;
+    }
+
+    .counters {
+        display: flex;
+        align-items: baseline;
+        gap: 26px;
+        font-family: var(--ai-mono);
+
+        .counter {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+
+            .n { font-size: 28px; font-weight: 700; line-height: 1; opacity: .5; }
+            .l { font-size: 12px; opacity: .6; }
+        }
+    }
+}
+
+.board {
+    border-top: 1px solid rgba(128, 128, 128, .3);
+    margin-bottom: 34px;
+}
+
+.srow {
+    display: grid;
+    grid-template-columns: 96px 240px 1fr;
+    align-items: center;
+    gap: 18px;
+    padding: 15px 10px 15px 4px;
+    border-bottom: 1px solid rgba(128, 128, 128, .3);
+    cursor: pointer;
+    outline: none;
+
+    &:hover, &:focus-visible {
+        background: rgba(128, 128, 128, .12);
+    }
+
+    .stword {
+        font-size: 13px;
+        letter-spacing: .12em;
+        opacity: .45;
+    }
+
+    .who {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+
+        .cli-tag {
+            font-family: var(--ai-mono);
+            font-size: 11px;
+            opacity: .55;
+            flex: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            .cli-icon ::ng-deep svg {
+                width: 14px;
+                height: 14px;
+                display: block;
+            }
+        }
+
+        .name {
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    }
+
+    .caption {
+        font-family: var(--ai-mono);
+        font-size: 12.5px;
+        opacity: .45;
+        font-style: italic;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+.empty-board {
+    border-top: 1px solid rgba(128, 128, 128, .3);
+    border-bottom: 1px solid rgba(128, 128, 128, .3);
+    padding: 36px 4px;
+    margin-bottom: 34px;
+    font-family: var(--ai-mono);
+    font-size: 13px;
+    opacity: .5;
+}
+
+.strip-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-family: var(--ai-mono);
+    font-size: 11px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    opacity: .7;
+    margin-bottom: 12px;
+
+    .label { opacity: .65; }
+    .count { opacity: .45; }
+
+    .rescan {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: inherit;
+        font: inherit;
+        letter-spacing: inherit;
+        text-transform: inherit;
+        cursor: pointer;
+        opacity: .65;
+        padding: 0;
+
+        &:hover { opacity: 1; text-decoration: underline; }
+        &[disabled] { cursor: default; opacity: .35; text-decoration: none; }
+    }
+}
+
+.strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.chip {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 14px;
+    background: rgba(128, 128, 128, .10);
+    border: 1px solid rgba(128, 128, 128, .3);
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+
+    &:hover, &:focus-visible {
+        background: rgba(128, 128, 128, .18);
+        border-color: rgba(128, 128, 128, .5);
+    }
+
+    .glyph ::ng-deep svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+    }
+
+    .nm { font-weight: 600; font-size: 13px; }
+
+    .ver {
+        font-family: var(--ai-mono);
+        font-size: 10.5px;
+        opacity: .45;
+    }
+
+    .tier {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        margin-left: 3px;
+        border: 1.5px solid rgba(128, 128, 128, .5);
+
+        &.full {
+            border: none;
+            background: var(--ai-green);
+        }
+    }
+}
+
+.strip-empty {
+    font-family: var(--ai-mono);
+    font-size: 12.5px;
+    opacity: .5;
+}

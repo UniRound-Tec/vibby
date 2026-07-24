@@ -1,0 +1,47 @@
+.ai-dashboard
+    .board-head
+        .eyebrow(translate) Sessions
+        .counters(*ngIf='rows.length')
+            .counter
+                .n {{rows.length}}
+                .l(translate) Untracked
+
+    .board(*ngIf='rows.length')
+        .srow(
+            *ngFor='let row of rows',
+            (click)='focusRow(row)',
+            tabindex='0',
+            (keyup.enter)='focusRow(row)',
+        )
+            .stword(translate) Untracked
+            .who
+                .cli-tag
+                    .cli-icon(*ngIf='iconForKind(row.kind)', [innerHTML]='iconForKind(row.kind)')
+                    span {{row.kind}}
+                .name {{row.pane.title}}
+            .caption(translate) Launch only · no event monitoring yet
+
+    .empty-board(*ngIf='!rows.length')
+        span(translate) No running AI sessions — pick a CLI below to start one.
+
+    .strip-head
+        span.label(translate) Available CLIs
+        span.count {{clis.length}}
+        button.rescan((click)='rescan()', [disabled]='scanning')
+            span(*ngIf='!scanning', translate) Rescan
+            span(*ngIf='scanning', translate) Scanning…
+
+    .strip(*ngIf='clis.length')
+        .chip(
+            *ngFor='let cli of clis',
+            (click)='launch(cli)',
+            tabindex='0',
+            (keyup.enter)='launch(cli)',
+        )
+            .glyph([innerHTML]='iconForKind(cli.entry.id)')
+            .nm {{cli.entry.name}}
+            .ver(*ngIf='cli.version') {{cli.version}}
+            .tier([class.full]='cli.entry.tier === "full"')
+
+    .strip-empty(*ngIf='!clis.length && !scanning')
+        span(translate) No AI CLIs found on this machine.
