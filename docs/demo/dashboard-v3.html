@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>vibby Dashboard V3 — 值机看板（出发大屏隐喻）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Fragment+Mono&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   V3「值机看板」— 抛弃卡片网格：全宽行 + 超大状态字 + 通栏字幕
+   主题变量演示：Gruvbox 系 ANSI 映射（真实现时读应用主题）
+   图标：@lobehub/icons-static-svg（unpkg CDN；Aider 无图标用字母兜底）
+   i18n 备忘：所有 UI 字符串走 ngx-translate；状态词按 locale 提供短词表
+   （zh: 等你/运行/空闲/异常/未监听 → en: WAITING/WORKING/IDLE/ERROR/UNTRACKED），
+   状态列宽 --stcol 与 CJK 专用 letter-spacing 随 locale 调整
+   ============================================================ */
+:root {
+  --stcol: 96px;   /* 状态字列宽：zh 96px / en 约 132px */
+  --bg:     #0d0e10;
+  --row:    #101114;
+  --row-hi: #16171b;
+  --line:   #1f2126;
+  --fg:     #e8e6df;   /* 暖白 */
+  --dim:    #8f8c82;
+  --faint:  #55534b;
+
+  --amber: #fabd2f;   /* needs-you */
+  --blue:  #83a598;   /* working   */
+  --green: #b8bb26;   /* idle      */
+  --red:   #fb4934;   /* error     */
+
+  --mono: "Fragment Mono", "Space Mono", Consolas, monospace;
+  --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0b0c; color: var(--fg); font-family: var(--sans); font-size: 14px; }
+
+.window { max-width: 1180px; margin: 26px auto; border: 1px solid #1c1e22; border-radius: 10px; overflow: hidden; box-shadow: 0 18px 60px rgba(0,0,0,.6); }
+
+/* ---------- 标签栏 ---------- */
+.tabstrip { display: flex; align-items: center; gap: 2px; background: #0a0b0c; padding: 7px 12px 0; border-bottom: 1px solid var(--line); }
+.tab { padding: 7px 15px; border-radius: 6px 6px 0 0; color: var(--dim); font-size: 12.5px; font-family: var(--mono); display: flex; align-items: center; gap: 8px; }
+.tab.active { background: var(--bg); color: var(--fg); }
+.tab .dot { width: 6px; height: 6px; border-radius: 50%; }
+.tab.plus { font-size: 14px; }
+
+.page { background: var(--bg); padding: 30px 36px 36px; }
+
+/* ---------- 板头：计数行是整页的论点 ---------- */
+.board-head { margin-bottom: 24px; }
+.board-head .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px; }
+.counters { display: flex; align-items: baseline; gap: 26px; font-family: var(--mono); }
+.counters .c { display: flex; align-items: baseline; gap: 8px; }
+.counters .n { font-size: 30px; font-weight: 700; line-height: 1; }
+.counters .l { font-size: 12px; color: var(--dim); }
+.counters .sep { color: var(--line); font-size: 22px; }
+
+/* ---------- 看板行 ---------- */
+.board { border-top: 1px solid var(--line); margin-bottom: 40px; }
+.row { position: relative; display: grid; grid-template-columns: var(--stcol) 220px 1fr 84px; align-items: center; gap: 18px; padding: 17px 10px 17px 4px; border-bottom: 1px solid var(--line); cursor: pointer; outline: none; transition: background .12s; }
+.row:hover, .row:focus-visible { background: var(--row-hi); }
+.row:focus-visible { box-shadow: inset 2px 0 0 var(--blue); }
+
+/* 状态字：本版的签名元素 */
+.stword { font-weight: 700; font-size: 17px; letter-spacing: .3em; }
+.row.needs-you .stword { color: var(--amber); animation: word-breathe 2.2s ease-in-out infinite; }
+.row.working  .stword { color: var(--blue); }
+.row.idle     .stword { color: var(--green); }
+.row.error    .stword { color: var(--red); }
+.row.nowatch  .stword { color: var(--faint); letter-spacing: .12em; font-size: 13px; font-weight: 400; }
+@keyframes word-breathe { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+.row.needs-you { background: linear-gradient(90deg, rgba(250,189,47,.07), transparent 60%); }
+.row.needs-you:hover { background: linear-gradient(90deg, rgba(250,189,47,.10), var(--row-hi) 60%); }
+
+.who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cli-tag { font-family: var(--mono); font-size: 11px; color: var(--faint); flex: none; display: flex; align-items: center; gap: 6px; }
+.cli-tag img { width: 14px; height: 14px; display: block; }
+img.inv { filter: invert(.88); opacity: .85; }  /* 单色图标反白适配暗底 */
+.who .name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.caption { font-family: var(--mono); font-size: 13.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row.nowatch .caption { color: var(--faint); font-style: italic; }
+
+.dur { font-family: var(--mono); font-size: 12px; color: var(--faint); text-align: right; }
+
+/* hover 浮出 mini feed */
+.feed { display: none; position: absolute; left: 96px; right: 84px; top: calc(100% - 4px); z-index: 10; background: #0a0b0c; border: 1px solid #26282e; border-radius: 6px; padding: 10px 16px; font-family: var(--mono); font-size: 12px; line-height: 2; color: var(--dim); box-shadow: 0 14px 34px rgba(0,0,0,.65); }
+.row:hover .feed, .row:focus-visible .feed { display: block; }
+.feed .t { color: var(--faint); margin-right: 12px; }
+
+/* ---------- CLI 站台条 ---------- */
+.strip-head { font-family: var(--mono); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--faint); margin-bottom: 12px; }
+.strip { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip { display: flex; align-items: center; gap: 9px; padding: 9px 14px; background: var(--row); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; transition: border-color .12s, background .12s; }
+.chip:hover { border-color: #33363d; background: var(--row-hi); }
+.chip .glyph { font-family: var(--mono); font-weight: 700; font-size: 13px; width: 24px; height: 24px; border: 1px solid #2a2d33; border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+.chip .glyph img { width: 15px; height: 15px; display: block; }
+.chip .nm { font-weight: 600; font-size: 13px; }
+.chip .ver { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+.chip .tier { width: 7px; height: 7px; border-radius: 50%; margin-left: 3px; }
+.tier.full { background: var(--green); box-shadow: 0 0 6px 1px rgba(184,187,38,.4); }
+.tier.launch { background: transparent; border: 1.5px solid var(--faint); }
+
+/* ---------- 空状态 ---------- */
+.empty-board { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 40px 4px; margin-bottom: 40px; font-family: var(--mono); color: var(--faint); font-size: 13px; }
+.empty-cta { text-align: center; padding: 8px 0 26px; }
+.empty-cta .big { font-family: var(--mono); font-weight: 700; font-size: 24px; letter-spacing: .06em; margin-bottom: 8px; }
+.empty-cta p { color: var(--dim); font-size: 13px; margin-bottom: 26px; }
+.empty-cta .strip { justify-content: center; }
+.empty-cta .hint { margin-top: 24px; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+.empty-cta .hint code { background: rgba(255,255,255,.06); padding: 1px 7px; border-radius: 4px; }
+
+.scene-label { max-width: 1180px; margin: 42px auto 10px; color: #3f423f; font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+
+@media (max-width: 760px) { .row { grid-template-columns: 80px 1fr 70px; } .caption { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="scene-label">V3 值机看板 ｜ 场景 1 满载态</div>
+<div class="window">
+  <div class="tabstrip">
+    <div class="tab active">⌂ home</div>
+    <div class="tab"><span class="dot" style="background:var(--amber)"></span>vibby</div>
+    <div class="tab"><span class="dot" style="background:var(--blue)"></span>tabby-web</div>
+    <div class="tab"><span class="dot" style="background:var(--faint)"></span>api-server</div>
+    <div class="tab plus">+</div>
+  </div>
+  <div class="page">
+
+    <div class="board-head">
+      <div class="eyebrow">Sessions · 会话看板</div>
+      <div class="counters">
+        <span class="c"><span class="n" style="color:var(--amber)">1</span><span class="l">等你</span></span>
+        <span class="sep">/</span>
+        <span class="c"><span class="n" style="color:var(--blue)">2</span><span class="l">运行</span></span>
+        <span class="sep">/</span>
+        <span class="c"><span class="n" style="color:var(--green)">1</span><span class="l">空闲</span></span>
+        <span class="sep">/</span>
+        <span class="c"><span class="n" style="color:var(--red)">1</span><span class="l">异常</span></span>
+        <span class="sep">/</span>
+        <span class="c"><span class="n" style="color:var(--faint)">1</span><span class="l">未监听</span></span>
+      </div>
+    </div>
+
+    <div class="board">
+      <div class="row needs-you" tabindex="0">
+        <span class="stword">等你</span>
+        <span class="who"><span class="cli-tag"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/claudecode-color.svg" alt="">claude</span><span class="name">vibby</span></span>
+        <span class="caption">等待审批 — git push --force origin master</span>
+        <span class="dur">3m 12s</span>
+        <div class="feed">
+          <div><span class="t">14:02</span>edit: tabby-core/src/index.ts</div>
+          <div><span class="t">14:03</span>bash: yarn build:typings</div>
+          <div><span class="t">14:05</span>permission-request: git push --force</div>
+        </div>
+      </div>
+
+      <div class="row working" tabindex="0">
+        <span class="stword">运行</span>
+        <span class="who"><span class="cli-tag"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/claudecode-color.svg" alt="">claude</span><span class="name">tabby-web</span></span>
+        <span class="caption">edit — dashboard.component.ts</span>
+        <span class="dur">41s</span>
+        <div class="feed">
+          <div><span class="t">14:07</span>think: 分析组件依赖关系</div>
+          <div><span class="t">14:08</span>read: dashboard.component.pug</div>
+          <div><span class="t">14:08</span>edit: dashboard.component.ts</div>
+        </div>
+      </div>
+
+      <div class="row working" tabindex="0">
+        <span class="stword">运行</span>
+        <span class="who"><span class="cli-tag"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/claudecode-color.svg" alt="">claude</span><span class="name">firmware-ble</span></span>
+        <span class="caption">bash — pio test -e esp32s3</span>
+        <span class="dur">2m 05s</span>
+        <div class="feed">
+          <div><span class="t">14:04</span>edit: src/ble_uart.cpp</div>
+          <div><span class="t">14:06</span>bash: pio run</div>
+          <div><span class="t">14:06</span>bash: pio test -e esp32s3</div>
+        </div>
+      </div>
+
+      <div class="row idle" tabindex="0">
+        <span class="stword">空闲</span>
+        <span class="who"><span class="cli-tag"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/claudecode-color.svg" alt="">claude</span><span class="name">docs-site</span></span>
+        <span class="caption">回合已结束 · 等待新指令</span>
+        <span class="dur">18m</span>
+        <div class="feed">
+          <div><span class="t">13:49</span>edit: content/guide.md</div>
+          <div><span class="t">13:50</span>turn-completed: 文档重构完成</div>
+        </div>
+      </div>
+
+      <div class="row error" tabindex="0">
+        <span class="stword">异常</span>
+        <span class="who"><span class="cli-tag"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/claudecode-color.svg" alt="">claude</span><span class="name">data-pipeline</span></span>
+        <span class="caption">exit code 1 · API 认证失败</span>
+        <span class="dur">6m</span>
+        <div class="feed">
+          <div><span class="t">14:01</span>bash: python etl.py --full</div>
+          <div><span class="t">14:02</span>error: process exited (1)</div>
+        </div>
+      </div>
+
+      <div class="row nowatch" tabindex="0">
+        <span class="stword">未监听</span>
+        <span class="who"><span class="cli-tag"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/codex-color.svg" alt="">codex</span><span class="name">api-server</span></span>
+        <span class="caption">仅启动 · 无状态监听</span>
+        <span class="dur">12m</span>
+      </div>
+    </div>
+
+    <div class="strip-head">Launch · 可用 CLI（已扫描 6）</div>
+    <div class="strip">
+      <div class="chip"><span class="glyph"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/claudecode-color.svg" alt=""></span><span class="nm">Claude Code</span><span class="ver">2.1.9</span><span class="tier full"></span></div>
+      <div class="chip"><span class="glyph"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/codex-color.svg" alt=""></span><span class="nm">Codex CLI</span><span class="ver">0.84.0</span><span class="tier launch"></span></div>
+      <div class="chip"><span class="glyph"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/geminicli-color.svg" alt=""></span><span class="nm">Gemini CLI</span><span class="ver">1.6.2</span><span class="tier launch"></span></div>
+      <div class="chip"><span class="glyph"><img class="inv" src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/opencode.svg" alt=""></span><span class="nm">OpenCode</span><span class="ver">0.31.5</span><span class="tier launch"></span></div>
+      <div class="chip"><span class="glyph">A</span><span class="nm">Aider</span><span class="ver">0.92.1</span><span class="tier launch"></span></div>
+      <div class="chip"><span class="glyph"><img class="inv" src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/pi.svg" alt=""></span><span class="nm">pi</span><span class="ver">0.4.0</span><span class="tier launch"></span></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="scene-label">V3 值机看板 ｜ 场景 2 空状态</div>
+<div class="window">
+  <div class="tabstrip">
+    <div class="tab active">⌂ home</div>
+    <div class="tab plus">+</div>
+  </div>
+  <div class="page">
+    <div class="board-head">
+      <div class="eyebrow">Sessions · 会话看板</div>
+      <div class="counters"><span class="c"><span class="n" style="color:var(--faint)">0</span><span class="l">运行中的会话</span></span></div>
+    </div>
+    <div class="empty-board">— 没有运行中的会话。从下方选择一个 CLI 开始。</div>
+    <div class="empty-cta">
+      <div class="strip">
+        <div class="chip"><span class="glyph"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/claudecode-color.svg" alt=""></span><span class="nm">Claude Code</span><span class="ver">2.1.9</span><span class="tier full"></span></div>
+        <div class="chip"><span class="glyph"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/codex-color.svg" alt=""></span><span class="nm">Codex CLI</span><span class="ver">0.84.0</span><span class="tier launch"></span></div>
+        <div class="chip"><span class="glyph"><img src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/geminicli-color.svg" alt=""></span><span class="nm">Gemini CLI</span><span class="ver">1.6.2</span><span class="tier launch"></span></div>
+        <div class="chip"><span class="glyph"><img class="inv" src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/opencode.svg" alt=""></span><span class="nm">OpenCode</span><span class="ver">0.31.5</span><span class="tier launch"></span></div>
+        <div class="chip"><span class="glyph">A</span><span class="nm">Aider</span><span class="ver">0.92.1</span><span class="tier launch"></span></div>
+        <div class="chip"><span class="glyph"><img class="inv" src="https://unpkg.com/@lobehub/icons-static-svg@latest/icons/pi.svg" alt=""></span><span class="nm">pi</span><span class="ver">0.4.0</span><span class="tier launch"></span></div>
+      </div>
+      <div class="hint">也可以打开一个普通终端 —— <code>Ctrl+Shift+T</code> 或点击 <code>+</code></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

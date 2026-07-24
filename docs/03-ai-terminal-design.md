@@ -81,9 +81,15 @@ vibby 对没有硬件的用户必须有完整价值（状态一览、通知、�
 - 遵循 `rebranding.md` §3 的合并纪律：功能开发不顺手重构上游代码；vibby-ai 包本身与上游零交集，合并冲突面≈0。
 - 事件模型类型定义单独成文件（协议 v0 的雏形），从第一天起当作对外协议的严谨度来写。
 
+## 2.5 Dashboard UI 定稿（2026-07-24 第二轮 grilling + 三版 demo 比稿）
+
+- **选定方向：V3「值机看板」**（`docs/demo/dashboard-v3.html`）：抛弃卡片网格，全宽行看板——每行 = 大号彩色状态字 + CLI 图标/会话名 + 通栏等宽字幕 + 时长；板头为彩色计数行（1 等你 / 2 运行 / …）；CLI 启动区收为底部"站台条" chip 横排。空状态 = 计数归零 + 空板提示行 + chip 居中。
+- 过程决策：骨架上下两区、会话主角（needs-you > working > idle 排序硬规则）；卡片信息密度 = 紧凑基态 + hover 浮出最近事件 feed；视觉完全跟随 Tabby 主题系统，四态映射 ANSI 色位（黄=等你、蓝=运行、绿=空闲、红=异常），全板只有 needs-you 有动效。落选方案 V1/V2 保留在 `docs/demo/` 备查（V2 的"注意力横幅"可作为将来杂交候选）。
+- **图标：`@lobehub/icons` 系列**（AI 品牌图标库）。已确认覆盖：claudecode / codex / geminicli / opencode / pi（含 color 变体；单色图标暗底需反白处理）；Aider 无图标，字母兜底。实现时装 npm 包（或内嵌所需 SVG），demo 阶段走 unpkg CDN。注意品牌 logo 的商标使用规范。
+- **多语言**：所有 UI 字符串走 Tabby 的 ngx-translate/locale 体系（英文原文为 key）；状态词按 locale 提供短词表（zh：等你/运行/空闲/异常/未监听），状态列宽与 CJK letter-spacing 随 locale 调整；事件 `summary` 的动词前缀（edit/bash/think）保持英文不译，自由文本部分跟随会话内容。
+
 ## 3. 悬而未决（后续再议）
 
-- Dashboard 的具体 UI/UX 设计（实现阶段专项，输入是 D5 的信息结构）
 - 事件 `summary` 的语言策略（跟随界面语言 or 固定英文短语）
 - thinking 摘要的 transcript 解析实现与降级策略
 - 更多 CLI 适配器的优先级（视各家 hook 能力演进）

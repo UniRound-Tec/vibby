@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>vibby Dashboard V2 — 信号台（设备面板隐喻）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   V2「信号台」— 卡片即设备：LED 指示灯 + OLED 字幕屏
+   主题变量演示：Tokyo Night 系 ANSI 映射（真实现时读应用主题）
+   ============================================================ */
+:root {
+  --bg:      #14161c;
+  --panel:   #181b22;
+  --card:    #1e222b;
+  --screen:  #0d0f14;   /* 卡内字幕屏，比卡更深一层 */
+  --line:    #2a3040;
+  --fg:      #c9cfdd;
+  --dim:     #7d8598;
+  --faint:   #545c6e;
+
+  --amber: #ffc66d;   /* needs-you */
+  --blue:  #7aa2f7;   /* working   */
+  --green: #9ece6a;   /* idle      */
+  --red:   #f7768e;   /* error     */
+
+  --mono: "IBM Plex Mono", Consolas, monospace;
+  --disp: "Space Grotesk", "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #101218; color: var(--fg); font-family: var(--disp); font-size: 14px; }
+
+.window { max-width: 1180px; margin: 26px auto; border: 1px solid #262b36; border-radius: 12px; overflow: hidden; box-shadow: 0 18px 60px rgba(0,0,0,.55); }
+
+/* ---------- 标签栏 ---------- */
+.tabstrip { display: flex; align-items: center; gap: 2px; background: var(--bg); padding: 7px 12px 0; border-bottom: 1px solid var(--line); }
+.tab { padding: 7px 15px; border-radius: 7px 7px 0 0; color: var(--dim); font-size: 12.5px; display: flex; align-items: center; gap: 7px; }
+.tab.active { background: var(--panel); color: var(--fg); }
+.tab .dot { width: 6px; height: 6px; border-radius: 50%; }
+.tab.plus { font-size: 15px; }
+
+.page { background: var(--panel); padding: 0 30px 34px; }
+
+/* ---------- 顶部注意力横幅：整页的"灯" ---------- */
+.attention { display: flex; align-items: center; gap: 12px; margin: 0 -30px 26px; padding: 11px 30px; background: linear-gradient(90deg, rgba(255,198,109,.10), rgba(255,198,109,.02) 55%, transparent); border-bottom: 1px solid rgba(255,198,109,.22); font-family: var(--mono); font-size: 12.5px; color: var(--amber); }
+.attention .led { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); animation: led-pulse 2.2s ease-in-out infinite; }
+.attention b { font-weight: 600; }
+.attention .rest { color: var(--dim); }
+.attention .go { margin-left: auto; color: var(--amber); opacity: .8; }
+
+@keyframes led-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,198,109,.0), 0 0 6px 1px rgba(255,198,109,.5); }
+  50%     { box-shadow: 0 0 0 5px rgba(255,198,109,.13), 0 0 14px 3px rgba(255,198,109,.65); }
+}
+
+/* ---------- 区头 ---------- */
+.zone-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.zone-head h2 { font-size: 15px; font-weight: 700; letter-spacing: .01em; }
+.zone-head .count { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.zone-head .legend { margin-left: auto; display: flex; gap: 16px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.legend i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+
+/* ---------- 会话卡：设备模块 ---------- */
+.sessions { display: grid; grid-template-columns: repeat(auto-fill, minmax(324px, 1fr)); gap: 14px; margin-bottom: 38px; }
+
+.card { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 11px; cursor: pointer; transition: border-color .15s, transform .15s; outline: none; }
+.card:hover, .card:focus-visible { border-color: #3a4256; transform: translateY(-1px); }
+.card:focus-visible { box-shadow: 0 0 0 2px var(--blue); }
+
+.card .head { display: flex; align-items: center; gap: 10px; padding: 13px 15px 10px; }
+.led { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.card.needs-you .led { background: var(--amber); animation: led-pulse 2.2s ease-in-out infinite; }
+.card.working  .led { background: var(--blue);  box-shadow: 0 0 7px 1px rgba(122,162,247,.55); }
+.card.idle     .led { background: var(--green); box-shadow: 0 0 7px 1px rgba(158,206,106,.4); }
+.card.error    .led { background: var(--red);   box-shadow: 0 0 7px 1px rgba(247,118,142,.6); }
+.card.nowatch  .led { background: transparent; border: 1.5px solid var(--faint); }
+
+.cli-badge { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 2.5px 7px; border-radius: 4px; background: rgba(255,255,255,.05); color: var(--dim); letter-spacing: .05em; }
+.card .name { font-weight: 600; font-size: 14.5px; letter-spacing: .01em; }
+.card .dur { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+
+/* 字幕屏：卡片的灵魂，模拟硬件小屏 */
+.screen { margin: 0 13px 13px; background: var(--screen); border: 1px solid #232834; border-radius: 7px; padding: 9px 12px; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: inset 0 2px 8px rgba(0,0,0,.45); }
+.screen .st { font-weight: 600; margin-right: 9px; }
+.card.needs-you .screen .st { color: var(--amber); text-shadow: 0 0 9px rgba(255,198,109,.45); }
+.card.working  .screen .st { color: var(--blue);  text-shadow: 0 0 9px rgba(122,162,247,.4); }
+.card.idle     .screen .st { color: var(--green); }
+.card.error    .screen .st { color: var(--red);   text-shadow: 0 0 9px rgba(247,118,142,.4); }
+.screen .tx { color: var(--dim); }
+.card.nowatch .screen { color: var(--faint); font-style: italic; }
+.card.needs-you { border-color: rgba(255,198,109,.38); }
+.card.error { border-color: rgba(247,118,142,.32); }
+
+/* hover 浮出 mini feed，延续字幕屏材质 */
+.feed { display: none; position: absolute; left: 10px; right: 10px; top: calc(100% + 7px); z-index: 10; background: var(--screen); border: 1px solid #2a3140; border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 12px; line-height: 2; color: var(--dim); box-shadow: 0 14px 34px rgba(0,0,0,.6); }
+.card:hover .feed, .card:focus-visible .feed { display: block; }
+.feed .t { color: var(--faint); margin-right: 10px; }
+
+/* ---------- CLI 启动模块 ---------- */
+.clis { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 12px; }
+.cli { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer; transition: border-color .15s, transform .15s; }
+.cli:hover { border-color: #3a4256; transform: translateY(-1px); }
+.cli .r1 { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.cli .glyph { width: 30px; height: 30px; border-radius: 8px; background: #262c39; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 600; font-size: 13px; }
+.cli .nm { font-weight: 600; font-size: 13px; line-height: 1.3; }
+.cli .ver { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+.cli .tier { font-family: var(--mono); font-size: 10.5px; }
+.tier.full { color: var(--green); }
+.tier.launch { color: var(--faint); }
+
+/* ---------- 空状态 ---------- */
+.empty { text-align: center; padding: 52px 0 26px; }
+.empty .mark { font-family: var(--disp); font-weight: 700; font-size: 26px; letter-spacing: .02em; margin-bottom: 6px; }
+.empty .mark::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px 2px rgba(158,206,106,.5); margin-right: 12px; vertical-align: 2px; }
+.empty p { color: var(--dim); margin-bottom: 30px; font-size: 13.5px; }
+.empty .clis { max-width: 780px; margin: 0 auto; text-align: left; }
+.empty .hint { margin-top: 26px; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+.empty .hint code { background: rgba(255,255,255,.06); padding: 1px 7px; border-radius: 4px; }
+
+.scene-label { max-width: 1180px; margin: 42px auto 10px; color: #4a5164; font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="scene-label">V2 信号台 ｜ 场景 1 满载态</div>
+<div class="window">
+  <div class="tabstrip">
+    <div class="tab active">⌂ Home</div>
+    <div class="tab"><span class="dot" style="background:var(--amber)"></span>claude · vibby</div>
+    <div class="tab"><span class="dot" style="background:var(--blue)"></span>claude · tabby-web</div>
+    <div class="tab"><span class="dot" style="background:var(--faint)"></span>codex · api-server</div>
+    <div class="tab plus">+</div>
+  </div>
+  <div class="page">
+
+    <div class="attention">
+      <span class="led"></span>
+      <b>1 个会话在等你</b>
+      <span class="rest">claude · vibby — 等待审批 git push --force · 已等 3m 12s</span>
+      <span class="go">点击前往 →</span>
+    </div>
+
+    <div class="zone-head">
+      <h2>运行中的会话</h2><span class="count">6 sessions</span>
+      <div class="legend">
+        <span><i style="background:var(--amber)"></i>需要你</span>
+        <span><i style="background:var(--blue)"></i>工作中</span>
+        <span><i style="background:var(--green)"></i>空闲</span>
+        <span><i style="background:var(--red)"></i>异常</span>
+      </div>
+    </div>
+
+    <div class="sessions">
+      <div class="card needs-you" tabindex="0">
+        <div class="head"><span class="led"></span><span class="cli-badge">claude</span><span class="name">vibby</span><span class="dur">3m 12s</span></div>
+        <div class="screen"><span class="st">等待审批</span><span class="tx">git push --force origin master</span></div>
+        <div class="feed">
+          <div><span class="t">14:02</span>edit: tabby-core/src/index.ts</div>
+          <div><span class="t">14:03</span>bash: yarn build:typings</div>
+          <div><span class="t">14:05</span>permission-request: git push --force</div>
+        </div>
+      </div>
+
+      <div class="card working" tabindex="0">
+        <div class="head"><span class="led"></span><span class="cli-badge">claude</span><span class="name">tabby-web</span><span class="dur">41s</span></div>
+        <div class="screen"><span class="st">edit</span><span class="tx">dashboard.component.ts</span></div>
+        <div class="feed">
+          <div><span class="t">14:07</span>think: 分析组件依赖关系</div>
+          <div><span class="t">14:08</span>read: dashboard.component.pug</div>
+          <div><span class="t">14:08</span>edit: dashboard.component.ts</div>
+        </div>
+      </div>
+
+      <div class="card working" tabindex="0">
+        <div class="head"><span class="led"></span><span class="cli-badge">claude</span><span class="name">firmware-ble</span><span class="dur">2m 05s</span></div>
+        <div class="screen"><span class="st">bash</span><span class="tx">pio test -e esp32s3</span></div>
+        <div class="feed">
+          <div><span class="t">14:04</span>edit: src/ble_uart.cpp</div>
+          <div><span class="t">14:06</span>bash: pio run</div>
+          <div><span class="t">14:06</span>bash: pio test -e esp32s3</div>
+        </div>
+      </div>
+
+      <div class="card idle" tabindex="0">
+        <div class="head"><span class="led"></span><span class="cli-badge">claude</span><span class="name">docs-site</span><span class="dur">18m</span></div>
+        <div class="screen"><span class="st">空闲</span><span class="tx">回合已结束 · 等待新指令</span></div>
+        <div class="feed">
+          <div><span class="t">13:49</span>edit: content/guide.md</div>
+          <div><span class="t">13:50</span>turn-completed: 文档重构完成</div>
+        </div>
+      </div>
+
+      <div class="card error" tabindex="0">
+        <div class="head"><span class="led"></span><span class="cli-badge">claude</span><span class="name">data-pipeline</span><span class="dur">6m</span></div>
+        <div class="screen"><span class="st">异常退出</span><span class="tx">exit code 1 · API 认证失败</span></div>
+        <div class="feed">
+          <div><span class="t">14:01</span>bash: python etl.py --full</div>
+          <div><span class="t">14:02</span>error: process exited (1)</div>
+        </div>
+      </div>
+
+      <div class="card nowatch" tabindex="0">
+        <div class="head"><span class="led"></span><span class="cli-badge">codex</span><span class="name">api-server</span><span class="dur">12m</span></div>
+        <div class="screen">仅启动 · 无状态监听</div>
+      </div>
+    </div>
+
+    <div class="zone-head"><h2>可用 CLI</h2><span class="count">scanned 6</span></div>
+    <div class="clis">
+      <div class="cli"><div class="r1"><div class="glyph">C</div><div><div class="nm">Claude Code</div><div class="ver">v2.1.9</div></div></div><div class="tier full">● 完整监听</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">X</div><div><div class="nm">Codex CLI</div><div class="ver">v0.84.0</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">G</div><div><div class="nm">Gemini CLI</div><div class="ver">v1.6.2</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">O</div><div><div class="nm">OpenCode</div><div class="ver">v0.31.5</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">A</div><div><div class="nm">Aider</div><div class="ver">v0.92.1</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">π</div><div><div class="nm">pi</div><div class="ver">v0.4.0</div></div></div><div class="tier launch">○ 仅启动</div></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="scene-label">V2 信号台 ｜ 场景 2 空状态</div>
+<div class="window">
+  <div class="tabstrip">
+    <div class="tab active">⌂ Home</div>
+    <div class="tab plus">+</div>
+  </div>
+  <div class="page" style="padding-top:0">
+    <div class="empty">
+      <div class="mark">vibby</div>
+      <p>一切安静。扫描到 6 个 AI 编程 CLI —— 点击卡片开始一个会话</p>
+      <div class="clis">
+        <div class="cli"><div class="r1"><div class="glyph">C</div><div><div class="nm">Claude Code</div><div class="ver">v2.1.9</div></div></div><div class="tier full">● 完整监听</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">X</div><div><div class="nm">Codex CLI</div><div class="ver">v0.84.0</div></div></div><div class="tier launch">○ 仅启动</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">G</div><div><div class="nm">Gemini CLI</div><div class="ver">v1.6.2</div></div></div><div class="tier launch">○ 仅启动</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">O</div><div><div class="nm">OpenCode</div><div class="ver">v0.31.5</div></div></div><div class="tier launch">○ 仅启动</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">A</div><div><div class="nm">Aider</div><div class="ver">v0.92.1</div></div></div><div class="tier launch">○ 仅启动</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">π</div><div><div class="nm">pi</div><div class="ver">v0.4.0</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      </div>
+      <div class="hint">也可以打开一个普通终端 —— <code>Ctrl+Shift+T</code> 或点击 <code>+</code></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>vibby Dashboard — 布局 demo（静态）</title>
+<style>
+/* ============================================================
+   模拟 Tabby 主题变量层：真实实现时这些值来自应用主题系统，
+   状态色映射当前终端配色方案的 ANSI 色位（D-视觉决策）
+   ============================================================ */
+:root {
+  --bg:            #171a21;   /* 窗口底 */
+  --bg-panel:      #1c2029;   /* 页面底 */
+  --bg-card:       #222733;   /* 卡片底 */
+  --bg-card-hover: #283040;
+  --fg:            #d3d9e3;
+  --fg-dim:        #8a93a5;
+  --fg-faint:      #5c6474;
+  --border:        #2e3542;
+  --radius: 8px;
+
+  /* ANSI 色位映射 */
+  --ansi-yellow: #f0c674;  /* needs-you */
+  --ansi-blue:   #61afef;  /* working  */
+  --ansi-green:  #98c379;  /* idle     */
+  --ansi-red:    #e06c75;  /* error    */
+
+  --mono: "Cascadia Code", Consolas, "JetBrains Mono", monospace;
+  --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; }
+
+/* ---------- 模拟应用窗口外框（提供布局上下文用） ---------- */
+.window { max-width: 1180px; margin: 24px auto; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 12px 48px rgba(0,0,0,.5); }
+
+.tabstrip { display: flex; align-items: center; gap: 2px; background: var(--bg); padding: 6px 10px 0; border-bottom: 1px solid var(--border); }
+.tab { padding: 7px 16px; border-radius: 6px 6px 0 0; color: var(--fg-dim); font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.tab.home { font-size: 15px; padding: 6px 13px; }
+.tab.active { background: var(--bg-panel); color: var(--fg); }
+.tab .dot { width: 7px; height: 7px; border-radius: 50%; }
+.tab.plus { font-size: 15px; padding: 6px 10px; }
+
+/* ---------- Dashboard 页面 ---------- */
+.page { background: var(--bg-panel); padding: 28px 32px 36px; }
+
+.zone-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+.zone-head h2 { font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-dim); }
+.zone-head .count { font-family: var(--mono); font-size: 12px; color: var(--fg-faint); }
+.zone-head .legend { margin-left: auto; display: flex; gap: 14px; font-size: 12px; color: var(--fg-faint); }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+
+/* ---------- 会话卡网格（主角区） ---------- */
+.sessions { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; margin-bottom: 40px; }
+
+.card { position: relative; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px 12px 20px; cursor: pointer; transition: background .15s; }
+.card:hover { background: var(--bg-card-hover); }
+.card::before { /* 左缘状态色条 */ content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: var(--radius) 0 0 var(--radius); background: var(--state); }
+
+.card .row1 { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.cli-badge { font-family: var(--mono); font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 4px; background: rgba(255,255,255,.06); color: var(--fg-dim); letter-spacing: .04em; }
+.card .name { font-weight: 600; font-size: 14.5px; }
+.card .dur { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--fg-faint); }
+
+.card .caption { font-family: var(--mono); font-size: 12.5px; color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
+.caption .st { color: var(--state); font-weight: 600; flex: none; }
+
+/* needs-you：全板唯一会动的卡 */
+@keyframes breathe { 0%,100% { box-shadow: 0 0 0 0 rgba(240,198,116,0); } 50% { box-shadow: 0 0 0 5px rgba(240,198,116,.14), 0 0 18px rgba(240,198,116,.10); } }
+.card.needs-you { --state: var(--ansi-yellow); border-color: color-mix(in srgb, var(--ansi-yellow) 45%, var(--border)); animation: breathe 2.4s ease-in-out infinite; }
+.card.working  { --state: var(--ansi-blue); }
+.card.idle     { --state: var(--ansi-green); }
+.card.error    { --state: var(--ansi-red); border-color: color-mix(in srgb, var(--ansi-red) 40%, var(--border)); }
+.card.nowatch  { --state: var(--fg-faint); }
+.card.nowatch .caption { color: var(--fg-faint); font-style: italic; }
+
+/* hover 浮出 mini feed（决策 D-卡片 C：紧凑 + hover 展开） */
+.feed { display: none; position: absolute; left: 8px; right: 8px; top: calc(100% + 6px); z-index: 10; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.9; color: var(--fg-dim); box-shadow: 0 8px 28px rgba(0,0,0,.55); }
+.card:hover .feed { display: block; }
+.feed .t { color: var(--fg-faint); margin-right: 9px; }
+
+/* ---------- CLI 启动卡（次区，小卡横排） ---------- */
+.clis { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+.cli { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px; cursor: pointer; transition: background .15s, border-color .15s; }
+.cli:hover { background: var(--bg-card-hover); border-color: var(--fg-faint); }
+.cli .r1 { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.cli .glyph { width: 30px; height: 30px; border-radius: 7px; background: rgba(255,255,255,.07); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--fg); }
+.cli .nm { font-weight: 600; font-size: 13.5px; line-height: 1.25; }
+.cli .ver { font-family: var(--mono); font-size: 11px; color: var(--fg-faint); }
+.cli .tier { margin-top: 4px; font-size: 11px; }
+.tier.full { color: var(--ansi-green); }
+.tier.launch { color: var(--fg-faint); }
+
+/* ---------- 空状态场景 ---------- */
+.empty { text-align: center; padding: 46px 0 30px; }
+.empty h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.empty p { color: var(--fg-dim); margin-bottom: 30px; }
+.empty .clis { max-width: 760px; margin: 0 auto; text-align: left; }
+.empty .hint { margin-top: 26px; font-size: 12.5px; color: var(--fg-faint); }
+.empty .hint code { font-family: var(--mono); background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 4px; }
+
+/* demo 场景分隔标注（非产品 UI） */
+.scene-label { max-width: 1180px; margin: 40px auto 10px; color: var(--fg-faint); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<div class="scene-label">场景 1 ｜ 满载态（M2 愿景：6 会话，含 needs-you / error / 未适配 CLI）</div>
+<div class="window">
+  <div class="tabstrip">
+    <div class="tab home active">⌂</div>
+    <div class="tab"><span class="dot" style="background:var(--ansi-yellow)"></span>claude · vibby</div>
+    <div class="tab"><span class="dot" style="background:var(--ansi-blue)"></span>claude · tabby-web</div>
+    <div class="tab"><span class="dot" style="background:var(--fg-faint)"></span>codex · api-server</div>
+    <div class="tab plus">+</div>
+  </div>
+  <div class="page">
+
+    <div class="zone-head">
+      <h2>运行中的会话</h2><span class="count">6</span>
+      <div class="legend">
+        <span><i style="background:var(--ansi-yellow)"></i>需要你</span>
+        <span><i style="background:var(--ansi-blue)"></i>工作中</span>
+        <span><i style="background:var(--ansi-green)"></i>空闲</span>
+        <span><i style="background:var(--ansi-red)"></i>异常</span>
+      </div>
+    </div>
+
+    <div class="sessions">
+      <!-- 排序硬规则：needs-you > working > idle/error/未适配，组内按最后事件时间 -->
+      <div class="card needs-you">
+        <div class="row1"><span class="cli-badge">claude</span><span class="name">vibby</span><span class="dur">3m 12s</span></div>
+        <div class="caption"><span class="st">等待审批</span> git push --force origin master</div>
+        <div class="feed">
+          <div><span class="t">14:02</span>edit: tabby-core/src/index.ts</div>
+          <div><span class="t">14:03</span>bash: yarn build:typings</div>
+          <div><span class="t">14:05</span>permission-request: git push --force</div>
+        </div>
+      </div>
+
+      <div class="card working">
+        <div class="row1"><span class="cli-badge">claude</span><span class="name">tabby-web</span><span class="dur">41s</span></div>
+        <div class="caption"><span class="st">edit</span> dashboard.component.ts</div>
+        <div class="feed">
+          <div><span class="t">14:07</span>think: 分析组件依赖关系</div>
+          <div><span class="t">14:08</span>read: dashboard.component.pug</div>
+          <div><span class="t">14:08</span>edit: dashboard.component.ts</div>
+        </div>
+      </div>
+
+      <div class="card working">
+        <div class="row1"><span class="cli-badge">claude</span><span class="name">firmware-ble</span><span class="dur">2m 05s</span></div>
+        <div class="caption"><span class="st">bash</span> pio test -e esp32s3</div>
+        <div class="feed">
+          <div><span class="t">14:04</span>edit: src/ble_uart.cpp</div>
+          <div><span class="t">14:06</span>bash: pio run</div>
+          <div><span class="t">14:06</span>bash: pio test -e esp32s3</div>
+        </div>
+      </div>
+
+      <div class="card idle">
+        <div class="row1"><span class="cli-badge">claude</span><span class="name">docs-site</span><span class="dur">18m</span></div>
+        <div class="caption"><span class="st">空闲</span> 回合已结束 · 等待新指令</div>
+        <div class="feed">
+          <div><span class="t">13:49</span>edit: content/guide.md</div>
+          <div><span class="t">13:50</span>turn-completed: 文档重构完成</div>
+        </div>
+      </div>
+
+      <div class="card error">
+        <div class="row1"><span class="cli-badge">claude</span><span class="name">data-pipeline</span><span class="dur">6m</span></div>
+        <div class="caption"><span class="st">异常退出</span> exit code 1 · API 认证失败</div>
+        <div class="feed">
+          <div><span class="t">14:01</span>bash: python etl.py --full</div>
+          <div><span class="t">14:02</span>error: process exited (1)</div>
+        </div>
+      </div>
+
+      <div class="card nowatch">
+        <div class="row1"><span class="cli-badge">codex</span><span class="name">api-server</span><span class="dur">12m</span></div>
+        <div class="caption">仅启动 · 无状态监听</div>
+      </div>
+    </div>
+
+    <div class="zone-head"><h2>可用 CLI</h2><span class="count">已扫描 6</span></div>
+    <div class="clis">
+      <div class="cli"><div class="r1"><div class="glyph">C</div><div><div class="nm">Claude Code</div><div class="ver">v2.1.9</div></div></div><div class="tier full">● 完整监听</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">X</div><div><div class="nm">Codex CLI</div><div class="ver">v0.84.0</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">G</div><div><div class="nm">Gemini CLI</div><div class="ver">v1.6.2</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">O</div><div><div class="nm">OpenCode</div><div class="ver">v0.31.5</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">A</div><div><div class="nm">Aider</div><div class="ver">v0.92.1</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      <div class="cli"><div class="r1"><div class="glyph">π</div><div><div class="nm">pi</div><div class="ver">v0.4.0</div></div></div><div class="tier launch">○ 仅启动</div></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="scene-label">场景 2 ｜ 空状态（M1 门面：无会话时 CLI 卡升格居中）</div>
+<div class="window">
+  <div class="tabstrip">
+    <div class="tab home active">⌂</div>
+    <div class="tab plus">+</div>
+  </div>
+  <div class="page">
+    <div class="empty">
+      <h1>vibby</h1>
+      <p>扫描到 6 个 AI 编程 CLI · 点击卡片开始一个会话</p>
+      <div class="clis">
+        <div class="cli"><div class="r1"><div class="glyph">C</div><div><div class="nm">Claude Code</div><div class="ver">v2.1.9</div></div></div><div class="tier full">● 完整监听</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">X</div><div><div class="nm">Codex CLI</div><div class="ver">v0.84.0</div></div></div><div class="tier launch">○ 仅启动</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">G</div><div><div class="nm">Gemini CLI</div><div class="ver">v1.6.2</div></div></div><div class="tier launch">○ 仅启动</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">O</div><div><div class="nm">OpenCode</div><div class="ver">v0.31.5</div></div></div><div class="tier launch">○ 仅启动</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">A</div><div><div class="nm">Aider</div><div class="ver">v0.92.1</div></div></div><div class="tier launch">○ 仅启动</div></div>
+        <div class="cli"><div class="r1"><div class="glyph">π</div><div><div class="nm">pi</div><div class="ver">v0.4.0</div></div></div><div class="tier launch">○ 仅启动</div></div>
+      </div>
+      <div class="hint">也可以打开一个普通终端 —— 按 <code>Ctrl+Shift+T</code> 或点击 <code>+</code></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
