@@ -169,3 +169,21 @@ export interface AiSessionSnapshot {
 ## 10. 完成定义
 
 §8 九条全绿 + 三个闸门（V3/V4/V5）通过记录在案 + 上游触点核对 + 本文件偏差回写。
+
+## 11. 实施记录（2026-07-24，WP3–WP5）
+
+- **WP3**：看板行 = tabs 枚举 ⋈ snapshots（join 键 = adapter 的 pane→sessionId WeakMap）；四态字上色 + 排序 + 时长列（5s tick）+ hover feed + 分态计数已上线，截图验证 2 空闲 + 4 未监听混排正确。needs-you 底色渐变用 `color-mix`（Chromium 111+，Electron 满足）。
+- **WP4**：`AiAttentionService` 订阅 attention$；已实测最小化窗口时 working→needs-you 发射通知（日志佐证）；聚焦门控/点击聚焦为代码审查级验证，列入 §12 手动清单。toast 可见性受系统通知设置（勿扰/Electron 应用权限）影响。
+- **WP5**：zh-CN.po 新增 10 词条（状态词 等你/运行/空闲/异常 + 通知设置组）；合并演练仍为空转（上游 master 无新提交），M2 上游触点仅 `locale/zh-CN.po` 一个文件，达成 §6 目标；全量 `yarn build` 通过（78.7s）。
+- 测试残留已清理：dev config 测试 profile、tmp 注入文件、测试进程；未触碰用户真实 `~/.claude` 配置。
+- **发现的产品问题（留 M2.5/M3 议）**：① cwd 落在未信任目录时 claude 卡在 trust 确认页，Dashboard 无从体现——考虑 profile 默认 cwd 策略或状态识别；② PTY 已死但事件未收尾的 tab 恒显"未监听"，与真未监听 CLI 无法区分；③ claude 的 OSC 标题（`✳ <短语>`）已实证流经 `tab.title$`，§9 think 字幕通道①成立。
+
+## 12. 手动回归清单（需真人 UI 交互）
+
+1. Dashboard 开 claude → 打字提问：行转"运行"（蓝）、字幕随工具滚动、回合结束转"空闲"（绿）。
+2. 触发权限审批：行转"等你"（黄+呼吸动效）且置顶；窗口失焦时收到桌面通知，点击通知回到正确 pane；窗口聚焦且停留在该 tab 时不弹。
+3. hover 会话行：浮出最近事件 feed（时间 + 摘要）。
+4. split 两个 claude 面板：两行独立状态互不干扰，点击行聚焦到正确 pane。
+5. 设置页"通知"两开关：关"该你了提醒"后全静默；开"回合结束时也通知"后 idle 有静默通知。
+6. 语言切 en：状态词/设置项无汉字残留；切回 zh 全部命中（等你/运行/空闲/异常）。
+7. `claude` 里 `/exit`：行定格"空闲"、tab 自关；重启应用后恢复的会话自动重建监听（状态从 ready 重新开始）。

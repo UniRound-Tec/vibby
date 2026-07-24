@@ -2643,3 +2643,43 @@ msgstr "额外搜索路径"
 #: tabby-ai/src/components/aiSettingsTab.component.pug:27
 msgid "One directory per line, scanned besides PATH"
 msgstr "每行一个目录，在 PATH 之外额外扫描"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:120
+msgid "Needs you"
+msgstr "等你"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:121
+msgid "Working"
+msgstr "运行"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:122
+msgid "Idle"
+msgstr "空闲"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:123
+msgid "Error"
+msgstr "异常"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:33
+msgid "Notifications"
+msgstr "通知"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:37
+msgid "Attention notifications"
+msgstr "该你了提醒"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:38
+msgid "Desktop notification when a session needs you or fails"
+msgstr "会话等你操作或异常时发送桌面通知"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:46
+msgid "Also notify when a turn completes"
+msgstr "回合结束时也通知"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug:47
+msgid "Quiet notification on every finished turn"
+msgstr "每个回合结束时发送静默通知"
+
+#: tabby-ai/src/services/attention.service.ts:64
+msgid "AI session"
+msgstr "AI 会话"
