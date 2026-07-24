@@ -13,6 +13,9 @@ export class AiConfigProvider extends ConfigProvider {
                 hidden: [],
             },
         },
+        hotkeys: {
+            'toggle-dashboard': ['Ctrl-Shift-H'],
+        },
     }
 
     platformDefaults = { }

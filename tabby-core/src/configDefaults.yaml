@@ -41,7 +41,7 @@ profileDefaults:
     disableDynamicTitle: true
 recoverTabs: true
 enableAnalytics: false
-enableWelcomeTab: true
+enableWelcomeTab: false
 electronFlags:
   - ['force_discrete_gpu', '0']
 enableAutomaticUpdates: true
