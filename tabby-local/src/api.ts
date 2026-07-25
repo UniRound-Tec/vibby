@@ -41,6 +41,8 @@ export interface SessionOptions {
     args: string[]
     cwd: string | null
     env: Record<string, string>
+    /** Paths prepended after all environment sources have been merged. */
+    pathPrefix: string[]
     width: number | null
     height: number | null
     shellType: ShellType | null
@@ -56,6 +58,7 @@ export interface ChildProcess {
     pid: number
     ppid: number
     command: string
+    commandLine?: string
 }
 
 export abstract class UACService {

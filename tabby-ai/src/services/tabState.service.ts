@@ -6,6 +6,7 @@ import { AiSessionSnapshot, AiSessionState } from '../events'
 import { AI_CLI_REGISTRY } from '../registry'
 import { AiEventBusService } from './eventBus.service'
 import { ClaudeAdapterService } from './claudeAdapter.service'
+import { RuntimeCliChange, RuntimeCliDetectorService } from './runtimeCliDetector.service'
 
 /** Worst-first, same order the dashboard sorts by: a split shows its loudest pane */
 const SEVERITY: Record<AiSessionState, number> = {
@@ -27,12 +28,14 @@ export class AiTabStateService {
         private app: AppService,
         private bus: AiEventBusService,
         private adapter: ClaudeAdapterService,
+        private runtimeDetector: RuntimeCliDetectorService,
         private translate: TranslateService,
     ) { }
 
     activate (): void {
         this.bus.snapshots$.subscribe(() => this.refresh())
         this.app.tabsChanged$.subscribe(() => this.refresh())
+        this.runtimeDetector.changed$.subscribe(change => this.onRuntimeChange(change))
         // the split wrapper's child is attached right after the tab is added,
         // so the AI check has to wait for the current frame to finish
         this.app.tabOpened$.subscribe(tab => setTimeout(() => this.groupTab(tab)))
@@ -78,11 +81,11 @@ export class AiTabStateService {
             tab['aiGroup'] = group === previousGroup ? null : group
             previousGroup = group
 
-            const kind = aiPane?.profile.options?.['aiCli']?.kind ?? null
+            const kind = aiPane ? this.runtimeDetector.kindForPane(aiPane) : null
             tab['aiKind'] = kind
             // the icon replaces the kind's name in the rail; the name stays as its tooltip
             tab['aiIcon'] = AI_CLI_REGISTRY.find(x => x.id === kind)?.icon ?? null
-            if (aiPane) {
+            if (aiPane?.profile.type === 'ai-cli') {
                 this.nameFromCwd(tab, aiPane)
             }
 
@@ -93,6 +96,7 @@ export class AiTabStateService {
                 tab['aiSummary'] = null
                 continue
             }
+            const monitoringSessionId = this.adapter.sessionIdForPane(aiPane, kind)
             // an AI tab is a card even before its first event — a session that
             // never reports is exactly what the rail has to make visible
             tab['aiState'] = snapshot?.state ?? 'untracked'
@@ -102,7 +106,11 @@ export class AiTabStateService {
             // the scraped status line is fresher than the last hook event
             tab['aiSummary'] = snapshot
                 ? snapshot.liveStatus ?? snapshot.lastEvent?.summary ?? null
-                : this.translate.instant('Launch only · no event monitoring yet')
+                : this.runtimeDetector.isRuntimeDetected(aiPane) && !monitoringSessionId
+                    ? this.translate.instant('Detected in terminal · event monitoring unavailable')
+                    : monitoringSessionId
+                        ? this.translate.instant('Event monitoring enabled · waiting for CLI activity')
+                        : this.translate.instant('Launch only · no event monitoring yet')
         }
     }
 
@@ -119,18 +127,34 @@ export class AiTabStateService {
     private aiPaneOf (tab: BaseTabComponent): TerminalTabComponent | null {
         const panes = tab instanceof SplitTabComponent ? tab.getAllTabs() : [tab]
         for (const pane of panes) {
-            if (pane instanceof TerminalTabComponent && pane.profile?.type === 'ai-cli') {
+            if (pane instanceof TerminalTabComponent && this.runtimeDetector.kindForPane(pane)) {
                 return pane
             }
         }
         return null
     }
 
+    private onRuntimeChange (change: RuntimeCliChange): void {
+        if (change.kind) {
+            const topTab = this.app.tabs.find(tab =>
+                tab === change.pane ||
+                tab instanceof SplitTabComponent && tab.getAllTabs().includes(change.pane),
+            )
+            if (topTab) {
+                this.groupTab(topTab)
+            }
+        }
+        this.refresh()
+    }
+
     private loudestSnapshot (tab: BaseTabComponent): AiSessionSnapshot | null {
         const panes = tab instanceof SplitTabComponent ? tab.getAllTabs() : [tab]
         let loudest: AiSessionSnapshot | null = null
         for (const pane of panes) {
-            const sessionId = this.adapter.sessionIdForPane(pane)
+            const sessionId = this.adapter.sessionIdForPane(
+                pane,
+                pane instanceof TerminalTabComponent ? this.runtimeDetector.kindForPane(pane) : null,
+            )
             const snapshot = sessionId ? this.bus.snapshotFor(sessionId) : null
             if (snapshot && (!loudest || SEVERITY[snapshot.state] < SEVERITY[loudest.state])) {
                 loudest = snapshot
@@ -151,6 +175,11 @@ export class AiTabStateService {
      */
     private nameFromCwd (tab: BaseTabComponent, pane: TerminalTabComponent): void {
         if (this.userNamed(tab)) {
+            return
+        }
+        const launchName = pane.profile?.options?.['aiCli']?.sessionName?.trim()
+        if (launchName) {
+            this.autoName(tab, launchName)
             return
         }
         const configured = this.baseName(pane.profile?.options?.cwd)

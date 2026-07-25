@@ -2767,3 +2767,50 @@ msgstr "下一页"
 #: tabby-ai/src/components/dashboardTab.component.pug
 msgid "Not detected"
 msgstr "未检测到"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Session name"
+msgstr "会话名称"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Working directory"
+msgstr "工作目录"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Choose folder"
+msgstr "选择文件夹"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Additional arguments"
+msgstr "附加参数"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Arguments could not be parsed. Check your quotes."
+msgstr "无法解析参数，请检查引号是否配对。"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Start"
+msgstr "启动"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Settings apply only to this session"
+msgstr "配置仅应用于本次会话"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Optional"
+msgstr "可选"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Leave blank to use:"
+msgstr "留空则使用："
+
+#: tabby-ai/src/components/dashboardTab.component.ts
+msgid "No additional arguments"
+msgstr "无附加参数"
+
+#: tabby-ai/src/components/dashboardTab.component.ts
+msgid "Detected in terminal · event monitoring unavailable"
+msgstr "已在终端中识别 · 无法启用事件监听"
+
+msgid "Event monitoring enabled · waiting for CLI activity"
+msgstr "事件监听已启用 · 等待 CLI 活动"

@@ -2,6 +2,7 @@
 import { NgModule } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap'
 import TabbyCorePlugin, { AppService, CLIHandler, CommandProvider, ConfigProvider, ConfigService, HotkeyProvider, HotkeysService, ProfileProvider } from 'tabby-core'
 import { SettingsTabProvider } from 'tabby-settings'
 
@@ -17,10 +18,12 @@ import { HookIngressService } from './services/hookIngress.service'
 import { ClaudeAdapterService } from './services/claudeAdapter.service'
 import { AiAttentionService } from './services/attention.service'
 import { AiTabStateService } from './services/tabState.service'
+import { RuntimeCliDetectorService } from './services/runtimeCliDetector.service'
 import { COLLAPSED_CLASS, RailService } from './services/rail.service'
 import { STARTUP_COVER_CLASS, StartupCoverService } from './services/startupCover.service'
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
+import { CliLaunchModalComponent } from './components/cliLaunchModal.component'
 
 /** Follows the active Tabby theme instead of imposing a fixed brand colour. */
 const ACCENT = 'var(--theme-primary)'
@@ -29,6 +32,7 @@ const ACCENT = 'var(--theme-primary)'
     imports: [
         CommonModule,
         FormsModule,
+        NgbModule,
         TabbyCorePlugin,
     ],
     providers: [
@@ -42,6 +46,7 @@ const ACCENT = 'var(--theme-primary)'
     declarations: [
         DashboardTabComponent,
         AiSettingsTabComponent,
+        CliLaunchModalComponent,
     ],
 })
 export default class AiModule {
@@ -55,6 +60,7 @@ export default class AiModule {
         claudeAdapter: ClaudeAdapterService,
         attention: AiAttentionService,
         tabState: AiTabStateService,
+        runtimeDetector: RuntimeCliDetectorService,
         rail: RailService,
         startupCover: StartupCoverService,
     ) {
@@ -64,6 +70,7 @@ export default class AiModule {
             console.debug(`[tabby-ai] ingress endpoint template: ${ingress.endpointFor('SESSION')}`)
         }).catch(() => null)
         claudeAdapter.activate()
+        runtimeDetector.activate()
         attention.activate()
         tabState.activate()
         rail.activate()

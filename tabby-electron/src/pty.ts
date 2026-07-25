@@ -114,12 +114,18 @@ export class ElectronPTYProxy extends PTYProxy {
         if (process.platform === 'win32') {
             return new Promise<ChildProcess[]>(resolve => {
                 windowsProcessTree.getProcessTree(truePID, tree => {
-                    resolve(tree ? tree.children.map(child => ({
-                        pid: child.pid,
-                        ppid: tree.pid,
-                        command: child.name,
-                    })) : [])
-                })
+                    const flatten = (children: any[], ppid: number): ChildProcess[] => children.reduce((result, child) => [
+                        ...result,
+                        {
+                            pid: child.pid,
+                            ppid,
+                            command: child.name,
+                            commandLine: child.commandLine,
+                        },
+                        ...flatten(child.children ?? [], child.pid),
+                    ], [])
+                    resolve(tree ? flatten(tree.children, tree.pid) : [])
+                }, windowsProcessTree.ProcessDataFlag.CommandLine)
             })
         }
         return new Promise<ChildProcess[]>((resolve, reject) => {

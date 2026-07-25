@@ -20,6 +20,7 @@ export class LocalProfilesService extends ProfileProvider<LocalProfile> {
             env: {
                 __nonStructural: true,
             },
+            pathPrefix: [],
             width: null,
             height: null,
             shellType: null,

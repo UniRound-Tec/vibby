@@ -1,5 +1,6 @@
 import * as fs from 'mz/fs'
 import * as fsSync from 'fs'
+import * as path from 'path'
 import { Injector } from '@angular/core'
 import { HostAppService, ConfigService, WIN_BUILD_CONPTY_SUPPORTED, isWindowsBuild, Platform, BootstrapData, BOOTSTRAP_DATA, LogService } from 'tabby-core'
 import { BaseSession } from 'tabby-terminal'
@@ -67,6 +68,14 @@ export class Session extends BaseSession {
                 substituteEnv(options.env),
                 this.config.store.terminal.environment || {},
             )
+
+            if (options.pathPrefix.length) {
+                const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path') ?? 'PATH'
+                env[pathKey] = [
+                    ...options.pathPrefix,
+                    env[pathKey],
+                ].filter(Boolean).join(path.delimiter)
+            }
 
             if (this.hostApp.platform === Platform.Windows && this.config.store.terminal.setComSpec) {
                 env = mergeEnv(env, { COMSPEC: this.bootstrapData.executable })

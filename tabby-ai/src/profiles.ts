@@ -23,6 +23,7 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
             env: {
                 __nonStructural: true,
             },
+            pathPrefix: [],
             width: null,
             height: null,
             shellType: null,
@@ -31,6 +32,7 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
             aiCli: {
                 kind: null,
                 version: null,
+                sessionName: null,
             },
         },
     }

@@ -1,0 +1,78 @@
+form.cli-launch-modal((ngSubmit)='start()')
+    .modal-header
+        .header-main
+            .cli-mark(*ngIf='cliIcon', [innerHTML]='cliIcon')
+            .heading
+                h5.modal-title
+                    span(translate) Launch
+                    |  {{cliName}}
+                .header-note(translate) Settings apply only to this session
+        button.close-button(
+            type='button',
+            (click)='cancel()',
+            [attr.aria-label]='"Cancel" | translate',
+        ) ×
+
+    .modal-body
+        .field
+            .label-row
+                label.form-label(for='cli-session-name', translate) Session name
+                span.optional(translate) Optional
+            input#cli-session-name.form-control(
+                type='text',
+                [(ngModel)]='name',
+                name='sessionName',
+                [placeholder]='fallbackName',
+                autocomplete='off',
+                autofocus,
+            )
+            .fallback
+                span(translate) Leave blank to use:
+                code {{fallbackName}}
+
+        .field
+            .label-row
+                label.form-label(for='cli-working-directory', translate) Working directory
+                span.optional(translate) Optional
+            .input-group
+                input#cli-working-directory.form-control(
+                    type='text',
+                    [(ngModel)]='cwd',
+                    name='workingDirectory',
+                    [placeholder]='fallbackCwd',
+                    autocomplete='off',
+                    spellcheck='false',
+                )
+                button.btn.btn-secondary.folder-button(
+                    type='button',
+                    (click)='pickWorkingDirectory()',
+                    [attr.aria-label]='"Choose folder" | translate',
+                    [title]='"Choose folder" | translate',
+                )
+                    i.fas.fa-folder-open
+            .fallback
+                span(translate) Leave blank to use:
+                code.path-value([title]='fallbackCwd') {{fallbackCwd}}
+
+        .field
+            .label-row
+                label.form-label(for='cli-arguments', translate) Additional arguments
+                span.optional(translate) Optional
+            textarea#cli-arguments.form-control.args-input(
+                [(ngModel)]='arguments',
+                name='arguments',
+                rows='3',
+                [placeholder]='fallbackArguments',
+                autocomplete='off',
+                spellcheck='false',
+                [class.is-invalid]='argumentsInvalid',
+                (input)='argumentsInvalid = false',
+            )
+            .invalid-feedback(*ngIf='argumentsInvalid', translate) Arguments could not be parsed. Check your quotes.
+            .fallback
+                span(translate) Leave blank to use:
+                code {{fallbackArguments}}
+
+    .modal-footer
+        button.btn.btn-secondary(type='button', (click)='cancel()', translate) Cancel
+        button.btn.btn-primary(type='submit', translate) Start

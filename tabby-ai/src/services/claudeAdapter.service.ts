@@ -6,9 +6,10 @@ import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
-import { AI_CLI_REGISTRY } from '../registry'
+import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
+import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalCliShim.service'
 
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Notification', 'Stop', 'SessionEnd']
 
@@ -63,18 +64,22 @@ const EXIT_GRACE_MS = 1500
 @Injectable({ providedIn: 'root' })
 export class ClaudeAdapterService {
     private sessionIds = new WeakMap<TerminalTabComponent, string>()
+    private sessionKinds = new WeakMap<TerminalTabComponent, string>()
     private panes = new Map<string, TerminalTabComponent>()
     private armed = new WeakSet<TerminalTabComponent>()
     private watchedSplits = new WeakSet<SplitTabComponent>()
     private injectDir = path.join(os.tmpdir(), INJECT_DIR_NAME)
     private scraper: any = null
     private lastStatus = new Map<string, string>()
+    private shimInstallations = new WeakMap<TerminalTabComponent, TerminalCliShimInstallation>()
 
     constructor (
         private app: AppService,
         private ingress: HookIngressService,
         private bus: AiEventBusService,
         private zone: NgZone,
+        private scanner: CliScannerService,
+        private terminalShim: TerminalCliShimService,
     ) { }
 
     activate (): void {
@@ -92,8 +97,11 @@ export class ClaudeAdapterService {
     }
 
     /** Dashboard join: which bus session does this pane report as */
-    sessionIdForPane (pane: BaseTabComponent): string | null {
-        return pane instanceof TerminalTabComponent ? this.sessionIds.get(pane) ?? null : null
+    sessionIdForPane (pane: BaseTabComponent, kind?: string|null): string | null {
+        if (!(pane instanceof TerminalTabComponent) || kind && this.sessionKinds.get(pane) !== kind) {
+            return null
+        }
+        return this.sessionIds.get(pane) ?? null
     }
 
     /** Reverse lookup for notification click-through */
@@ -124,11 +132,22 @@ export class ClaudeAdapterService {
     }
 
     private async arm (tab: TerminalTabComponent): Promise<void> {
-        if (this.armed.has(tab) || tab.profile?.type !== 'ai-cli') {
+        if (this.armed.has(tab)) {
             return
         }
-        const kind = tab.profile.options?.['aiCli']?.kind
-        if (AI_CLI_REGISTRY.find(x => x.id === kind)?.tier !== 'full') {
+        const isDirectLaunch = tab.profile?.type === 'ai-cli'
+        const kind = isDirectLaunch
+            ? tab.profile.options?.['aiCli']?.kind
+            : 'claude-code'
+        // Adapter ownership is explicit: future full-tier CLIs get their own
+        // event translator while reusing TerminalCliShimService.
+        if (kind !== 'claude-code') {
+            return
+        }
+        const detected = isDirectLaunch
+            ? null
+            : this.scanner.scanResults.find(item => item.entry.id === kind) ?? null
+        if (!isDirectLaunch && !detected) {
             return
         }
         this.armed.add(tab)
@@ -150,20 +169,39 @@ export class ClaudeAdapterService {
             return
         }
 
-        const args = (tab.profile.options.args ?? []).slice()
-        for (let i = args.length - 2; i >= 0; i--) {
-            if (args[i] === '--settings' && String(args[i + 1]).includes(INJECT_DIR_NAME)) {
-                args.splice(i, 2)
+        if (isDirectLaunch) {
+            const args = (tab.profile.options.args ?? []).slice()
+            for (let i = args.length - 2; i >= 0; i--) {
+                if (args[i] === '--settings' && String(args[i + 1]).includes(INJECT_DIR_NAME)) {
+                    args.splice(i, 2)
+                }
+            }
+            args.push('--settings', settingsPath)
+            tab.profile.options.args = args
+        } else {
+            const shimDirectory = path.join(this.injectDir, `vibby-cli-${process.pid}-${sessionId}`)
+            try {
+                this.shimInstallations.set(tab, this.terminalShim.install(
+                    tab,
+                    detected!,
+                    shimDirectory,
+                    ['--settings', settingsPath],
+                ))
+            } catch (error) {
+                try {
+                    fs.unlinkSync(settingsPath)
+                } catch { /* already gone */ }
+                console.error('[tabby-ai] could not install terminal CLI shim, session will use process detection', error)
+                return
             }
         }
-        args.push('--settings', settingsPath)
-        tab.profile.options.args = args
 
         // empty string beats any inherited value in mergeEnv and reads as unset
         const envOverrides = Object.fromEntries(CLAUDE_ENV_MARKERS.map(k => [k, '']))
         tab.profile.options.env = { ...tab.profile.options.env, ...envOverrides }
 
         this.sessionIds.set(tab, sessionId)
+        this.sessionKinds.set(tab, kind)
         this.panes.set(sessionId, tab)
         this.startScraper()
 
@@ -178,6 +216,7 @@ export class ClaudeAdapterService {
             try {
                 fs.unlinkSync(settingsPath)
             } catch { /* already gone */ }
+            this.shimInstallations.get(tab)?.remove()
             this.panes.delete(sessionId)
             this.lastStatus.delete(sessionId)
             this.zone.run(() => this.bus.dropSession(sessionId))
@@ -272,7 +311,7 @@ export class ClaudeAdapterService {
             for (const name of fs.readdirSync(this.injectDir)) {
                 const file = path.join(this.injectDir, name)
                 if (fs.statSync(file).mtimeMs < cutoff) {
-                    fs.unlinkSync(file)
+                    fs.rmSync(file, { recursive: true, force: true })
                 }
             }
         } catch { /* dir may not exist yet */ }

@@ -16,6 +16,9 @@ export interface AiCliRegistryEntry {
     /** Default arguments when launching a session */
     launchArgs?: string[]
 
+    /** Distinctive package/script fragments found in process command lines */
+    runtimeMarkers?: string[]
+
     /** Inline SVG */
     icon: string
 
@@ -29,6 +32,9 @@ export interface AiCliMetadata {
     /** Registry entry id, e.g. 'claude-code' */
     kind: string | null
     version: string | null
+
+    /** Optional name supplied for this individual launch */
+    sessionName?: string|null
 }
 
 export interface DetectedCli {
