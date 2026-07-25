@@ -195,6 +195,14 @@ export class DashboardTabComponent extends BaseTabComponent {
         return Math.max(1, Math.ceil((this.cliCards.length + 1) / LAUNCH_PAGE_SIZE))
     }
 
+    get detectedCliCount (): number {
+        return this.cliCards.filter(card => !!card.detected).length
+    }
+
+    get monitoredSessionCount (): number {
+        return this.rows.filter(row => !!row.sessionId).length
+    }
+
     changeSessionPage (delta: number): void {
         this.sessionPage = this.clampPage(this.sessionPage + delta, this.sessionPageCount)
     }

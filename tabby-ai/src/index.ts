@@ -324,6 +324,13 @@ export default class AiModule {
             .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) .current-tab-indicator {
                 display: none !important;
             }
+            /* AI cards already expose a richer state and event summary. The
+               stock activity marker otherwise survives as an unexplained dot
+               in the card's bottom-right corner. */
+            .content.tabs-on-left > .tab-bar tab-header:has(.ai-state) .activity-indicator,
+            .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) .activity-indicator {
+                display: none !important;
+            }
             .content.tabs-on-left > .tab-bar tab-header:has(.ai-state) .index,
             .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) .index {
                 grid-area: index;
@@ -531,6 +538,12 @@ export default class AiModule {
                 padding: 0;
                 background: none !important;
             }
+            /* The options and close buttons are absolutely positioned over
+               the right edge. Move the state dot clear of them on hover
+               instead of letting the controls cover the only status cue. */
+            .content:not(.tabs-on-left):not(.tabs-on-right) > .tab-bar tab-header:hover .ai-state {
+                margin-right: 55px;
+            }
             .content.tabs-on-left > .tab-bar tab-header:not(.active):hover,
             .content.tabs-on-right > .tab-bar tab-header:not(.active):hover {
                 background: rgba(128, 128, 128, .12);
@@ -730,6 +743,7 @@ export default class AiModule {
             ${collapsed} tab-header.mini { display: none !important; }
             ${collapsed} tab-header .name,
             ${collapsed} tab-header .ai-summary,
+            ${collapsed} tab-header .ai-pane-list,
             ${collapsed} tab-header .buttons { display: none !important; }
             /* no room for a close button — the right-click menu still has one */
             ${collapsed} tab-header .index {
