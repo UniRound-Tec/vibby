@@ -10,6 +10,37 @@
     padding: 10px 15px;
 }
 
+.selector-pages {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+    padding: 12px 15px 2px;
+    border-top: 1px solid rgba(128, 128, 128, .18);
+
+    .selector-page {
+        min-width: 0;
+        padding: 8px 6px;
+        color: var(--bs-body-color, inherit);
+        background: rgba(128, 128, 128, .08);
+        border: 1px solid rgba(128, 128, 128, .2);
+        border-radius: 7px;
+        font-size: .84rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        &:hover {
+            background: rgba(128, 128, 128, .14);
+        }
+
+        &.active {
+            color: var(--bs-primary);
+            border-color: var(--bs-primary);
+            background: color-mix(in srgb, var(--bs-primary) 10%, transparent);
+        }
+    }
+}
+
 .group-header {
     padding: 0 1rem;
     margin: 15px 0 10px;

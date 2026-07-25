@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core'
 import { NgbModal, NgbModalRef } from '@ng-bootstrap/ng-bootstrap'
 
 import { SelectorModalComponent } from '../components/selectorModal.component'
-import { SelectorOption } from '../api/selector'
+import { SelectorOption, SelectorPage } from '../api/selector'
 
 @Injectable({ providedIn: 'root' })
 export class SelectorService {
@@ -18,7 +18,7 @@ export class SelectorService {
         private ngbModal: NgbModal,
     ) { }
 
-    show <T> (name: string, options: SelectorOption<T>[]): Promise<T> {
+    show <T> (name: string, options: SelectorOption<T>[], pages: SelectorPage[] = []): Promise<T> {
         const modal = this.ngbModal.open(SelectorModalComponent)
         this.current = modal
         modal.result.finally(() => {
@@ -27,6 +27,7 @@ export class SelectorService {
         const instance: SelectorModalComponent<T> = modal.componentInstance
         instance.name = name
         instance.options = options
+        instance.pageDefinitions = pages
         return modal.result as Promise<T>
     }
 }

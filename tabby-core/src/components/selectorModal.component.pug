@@ -7,6 +7,14 @@
         (ngModelChange)='onFilterChange()'
     )
 
+    .selector-pages(*ngIf='pages.length')
+        button.selector-page(
+            *ngFor='let page of pages',
+            type='button',
+            [class.active]='page.name === activePage',
+            (click)='selectPage(page.name)'
+        ) {{ page.name }}
+
     .list-group.list-group-light(*ngIf='filteredOptions.length')
         ng-container(*ngFor='let option of filteredOptions; let i = index')
             label.group-header(

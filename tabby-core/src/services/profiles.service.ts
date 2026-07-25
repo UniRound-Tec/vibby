@@ -3,7 +3,7 @@ import { TranslateService } from '@ngx-translate/core'
 import { NewTabParameters } from './tabs.service'
 import { BaseTabComponent } from '../components/baseTab.component'
 import { QuickConnectProfileProvider, PartialProfile, PartialProfileGroup, Profile, ProfileGroup, ProfileProvider } from '../api/profileProvider'
-import { SelectorOption } from '../api/selector'
+import { SelectorOption, SelectorPage } from '../api/selector'
 import { AppService } from './app.service'
 import { configMerge, ConfigProxy, ConfigService, FullyDefined } from './config.service'
 import { NotificationsService } from './notifications.service'
@@ -254,34 +254,7 @@ export class ProfilesService {
 
         return new Promise<PartialProfile<Profile>|null>(async (resolve, reject) => {
             try {
-                const recentProfiles = this.getRecentProfiles()
-
-                let options: SelectorOption<void>[] = recentProfiles.map((p, i) => ({
-                    ...this.selectorOptionForProfile(p),
-                    group: this.translate.instant('Recent'),
-                    icon: 'fas fa-history',
-                    color: p.color ?? undefined,
-                    weight: i - (recentProfiles.length + 1),
-                    callback: async () => {
-                        if (p.id) {
-                            p = (await this.getProfiles()).find(x => x.id === p.id) ?? p
-                        }
-                        resolve(p)
-                    },
-                }))
-                if (recentProfiles.length) {
-                    options.push({
-                        name: this.translate.instant('Clear recent profiles'),
-                        group: this.translate.instant('Recent'),
-                        icon: 'fas fa-eraser',
-                        weight: -1,
-                        callback: async () => {
-                            window.localStorage.removeItem('recentProfiles')
-                            this.config.save()
-                            resolve(null)
-                        },
-                    })
-                }
+                let options: SelectorOption<void>[] = []
 
                 let profiles = await this.getProfiles()
 
@@ -301,17 +274,31 @@ export class ProfilesService {
 
                 profiles = profiles.filter(x => x.id && !this.config.store.profileBlacklist.includes(x.id))
 
-                options = [...options, ...profiles.map((p): SelectorOption<void> => ({
-                    ...this.selectorOptionForProfile(p),
-                    weight: p.isBuiltin ? 2 : 1,
-                    callback: () => resolve(p),
-                }))]
+                options = profiles.map((p): SelectorOption<void> => {
+                    const page = this.profileSelectorPage(p)
+                    const option = this.selectorOptionForProfile<Profile, never>(p)
+                    return {
+                        ...option,
+                        // The four pages replace the old provider/group headers.
+                        group: undefined,
+                        page: page.name,
+                        pageOrder: page.order,
+                        // Executable paths are implementation detail. Connection
+                        // addresses and serial ports remain useful identifiers.
+                        description: p.type === 'ssh' || p.type === 'serial'
+                            ? option.description
+                            : undefined,
+                        weight: p.isBuiltin ? 2 : 1,
+                        callback: () => resolve(p),
+                    }
+                })
 
                 try {
                     const { SettingsTabComponent } = window['nodeRequire']('tabby-settings')
                     options.push({
                         name: this.translate.instant('Manage profiles'),
                         icon: 'fas fa-window-restore',
+                        allPages: true,
                         weight: 10,
                         callback: () => {
                             this.app.openNewTabRaw({
@@ -325,11 +312,14 @@ export class ProfilesService {
 
                 this.getProviders().forEach(provider => {
                     if (provider instanceof QuickConnectProfileProvider) {
+                        const page = this.profileSelectorPage({ type: provider.id, name: provider.name })
                         options.push({
                             name: this.translate.instant('Quick connect'),
                             freeInputPattern: this.translate.instant('Connect to "%s"...'),
                             description: `(${provider.name.toUpperCase()})`,
                             icon: 'fas fa-arrow-right',
+                            page: page.name,
+                            pageOrder: page.order,
                             weight: provider.id !== this.config.store.defaultQuickConnectProvider ? 1 : 0,
                             callback: query => {
                                 const profile = provider.quickConnect(query)
@@ -339,11 +329,38 @@ export class ProfilesService {
                     }
                 })
 
-                await this.selector.show(this.translate.instant('Select profile or enter an address'), options).catch(() => reject())
+                await this.selector.show(
+                    this.translate.instant('Select profile or enter an address'),
+                    options,
+                    this.profileSelectorPages(),
+                ).catch(() => reject())
             } catch (err) {
                 reject(err)
             }
         })
+    }
+
+    private profileSelectorPage (profile: Pick<PartialProfile<Profile>, 'type'|'name'>): { name: string, order: number } {
+        switch (profile.type) {
+            case 'ai-cli':
+                return { name: this.translate.instant('AI CLI'), order: 2 }
+            case 'ssh':
+            case 'telnet':
+                return { name: this.translate.instant('SSH connections'), order: 3 }
+            case 'serial':
+                return { name: this.translate.instant('Hardware'), order: 4 }
+            default:
+                return { name: this.translate.instant('Built-in terminals'), order: 1 }
+        }
+    }
+
+    private profileSelectorPages (): SelectorPage[] {
+        return [
+            { name: this.translate.instant('Built-in terminals'), order: 1 },
+            { name: this.translate.instant('AI CLI'), order: 2 },
+            { name: this.translate.instant('SSH connections'), order: 3 },
+            { name: this.translate.instant('Hardware'), order: 4 },
+        ]
     }
 
     getRecentProfiles (): PartialProfile<Profile>[] {

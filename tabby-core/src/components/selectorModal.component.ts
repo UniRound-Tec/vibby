@@ -2,7 +2,7 @@ import { firstBy } from 'thenby'
 import { Component, Input, HostListener, ViewChildren, QueryList, ElementRef } from '@angular/core' // eslint-disable-line @typescript-eslint/no-unused-vars
 import { NgbActiveModal } from '@ng-bootstrap/ng-bootstrap'
 import FuzzySearch from 'fuzzy-search'
-import { SelectorOption } from '../api/selector'
+import { SelectorOption, SelectorPage } from '../api/selector'
 
 /** @hidden */
 @Component({
@@ -16,7 +16,10 @@ export class SelectorModalComponent<T> {
     @Input() filter = ''
     @Input() name: string
     @Input() selectedIndex = 0
+    @Input() pageDefinitions: SelectorPage[] = []
     hasGroups = false
+    pages: SelectorPage[] = []
+    activePage: string|null = null
     @ViewChildren('item') itemChildren: QueryList<ElementRef>
     private preventEdit: boolean
 
@@ -25,6 +28,15 @@ export class SelectorModalComponent<T> {
     }
 
     ngOnInit (): void {
+        const pageOrders = new Map(this.pageDefinitions.map(page => [page.name, page.order]))
+        for (const option of this.options) {
+            if (option.page) {
+                pageOrders.set(option.page, Math.min(pageOrders.get(option.page) ?? Number.MAX_SAFE_INTEGER, option.pageOrder ?? 0))
+            }
+        }
+        this.pages = [...pageOrders].map(([name, order]) => ({ name, order }))
+            .sort((a, b) => a.order - b.order)
+        this.activePage = this.pages[0]?.name ?? null
         this.onFilterChange()
         this.hasGroups = this.options.some(x => x.group)
     }
@@ -32,6 +44,12 @@ export class SelectorModalComponent<T> {
     @HostListener('keydown', ['$event']) onKeyDown (event: KeyboardEvent): void {
         if (event.key === 'Escape') {
             this.close()
+        } else if (this.pages.length && (event.key === 'ArrowLeft' || event.key === 'ArrowRight') && event.altKey) {
+            const direction = event.key === 'ArrowRight' ? 1 : -1
+            const current = this.pages.findIndex(page => page.name === this.activePage)
+            const target = (current + direction + this.pages.length) % this.pages.length
+            this.selectPage(this.pages[target].name)
+            event.preventDefault()
         } else if (this.filteredOptions.length > 0) {
             if (event.key === 'PageUp' || event.key === 'ArrowUp' && event.metaKey) {
                 this.selectedIndex -= Math.min(10, Math.max(1, this.selectedIndex))
@@ -74,8 +92,11 @@ export class SelectorModalComponent<T> {
 
     onFilterChange (): void {
         const f = this.filter.trim().toLowerCase()
+        const pageOptions = this.activePage
+            ? this.options.filter(option => option.page === this.activePage || option.allPages)
+            : this.options
         if (!f) {
-            this.filteredOptions = this.options.slice().sort(
+            this.filteredOptions = pageOptions.slice().sort(
                 firstBy<SelectorOption<T>, number>(x => x.weight ?? 0)
                     .thenBy<SelectorOption<T>, string>(x => x.group ?? '')
                     .thenBy<SelectorOption<T>, string>(x => x.name),
@@ -84,12 +105,12 @@ export class SelectorModalComponent<T> {
         } else {
             // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
             this.filteredOptions = new FuzzySearch(
-                this.options,
+                pageOptions,
                 ['name', 'group', 'description'],
                 { sort: true },
             ).search(f)
 
-            this.options.filter(x => x.freeInputPattern).sort(firstBy<SelectorOption<T>, number>(x => x.weight ?? 0)).forEach(freeOption => {
+            pageOptions.filter(x => x.freeInputPattern).sort(firstBy<SelectorOption<T>, number>(x => x.weight ?? 0)).forEach(freeOption => {
                 if (!this.filteredOptions.includes(freeOption)) {
                     this.filteredOptions.push(freeOption)
                 }
@@ -97,6 +118,15 @@ export class SelectorModalComponent<T> {
         }
         this.selectedIndex = Math.max(0, this.selectedIndex)
         this.selectedIndex = Math.min(this.filteredOptions.length - 1, this.selectedIndex)
+    }
+
+    selectPage (page: string): void {
+        if (this.activePage === page) {
+            return
+        }
+        this.activePage = page
+        this.selectedIndex = 0
+        this.onFilterChange()
     }
 
     filterMatches (option: SelectorOption<T>, terms: string[]): boolean {

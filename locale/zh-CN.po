@@ -2814,3 +2814,12 @@ msgstr "已在终端中识别 · 无法启用事件监听"
 
 msgid "Event monitoring enabled · waiting for CLI activity"
 msgstr "事件监听已启用 · 等待 CLI 活动"
+
+msgid "Built-in terminals"
+msgstr "内置终端"
+
+msgid "SSH connections"
+msgstr "SSH 连接"
+
+msgid "Hardware"
+msgstr "硬件"
