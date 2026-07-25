@@ -49,6 +49,9 @@ export class DashboardTabComponent extends BaseTabComponent {
     private snapshots: ReadonlyMap<string, AiSessionSnapshot> = new Map()
     private watchedSplits = new Set<SplitTabComponent>()
     private iconCache = new Map<string, SafeHtml>()
+    /** Only for panes whose profile carries no cwd — asked once per pane, never per render */
+    private liveCwdNames = new Map<TerminalTabComponent, string>()
+    private cwdAsked = new WeakSet<TerminalTabComponent>()
 
     constructor (
         injector: Injector,
@@ -92,6 +95,7 @@ export class DashboardTabComponent extends BaseTabComponent {
             }
             for (const pane of panes) {
                 if (pane instanceof TerminalTabComponent && pane.profile?.type === 'ai-cli') {
+                    this.askCwd(pane)
                     const sessionId = this.adapter.sessionIdForPane(pane)
                     const snapshot = sessionId ? this.snapshots.get(sessionId) ?? null : null
                     rows.push({
@@ -125,6 +129,24 @@ export class DashboardTabComponent extends BaseTabComponent {
             case 'error': return this.translate.instant('Error')
             case 'untracked': return this.translate.instant('Untracked')
         }
+    }
+
+    /**
+     * User-given name first (rename the tab and it sticks), else the working
+     * directory — the tab title is unusable here: claude overwrites it with
+     * the prompt text, which the caption already shows.
+     */
+    nameFor (row: AiSessionRow): string {
+        if (row.pane.customTitle) {
+            return row.pane.customTitle
+        }
+        const configured = row.pane.profile?.options?.cwd
+        return this.baseName(configured) ?? this.liveCwdNames.get(row.pane) ?? row.pane.title
+    }
+
+    rename (row: AiSessionRow, event: MouseEvent): void {
+        event.stopPropagation()
+        this.app.renameTab(row.pane)
     }
 
     /** What the session last did — the hook event, high confidence */
@@ -195,6 +217,25 @@ export class DashboardTabComponent extends BaseTabComponent {
             this.iconCache.set(kind, this.sanitizer.bypassSecurityTrustHtml(entry.icon))
         }
         return this.iconCache.get(kind) ?? null
+    }
+
+    private baseName (dir: string|null|undefined): string|null {
+        const name = dir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
+        return name ? name : null
+    }
+
+    /** One shot per pane, and only once its session exists — the answer never changes for a CLI */
+    private askCwd (pane: TerminalTabComponent): void {
+        if (this.cwdAsked.has(pane) || pane.profile?.options?.cwd || !pane.session) {
+            return
+        }
+        this.cwdAsked.add(pane)
+        pane.session.getWorkingDirectory().then(cwd => {
+            const name = this.baseName(cwd)
+            if (name) {
+                this.liveCwdNames.set(pane, name)
+            }
+        }).catch(() => { /* unnamed is survivable */ })
     }
 
     private applyThemeVars (): void {
