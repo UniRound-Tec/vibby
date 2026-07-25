@@ -29,6 +29,13 @@ import { ReleaseNotesComponent } from './releaseNotesTab.component'
     ],
 })
 export class SettingsTabComponent extends BaseTabComponent {
+    /**
+     * vibby: keeps this tab out of the tab list — the toolbar's cog is the one
+     * way in and out, the same deal the dashboard has. Read by
+     * tabHeader.component.ts, which hides the header entirely.
+     */
+    miniHeader = true
+
     @Input() activeTab: string
     Platform = Platform
     configDefaults: any

@@ -2,7 +2,6 @@
 import { Injectable } from '@angular/core'
 import { TranslateService } from '@ngx-translate/core'
 
-import { HostAppService, Platform } from './api/hostApp'
 import { ProfilesService } from './services/profiles.service'
 import { CommandProvider, Command, CommandLocation } from './api/commands'
 
@@ -10,7 +9,6 @@ import { CommandProvider, Command, CommandLocation } from './api/commands'
 @Injectable({ providedIn: 'root' })
 export class CoreCommandProvider extends CommandProvider {
     constructor (
-        private hostApp: HostAppService,
         private profilesService: ProfilesService,
         private translate: TranslateService,
     ) {
@@ -30,9 +28,10 @@ export class CoreCommandProvider extends CommandProvider {
                 id: 'core:profile-selector',
                 locations: [CommandLocation.LeftToolbar, CommandLocation.StartPage],
                 label: this.translate.instant('Profiles & connections'),
-                icon: this.hostApp.platform === Platform.Web
-                    ? require('./icons/plus.svg')
-                    : require('./icons/profiles.svg'),
+                // vibby: a plus on every platform, not just Web. This is the
+                // only "new tab" affordance in the rail now that local's "+"
+                // button is unregistered, so it has to read as one.
+                icon: require('./icons/plus.svg'),
                 run: async () => this.activate(),
             },
             ...this.profilesService.getRecentProfiles().map((profile, index) => ({

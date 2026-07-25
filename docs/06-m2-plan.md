@@ -147,12 +147,24 @@ export interface AiSessionSnapshot {
 | `tabby-core/src/components/tabHeader.component.pug` | 3 行 vibby 挂载点（`.ai-icon`/`.ai-state`/`.ai-summary`，全部 `*ngIf` 兜底） | 低（纯追加） |
 | `tabby-core/src/components/tabHeader.component.ts` | `data-ai-group` HostBinding | 低（新增成员） |
 | `tabby-core/src/configDefaults.yaml` | `tabsLocation: top` → `left` | 低（单值） |
+| `tabby-local/src/index.ts` | 不注册 `ButtonProvider`（「+」新终端按钮） | 低（删 1 行 + 2 处 import，`buttonProvider.ts` 原样保留） |
+| `tabby-core/src/services/profiles.service.ts` | 选择器里内置 profile 自带 `group` 时保留自己的分组，并翻译「内置」 | 低（1 行） |
+| `tabby-core/src/icons/plus.svg` | Font Awesome → Tabler（描边） | 低（整文件替换） |
+| `tabby-settings/src/icons/cog.svg` | Font Awesome → Tabler（描边） | 低（整文件替换） |
+| `tabby-core/src/commands.ts` | 「配置和连接」所有平台都用 `plus.svg`（上游仅 Web 用） | 低（3 行 + 删一个未用的注入） |
+| `tabby-settings/src/components/settingsTab.component.ts` | `miniHeader = true` | 低（新增成员） |
 
 编号那三项是 Dashboard 作为 mini tab 不该占用序号的必然代价：编号既在头部渲染又在 `tab-N` 热键里，两处都在 core。
+
+主页和设置都是 `miniHeader` tab：tab 列表里完全不渲染，入口只有工具栏按钮。这带来一条横向布局的修正——上游把工具栏排在 tab 列表**之后**，去掉 mini tab 后主页会从最左跑到中间，所以注入样式表里给横向布局的首个按钮组加 `order: -1`（选择器用 `.tabs + .btn-group` 而非 `:first-of-type`——of-type 数的是 div，`.tabs` 也是 div，永远选不中）。侧栏布局不受影响，工具栏本来就固定在底部。
 
 侧栏其余外观（卡片布局、分组标题、底部工具栏、状态色）**全部走 tabby-ai 注入的样式表**，core 不含任何 vibby 专属样式——挂载点只提供 DOM 和数据，样式留在插件侧，这是刻意的合并纪律。
 
 侧栏收缩（`aiCli.rail.collapsed`）同样零 core 触点：`RailService` 只往 `<body>` 挂 `vibby-rail-collapsed` 类，收缩态的全部布局在同一张注入样式表里。其中 `body.vibby-rail-collapsed .window { min-height: 0 }` 是必需的——工具栏在窄栏里改为竖排后，flex item 默认的 `min-height: auto` 会把整个窗口布局顶出视口底部 30px（标题栏高度）。
+
+工具栏四个图标统一为 **Tabler Icons（MIT，描边 2px）**：主页和折叠在 `tabby-ai/src/icons/`，「+」和设置只能替换 core / settings 里的原文件（上游把图标路径写死在各自的 provider 里，没有替换点）。候选方案见 `docs/mockups/toolbar-icons.html`，由 `scripts/fetch-icons.mjs` + `scripts/build-icon-mockup.mjs` 生成，换图标不必手抄 SVG。
+
+描边图标有一个坑：主题（`theme.new.scss`）和 `appRoot.component.scss` 都给 `.btn-tab-bar svg` 强制 `fill`，会把描边图标灌成实心色块。注入样式表里用 `svg[stroke] { fill: none !important }` 兜住——按属性选择而不是按类，这样 core 那两个文件也覆盖到，且换成别的描边图标集时不用改。
 
 ## 7. 风险表
 

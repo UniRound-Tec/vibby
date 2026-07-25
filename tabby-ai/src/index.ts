@@ -87,8 +87,6 @@ export default class AiModule {
      * the upstream diff at the single markup hook in tabHeader.component.pug.
      */
     private injectTabBarStyles (): void {
-        const homeIcon: string = require('./icons/home.svg')
-        const mask = `url("data:image/svg+xml,${encodeURIComponent(homeIcon)}") center / contain no-repeat`
         // every collapsed rule shares this prefix; :is() keeps the block
         // readable where spelling both sides out would double its length
         const collapsed = `body.${COLLAPSED_CLASS} .content:is(.tabs-on-left, .tabs-on-right) > .tab-bar`
@@ -121,37 +119,34 @@ export default class AiModule {
                 background: color-mix(in srgb, ${ACCENT} 55%, transparent);
             }
 
-            /* ---- home tab: icon only on horizontal bars, a labelled row on side bars ---- */
-            tab-header.mini {
-                width: 52px !important;
-                flex: 0 0 52px !important;
-                min-width: 52px !important;
+            /* ---- toolbar icons are Tabler, which draws with strokes ----
+               both the theme and appRoot force a fill on every .btn-tab-bar
+               svg, which floods a stroke icon into a solid blob. Keyed on
+               [stroke] rather than a class so it covers any stroke icon,
+               including the two that live in core's own icon folders. */
+            .tab-bar .btn-tab-bar svg[stroke],
+            .tab-bar .btn-tab-bar svg[stroke] path {
+                fill: none !important;
             }
-            tab-header.mini .index,
-            tab-header.mini .pin-indicator,
-            tab-header.mini .buttons,
-            tab-header.mini .name { display: none !important; }
 
-            /* a flex item, not an overlay: it can hold the index column open on
-               side bars and centre itself with auto margins on horizontal ones */
-            tab-header.mini::before {
-                content: '';
-                flex: none;
-                width: 14px;
-                height: 14px;
-                margin: auto;
-                align-self: center;
-                background: currentColor;
-                opacity: .6;
-                -webkit-mask: ${mask};
-                mask: ${mask};
-                pointer-events: none;
+            /* ---- home is a toolbar button in every layout ----
+               so its tab must never be in the list: on horizontal bars the two
+               would both be visible and read as duplicates. Hiding the tab
+               rather than the button keeps one affordance in one place across
+               all four tabsLocation values. */
+            tab-header.mini { display: none !important; }
+
+            /* On horizontal bars the toolbar is markup-ordered after the tab
+               list, so removing the mini tab would move home from the leading
+               edge into the middle. The leading button group goes back to the
+               front — home has to stay in the same corner in every layout.
+               Safe with drag-reorder: the CDK drop list is .tabs, and it only
+               ever reorders tab-headers inside it, never the bar's own children.
+               Selected by adjacency, not :first-of-type — of-type counts divs,
+               and .tabs is a div too, so it would never match the group. */
+            .content:not(.tabs-on-left):not(.tabs-on-right) > .tab-bar > .tabs + .btn-group {
+                order: -1;
             }
-            tab-header.mini.active::before { opacity: 1; }
-
-            /* on side bars the list is sessions only — home is a toolbar button */
-            .tabs-on-left tab-header.mini,
-            .tabs-on-right tab-header.mini { display: none !important; }
 
             /* ---- side bar: a list, not a strip of tabs ---- */
             /* cards need more room than upstream's 200px name-only rail */
@@ -364,6 +359,38 @@ export default class AiModule {
                 border-radius: 0 3px 3px 0;
                 background: ${ACCENT} !important;
             }
+            /* the unread-activity underline has the same problem and no room to
+               solve it: a 2px line inset 10px from both edges reads as a stray
+               divider inside a card. A dot on the trailing edge says the same
+               thing without being mistaken for structure. */
+            .content.tabs-on-left > .tab-bar .activity-indicator,
+            .content.tabs-on-right > .tab-bar .activity-indicator {
+                top: 50%;
+                bottom: auto !important;
+                left: auto !important;
+                right: 8px !important;
+                width: 5px !important;
+                height: 5px !important;
+                margin-top: -2px;
+                border-radius: 50%;
+                opacity: .55;
+            }
+            /* in a card the chip already occupies that corner, so the dot goes
+               on the event line's own row instead of on top of the chip */
+            .content.tabs-on-left > .tab-bar tab-header:has(.ai-state) .activity-indicator,
+            .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) .activity-indicator {
+                top: auto;
+                bottom: 11px !important;
+                margin-top: 0;
+            }
+            /* collapsed: the state badge owns the top-right corner, so this
+               sits bottom-right and cannot be read as a divider */
+            ${collapsed} .activity-indicator {
+                top: auto !important;
+                bottom: 5px !important;
+                right: 5px !important;
+                margin-top: 0;
+            }
 
             /* ---- side bar: one toolbar pinned at the bottom ---- */
             .content.tabs-on-left > .tab-bar > .btn-group,
@@ -425,19 +452,10 @@ export default class AiModule {
                 background: color-mix(in srgb, ${ACCENT} 13%, transparent);
                 opacity: 1;
             }
-            /* the icon's own fill="currentColor" loses to a global svg rule */
-            .content.tabs-on-left > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar svg,
-            .content.tabs-on-left > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar svg path,
-            .content.tabs-on-right > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar svg,
-            .content.tabs-on-right > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar svg path {
-                fill: ${ACCENT} !important;
-            }
-            .content.tabs-on-left > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar svg,
-            .content.tabs-on-left > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar svg path,
-            .content.tabs-on-right > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar svg,
-            .content.tabs-on-right > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar svg path {
-                fill: currentColor !important;
-            }
+            /* the icon's own stroke="currentColor" already follows the colour
+               above; only the theme's forced fill has to be undone, and the
+               svg[stroke] rule at the top of this sheet does that. Nothing
+               else needed here — a fill would flood a stroke icon solid. */
             /* ...but not the trailing group's, which starts with settings */
             .content.tabs-on-left > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar,
             .content.tabs-on-right > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar {
@@ -514,7 +532,9 @@ export default class AiModule {
                 padding: 0 !important;
                 margin-bottom: 4px;
             }
-            /* home is a toolbar button on side bars, collapsed or not */
+            /* ...but not the home tab. The rule above also carries !important,
+               so the global \`tab-header.mini { display: none }\` loses to it on
+               specificity — this scope has to hide it again itself. */
             ${collapsed} tab-header.mini { display: none !important; }
             ${collapsed} tab-header .name,
             ${collapsed} tab-header .ai-summary,
