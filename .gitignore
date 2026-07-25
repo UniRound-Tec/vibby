@@ -40,3 +40,6 @@ crowdin.yml
 
 # fetch-icons.mjs cache; re-fetched on demand, not part of the build
 scripts/.icons.json
+
+# local dev scratch (CDP screenshots, app logs)
+tmp/

@@ -56,16 +56,29 @@ if (command === 'eval') {
     const value = result.result?.result
     console.log(value?.type === 'string' ? value.value : JSON.stringify(value?.value ?? result.result, null, 2))
 } else if (command === 'shot') {
-    const result = await cdp.send('Page.captureScreenshot', { format: 'png' })
-    await fs.writeFile(rest[0], Buffer.from(result.result.data, 'base64'))
-    console.log(`wrote ${rest[0]}`)
+    // shot <file.png> [x y w h] [scale] — optional clip is in CSS px
+    const [file, x, y, w, h, scale] = rest
+    const params = { format: 'png' }
+    if (x !== undefined) {
+        params.clip = { x: +x, y: +y, width: +w, height: +h, scale: +(scale ?? 1) }
+    }
+    const result = await cdp.send('Page.captureScreenshot', params)
+    await fs.writeFile(file, Buffer.from(result.result.data, 'base64'))
+    console.log(`wrote ${file}`)
 } else if (command === 'hover') {
     // synthetic, at the CDP layer — it never touches the real cursor
     const [x, y] = rest.map(Number)
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0 })
     console.log(`hovered ${x},${y}`)
+} else if (command === 'click') {
+    // same — CDP-level synthetic click
+    const [x, y] = rest.map(Number)
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0 })
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 })
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 })
+    console.log(`clicked ${x},${y}`)
 } else {
-    console.error('usage: cdp.mjs eval <expr> | shot <file.png> | hover <x> <y>')
+    console.error('usage: cdp.mjs eval <expr> | shot <file.png> | hover <x> <y> | click <x> <y>')
     process.exitCode = 1
 }
 
