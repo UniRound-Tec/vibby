@@ -1,4 +1,6 @@
 .ai-dashboard
+    img.dashboard-brand([src]='wordmark', alt='Vibby')
+
     section.panel
         .panel-head
             h2.title(translate) Sessions
@@ -40,7 +42,18 @@
                 span(*ngIf='!scanning', translate) Rescan
                 span(*ngIf='scanning', translate) Scanning…
 
-        .strip(*ngIf='clis.length')
+        .strip
+            .chip.terminal-chip(
+                (click)='launchTerminal()',
+                tabindex='0',
+                (keyup.enter)='launchTerminal()',
+            )
+                .glyph([innerHTML]='terminalIcon')
+                .chip-text
+                    .nm(translate) Terminal
+                    .sub
+                        span(translate) Profiles & connections
+
             .chip(
                 *ngFor='let cli of clis',
                 (click)='launch(cli)',

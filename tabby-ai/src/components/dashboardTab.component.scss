@@ -12,6 +12,15 @@
     padding: 22px 26px 44px;
 }
 
+.dashboard-brand {
+    display: block;
+    width: clamp(132px, 14vw, 178px);
+    height: auto;
+    margin: 0 auto 20px;
+    opacity: .9;
+    filter: brightness(0) invert(var(--vibby-logo-invert, 0));
+}
+
 // Two surfaces, theme-agnostic: the panel is the page tinted grey, the cards
 // inside it drop back to the page colour — so they read as raised on light
 // themes and inset on dark ones without either being hardcoded.
@@ -312,6 +321,10 @@ $card-line-hover: rgba(128, 128, 128, .48);
     .tier.full {
         color: var(--ai-green);
         opacity: .95;
+    }
+
+    &.terminal-chip .glyph {
+        opacity: .72;
     }
 }
 

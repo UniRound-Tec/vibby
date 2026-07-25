@@ -2751,3 +2751,15 @@ msgstr "终端"
 #: tabby-ai/src/commands.ts:31
 msgid "Toggle sidebar"
 msgstr "折叠 / 展开侧边栏"
+
+#: tabby-ai/src/services/rail.service.ts
+msgid "No sessions yet"
+msgstr "暂无会话"
+
+#: tabby-ai/src/services/rail.service.ts
+msgid "Choose an AI CLI on Home to get started."
+msgstr "前往主页选择一个 AI CLI，开始新的会话。"
+
+#: tabby-ai/src/services/rail.service.ts
+msgid "New session"
+msgstr "新建会话"

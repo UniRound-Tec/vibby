@@ -5,6 +5,7 @@ import { BaseTabComponent, AppService, ConfigService, ProfilesService, SplitTabC
 import { TerminalTabComponent } from 'tabby-local'
 
 import { DetectedCli } from '../api'
+import { VIBBY_WORDMARK } from '../branding'
 import { AiEvent, AiEventKind, AiSessionSnapshot, stateAfter } from '../events'
 import { AI_CLI_REGISTRY } from '../registry'
 import { CliScannerService } from '../services/cliScanner.service'
@@ -58,6 +59,8 @@ export class DashboardTabComponent extends BaseTabComponent {
     clis: DetectedCli[] = []
     scanning = false
     now = Date.now()
+    readonly wordmark = VIBBY_WORDMARK
+    readonly terminalIcon: SafeHtml
 
     private snapshots: ReadonlyMap<string, AiSessionSnapshot> = new Map()
     private watchedSplits = new Set<SplitTabComponent>()
@@ -81,6 +84,7 @@ export class DashboardTabComponent extends BaseTabComponent {
         private translate: TranslateService,
     ) {
         super(injector)
+        this.terminalIcon = sanitizer.bypassSecurityTrustHtml(require('../icons/terminal.svg'))
         this.setTitle(translate.instant('Home'))
         this.subscribeUntilDestroyed(this.app.tabsChanged$, () => this.refreshRows())
         this.subscribeUntilDestroyed(this.bus.snapshots$, snapshots => {
@@ -236,6 +240,13 @@ export class DashboardTabComponent extends BaseTabComponent {
     async launch (cli: DetectedCli): Promise<void> {
         const profiles = await this.profilesService.getProfiles()
         const profile = profiles.find(x => x.id === `ai-cli:${cli.entry.id}`)
+        if (profile) {
+            await this.profilesService.launchProfile(profile)
+        }
+    }
+
+    async launchTerminal (): Promise<void> {
+        const profile = await this.profilesService.showProfileSelector().catch(() => null)
         if (profile) {
             await this.profilesService.launchProfile(profile)
         }

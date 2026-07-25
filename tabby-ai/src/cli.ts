@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core'
 import { AppService, CLIHandler, CLIEvent, ConfigService } from 'tabby-core'
 
 import { DashboardService } from './services/dashboard.service'
+import { StartupCoverService } from './services/startupCover.service'
 
 /**
  * Opens the dashboard on a plain main-instance launch. priority 0 with
@@ -18,11 +19,15 @@ export class OpenDashboardCLIHandler extends CLIHandler {
         private app: AppService,
         private config: ConfigService,
         private dashboard: DashboardService,
+        private startupCover: StartupCoverService,
     ) {
         super()
     }
 
     async handle (event: CLIEvent): Promise<boolean> {
+        if (!event.secondInstance) {
+            this.startupCover.initialHandshakeReceived()
+        }
         if (event.secondInstance || event.argv._.length !== 0) {
             return false
         }

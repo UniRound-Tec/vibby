@@ -1,5 +1,7 @@
-import { Injectable } from '@angular/core'
-import { ConfigService } from 'tabby-core'
+import { Injectable, NgZone } from '@angular/core'
+import { AppService, ConfigService, TranslateService } from 'tabby-core'
+import { VIBBY_WORDMARK } from '../branding'
+import { DashboardService } from './dashboard.service'
 
 /**
  * Scope for every collapsed-rail rule in the injected stylesheet. It goes on
@@ -7,6 +9,7 @@ import { ConfigService } from 'tabby-core'
  * and has no component to bind a class to.
  */
 export const COLLAPSED_CLASS = 'vibby-rail-collapsed'
+const EMPTY_STATE_CLASS = 'vibby-rail-empty'
 
 /**
  * The side rail's collapsed state. Just a persisted boolean mirrored onto the
@@ -15,13 +18,29 @@ export const COLLAPSED_CLASS = 'vibby-rail-collapsed'
  */
 @Injectable({ providedIn: 'root' })
 export class RailService {
-    constructor (private config: ConfigService) { }
+    private emptyState: HTMLDivElement|null = null
+
+    constructor (
+        private config: ConfigService,
+        private app: AppService,
+        private dashboard: DashboardService,
+        private translate: TranslateService,
+        private zone: NgZone,
+    ) { }
 
     activate (): void {
-        this.config.ready$.toPromise().then(() => this.apply())
+        this.config.ready$.toPromise().then(() => {
+            this.apply()
+            this.updateEmptyState()
+        })
+        this.app.ready$.subscribe(() => setTimeout(() => this.updateEmptyState()))
+        this.app.tabsChanged$.subscribe(() => setTimeout(() => this.updateEmptyState()))
         // keeps the two windows of a synced config in step, and picks up
-        // anyone editing the key by hand
-        this.config.changed$.subscribe(() => this.apply())
+        // anyone editing the key by hand; locale also travels through config
+        this.config.changed$.subscribe(() => {
+            this.apply()
+            this.updateEmptyState()
+        })
     }
 
     get collapsed (): boolean {
@@ -36,5 +55,65 @@ export class RailService {
 
     private apply (): void {
         document.body.classList.toggle(COLLAPSED_CLASS, this.collapsed)
+    }
+
+    /**
+     * The dashboard and settings are intentionally hidden from the session
+     * rail. When they are the only tabs, leave a real affordance in the space
+     * instead of an unexplained blank column. This lives here rather than in
+     * core so the Tabby-side markup stays generic.
+     */
+    private updateEmptyState (): void {
+        const empty = this.ensureEmptyState()
+        if (!empty) {
+            return
+        }
+        empty.hidden = this.app.tabs.some(tab => !tab['miniHeader'])
+        empty.querySelector<HTMLElement>('.vibby-rail-empty-title')!.textContent =
+            this.translate.instant('No sessions yet')
+        empty.querySelector<HTMLElement>('.vibby-rail-empty-copy')!.textContent =
+            this.translate.instant('Choose an AI CLI on Home to get started.')
+        empty.querySelector<HTMLButtonElement>('button')!.textContent =
+            `＋ ${this.translate.instant('New session')}`
+    }
+
+    private ensureEmptyState (): HTMLDivElement|null {
+        const host = document.querySelector<HTMLElement>('.content.main > .tab-bar > .tabs')
+        if (!host) {
+            return null
+        }
+        if (this.emptyState?.parentElement === host) {
+            return this.emptyState
+        }
+
+        const empty = document.createElement('div')
+        empty.className = EMPTY_STATE_CLASS
+        empty.setAttribute('aria-live', 'polite')
+
+        const brand = document.createElement('img')
+        brand.className = 'vibby-rail-empty-brand'
+        brand.src = VIBBY_WORDMARK
+        brand.alt = 'Vibby'
+        empty.appendChild(brand)
+
+        const title = document.createElement('div')
+        title.className = 'vibby-rail-empty-title'
+        empty.appendChild(title)
+
+        const copy = document.createElement('div')
+        copy.className = 'vibby-rail-empty-copy'
+        empty.appendChild(copy)
+
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.addEventListener('click', event => {
+            event.stopPropagation()
+            this.zone.run(() => this.dashboard.open())
+        })
+        empty.appendChild(button)
+
+        host.appendChild(empty)
+        this.emptyState = empty
+        return empty
     }
 }

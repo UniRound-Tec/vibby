@@ -77,6 +77,8 @@ export class ThemesService {
         const contrastPairs: string[][] = []
 
         vars['--body-bg'] = background.string()
+        vars['--vibby-logo-color'] = isDark ? '#fff' : '#000'
+        vars['--vibby-logo-invert'] = isDark ? '1' : '0'
         if (this.findCurrentTheme().followsColorScheme) {
             vars['--bs-body-bg'] = theme.background
             vars['--bs-body-color'] = theme.foreground

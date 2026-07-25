@@ -18,6 +18,7 @@ import { ClaudeAdapterService } from './services/claudeAdapter.service'
 import { AiAttentionService } from './services/attention.service'
 import { AiTabStateService } from './services/tabState.service'
 import { COLLAPSED_CLASS, RailService } from './services/rail.service'
+import { STARTUP_COVER_CLASS, StartupCoverService } from './services/startupCover.service'
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
 
@@ -55,7 +56,9 @@ export default class AiModule {
         attention: AiAttentionService,
         tabState: AiTabStateService,
         rail: RailService,
+        startupCover: StartupCoverService,
     ) {
+        startupCover.activate()
         scanner.ensureScanned()
         ingress.start().then(() => {
             console.debug(`[tabby-ai] ingress endpoint template: ${ingress.endpointFor('SESSION')}`)
@@ -136,6 +139,12 @@ export default class AiModule {
                all four tabsLocation values. */
             tab-header.mini { display: none !important; }
 
+            /* The stock StartPage otherwise paints for one frame between
+               AppRoot becoming ready and the initial CLI IPC opening Home. */
+            body.${STARTUP_COVER_CLASS} start-page {
+                visibility: hidden !important;
+            }
+
             /* On horizontal bars the toolbar is markup-ordered after the tab
                list, so removing the mini tab would move home from the leading
                edge into the middle. The leading button group goes back to the
@@ -153,6 +162,15 @@ export default class AiModule {
             .content.tabs-on-left,
             .content.tabs-on-right {
                 --side-tab-width: calc(236px * var(--spaciness));
+                background: var(--theme-bg-more-2);
+            }
+            .content.tabs-on-left > .content {
+                overflow: hidden;
+                border-top-left-radius: 12px;
+            }
+            .content.tabs-on-right > .content {
+                overflow: hidden;
+                border-top-right-radius: 12px;
             }
             .content.tabs-on-left > .tab-bar,
             .content.tabs-on-right > .tab-bar {
@@ -167,6 +185,71 @@ export default class AiModule {
                 min-height: 0;
                 overflow-y: auto;
                 padding: 8px 8px 0 !important;
+            }
+            .content:is(.tabs-on-left, .tabs-on-right) > .tab-bar:has(> .tabs > .vibby-rail-empty:not([hidden])) > .btn-space {
+                flex: 0 0 0 !important;
+                height: 0 !important;
+                min-height: 0;
+            }
+            .vibby-rail-empty {
+                display: none;
+            }
+            .content.tabs-on-left > .tab-bar > .tabs > .vibby-rail-empty:not([hidden]),
+            .content.tabs-on-right > .tab-bar > .tabs > .vibby-rail-empty:not([hidden]) {
+                display: flex;
+                flex: 1 0 220px;
+                min-height: 220px;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 32px 15px;
+                text-align: center;
+                color: var(--bs-body-color);
+            }
+            .vibby-rail-empty-brand {
+                display: block;
+                width: 142px;
+                height: auto;
+                margin-bottom: 25px;
+                opacity: .88;
+                filter: brightness(0) invert(var(--vibby-logo-invert, 0));
+            }
+            .vibby-rail-empty-title {
+                margin-bottom: 7px;
+                font-size: 13px;
+                font-weight: 600;
+                letter-spacing: .02em;
+                opacity: .78;
+            }
+            .vibby-rail-empty-copy {
+                max-width: none;
+                margin-bottom: 16px;
+                font-size: 10.5px;
+                line-height: 1.65;
+                white-space: nowrap;
+                opacity: .48;
+            }
+            .vibby-rail-empty button {
+                min-width: 118px;
+                padding: 7px 13px;
+                border: 1px solid color-mix(in srgb, ${ACCENT} 78%, transparent);
+                border-radius: 7px;
+                background: color-mix(in srgb, ${ACCENT} 14%, transparent);
+                color: ${ACCENT};
+                font: inherit;
+                font-size: 11px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: background .15s ease, color .15s ease, border-color .15s ease;
+            }
+            .vibby-rail-empty button:hover {
+                border-color: ${ACCENT};
+                background: ${ACCENT};
+                color: white;
+            }
+            .vibby-rail-empty button:focus-visible {
+                outline: 2px solid color-mix(in srgb, ${ACCENT} 60%, white);
+                outline-offset: 2px;
             }
             .content.tabs-on-left > .tab-bar tab-header,
             .content.tabs-on-right > .tab-bar tab-header {
@@ -497,6 +580,9 @@ export default class AiModule {
             body.${COLLAPSED_CLASS} .content.tabs-on-left,
             body.${COLLAPSED_CLASS} .content.tabs-on-right {
                 --side-tab-width: calc(58px * var(--spaciness));
+            }
+            body.${COLLAPSED_CLASS} .vibby-rail-empty {
+                display: none !important;
             }
             /* the toolbar stops being one row pinned to the bottom and becomes
                a column, which is the only thing that fits at this width */

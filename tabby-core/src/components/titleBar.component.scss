@@ -9,9 +9,20 @@ $titlebar-height: 30px;
     .title {
         flex: auto;
         padding-left: 15px;
-        line-height: $titlebar-height;
+        display: flex;
+        align-items: center;
         -webkit-app-region: drag;
         color: var(--bs-body-color);
+    }
+
+    .vibby-logo {
+        width: 20px;
+        height: 20px;
+        display: block;
+        flex: none;
+        background: var(--vibby-logo-color, currentColor);
+        -webkit-mask: url('../../../app/assets/vibby-logo-black.png') center / contain no-repeat;
+        mask: url('../../../app/assets/vibby-logo-black.png') center / contain no-repeat;
     }
 
     window-controls {
@@ -23,7 +34,6 @@ $titlebar-height: 30px;
 
         .title {
             padding-left: 80px;
-            line-height: 36px;
         }
 
         window-controls {

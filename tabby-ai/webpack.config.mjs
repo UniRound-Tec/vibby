@@ -8,4 +8,7 @@ export default () => config({
     name: 'ai',
     dirname: __dirname,
     externals: ['http', 'crypto'],
+    rules: [
+        { test: /\.png$/, type: 'asset/inline' },
+    ],
 })
