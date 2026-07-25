@@ -137,6 +137,16 @@ export interface AiSessionSnapshot {
 
 **预期新增：仅 `locale/zh-CN.po`**。全部功能收在 tabby-ai 包内，无新 core/local 改动——这是本里程碑合并纪律的验收项之一。
 
+**实际（含 M2 收尾修复）**：
+| 文件 | 改动 | 合并风险 |
+|---|---|---|
+| `locale/zh-CN.po` | 新增词条 | 无（纯追加） |
+| `tabby-core/src/components/tabHeader.component.ts` | `miniHeader` HostBinding + `displayIndex` getter | 低（新增成员） |
+| `tabby-core/src/components/tabHeader.component.pug` | `{{index + 1}}` → `{{displayIndex}}`（2 处） | 低（单点替换） |
+| `tabby-core/src/components/appRoot.component.ts` | `tab-N` 热键跳过 mini tab | 低（3 行） |
+
+后三项是 Dashboard 作为 mini tab 不该占用序号的必然代价：编号既在头部渲染又在 `tab-N` 热键里，两处都在 core。
+
 ## 7. 风险表
 
 | 风险 | 位置 | 预案 |
@@ -159,7 +169,7 @@ export interface AiSessionSnapshot {
 6. 重启恢复：会话重新拉起后监听自动重建，无 stale 注入参数。
 7. 未监听 CLI（如 opencode）行为与 M1 完全一致，标注"未监听"。
 8. 通知开关关闭后全静默；语言切换 en/zh 无残留。
-9. 上游触点仅 locale；合并演练通过。
+9. 上游触点核对（§6 表）；合并演练通过。
 
 ## 9. 增强项（不阻塞 M2 交付，做完验收后视余力）
 
@@ -176,6 +186,10 @@ export interface AiSessionSnapshot {
 - **WP4**：`AiAttentionService` 订阅 attention$；已实测最小化窗口时 working→needs-you 发射通知（日志佐证）；聚焦门控/点击聚焦为代码审查级验证，列入 §12 手动清单。toast 可见性受系统通知设置（勿扰/Electron 应用权限）影响。
 - **WP5**：zh-CN.po 新增 10 词条（状态词 等你/运行/空闲/异常 + 通知设置组）；合并演练仍为空转（上游 master 无新提交），M2 上游触点仅 `locale/zh-CN.po` 一个文件，达成 §6 目标；全量 `yarn build` 通过（78.7s）。
 - 测试残留已清理：dev config 测试 profile、tmp 注入文件、测试进程；未触碰用户真实 `~/.claude` 配置。
+- **收尾修复（2026-07-25）**：
+  - **think 字幕落地，通道改判**（§9）：通道②（去 ANSI 后正则匹配 PTY 输出）**实证不可行**——用 node-pty 直连 claude 抓原始流可见其状态行是**差分重绘**（只重写变化的字符格，中间穿插光标跳转），`✻ Spelunking… (4s · ↓ 2 tokens)` 到达时序为 `g✶Spelunkn✻✽i…kg✻nn✶ui*✢lk·enpu✢Sl*e✶(4s · ↓2 tokens)`，语序不可恢复。改用**通道③：读渲染后的 xterm 屏幕缓冲区**（`frontend.xterm.buffer.active`，自 `baseY` 起自底向上扫可见行），600ms 轮询、仅 working 会话、跑在 Angular zone 外、仅文本变化时 `zone.run`。短语正则必须 Unicode 感知（`\p{Lu}\p{L}+`）——claude 词表含 `Flambéing`/`Nöödling` 等重音字母，ASCII 类必然漏匹配。
+  - **子会话环境标记**：vibby 若由 claude 会话拉起，子进程继承 `CLAUDECODE`/`CLAUDE_CODE_CHILD_SESSION` 等标记会误判嵌套（"Transcript saving is off"）。arm 时以空串覆盖（`mergeEnv` 里后写胜出，空串读作未设），`ANTHROPIC_*` 不动——那是用户配置。
+  - **mini tab 不占序号**：Dashboard 是 mini tab，`{{index + 1}}` 让真实 tab 从 2 起编。改为 `displayIndex`（非 mini tab 中的序位），`tab-N` 热键同步过滤，上游触点见 §6。
 - **发现的产品问题（留 M2.5/M3 议）**：① cwd 落在未信任目录时 claude 卡在 trust 确认页，Dashboard 无从体现——考虑 profile 默认 cwd 策略或状态识别；② PTY 已死但事件未收尾的 tab 恒显"未监听"，与真未监听 CLI 无法区分；③ claude 的 OSC 标题（`✳ <短语>`）已实证流经 `tab.title$`，§9 think 字幕通道①成立。
 
 ## 12. 手动回归清单（需真人 UI 交互）

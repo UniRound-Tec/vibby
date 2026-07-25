@@ -68,6 +68,14 @@ assert.equal(isAttentionTransition('idle', 'needs-you'), false)
 assert.equal(isAttentionTransition('needs-you', 'idle'), false)
 assert.equal(isAttentionTransition(null, 'working'), false)
 
+// --- liveStatus: rides along while working, dies when work stops ---
+let live = reduceSnapshot(null, ev('prompt-submitted', { ts: 1000 }))
+live = { ...live, liveStatus: 'Spelunking… (4s · ↓ 2 tokens)' }
+live = reduceSnapshot(live, ev('tool-call', { ts: 2000 }))
+assert.equal(live.liveStatus, 'Spelunking… (4s · ↓ 2 tokens)', 'spinner survives tool calls')
+live = reduceSnapshot(live, ev('turn-completed', { ts: 3000 }))
+assert.equal(live.liveStatus, null, 'spinner must not outlive the working state')
+
 // --- summary clamp ---
 assert.equal(clampSummary('  edit:   auth.ts  '), 'edit: auth.ts')
 const long = clampSummary('bash: ' + 'x'.repeat(200))

@@ -50,6 +50,14 @@ export interface AiSessionSnapshot {
     since: number
 
     lastEvent: AiEvent | null
+
+    /**
+     * Low-confidence live caption scraped from the CLI's own status line
+     * (e.g. claude's `Flambéing… (17s · ↓ 1.2k tokens)`). Survives events that
+     * keep the session working — the spinner keeps running across tool calls —
+     * and is dropped the moment the state leaves `working`.
+     */
+    liveStatus?: string | null
 }
 
 export function clampSummary (text: string): string {
@@ -85,6 +93,7 @@ export function reduceSnapshot (prev: AiSessionSnapshot | null, event: AiEvent):
         state: nextState,
         since: prevState === nextState && prev ? prev.since : event.ts,
         lastEvent: event,
+        liveStatus: nextState === 'working' ? prev?.liveStatus ?? null : null,
     }
 }
 

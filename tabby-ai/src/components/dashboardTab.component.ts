@@ -127,11 +127,17 @@ export class DashboardTabComponent extends BaseTabComponent {
         }
     }
 
+    /** What the session last did — the hook event, high confidence */
     captionFor (row: AiSessionRow): string {
         if (!row.snapshot) {
             return this.translate.instant('Launch only · no event monitoring yet')
         }
         return row.snapshot.lastEvent?.summary ?? ''
+    }
+
+    /** That it is still alive — the CLI's own status line, scraped, low confidence */
+    liveFor (row: AiSessionRow): string {
+        return row.snapshot?.liveStatus ?? ''
     }
 
     durationFor (row: AiSessionRow): string {

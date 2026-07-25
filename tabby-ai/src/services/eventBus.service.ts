@@ -61,6 +61,19 @@ export class AiEventBusService {
         return this.snapshots.get(sessionId) ?? null
     }
 
+    /**
+     * Low-confidence caption between hook events (spinner scrape). Ignored
+     * unless the session is known and working; wiped by the next publish().
+     */
+    setLiveStatus (sessionId: string, text: string): void {
+        const snapshot = this.snapshots.get(sessionId)
+        if (!snapshot || snapshot.state !== 'working' || snapshot.liveStatus === text) {
+            return
+        }
+        this.snapshots.set(sessionId, { ...snapshot, liveStatus: clampSummary(text) })
+        this.snapshotsSubject.next(this.snapshots)
+    }
+
     feedFor (sessionId: string): AiEvent[] {
         return this.feeds.get(sessionId) ?? []
     }

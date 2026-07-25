@@ -12,6 +12,35 @@ import { HookIngressService } from './hookIngress.service'
 
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Notification', 'Stop', 'SessionEnd']
 
+/**
+ * Session markers claude sets in its own environment. If vibby itself was
+ * launched from inside a claude session (dev workflows, terminals spawned
+ * by agents), children would inherit them and misdetect a nested session
+ * ("Transcript saving is off"). ANTHROPIC_* stays — that's user config.
+ */
+const CLAUDE_ENV_MARKERS = [
+    'CLAUDECODE',
+    'CLAUDE_CODE_CHILD_SESSION',
+    'CLAUDE_CODE_SESSION_ID',
+    'CLAUDE_CODE_ENTRYPOINT',
+    'CLAUDE_CODE_EXECPATH',
+    'CLAUDE_CODE_SSE_PORT',
+    'CLAUDE_PID',
+    'CLAUDE_EFFORT',
+]
+
+/**
+ * claude's own status line: `✻ Flambéing… (17s · ↓ 1.2k tokens · esc to interrupt)`.
+ * Unicode-aware on purpose — the vocabulary is full of accents (Flambéing, Nöödling).
+ */
+const SPINNER_RE = /(\p{Lu}[\p{L}'’-]{2,24})(?:…|\.{3})\s*\((\d+[smh][^)]{0,60})\)/u
+
+/** Trailing hint claude appends inside the parens */
+const SPINNER_HINT_RE = /\s*·\s*(esc|ctrl)\b.*$/i
+
+/** Status-line poll while a session is working — fast enough to look live, cheap enough to ignore */
+const SCRAPE_INTERVAL_MS = 600
+
 /** Marks generated settings paths so stale injections can be stripped idempotently */
 const INJECT_DIR_NAME = 'vibby-hooks'
 
@@ -38,6 +67,8 @@ export class ClaudeAdapterService {
     private armed = new WeakSet<TerminalTabComponent>()
     private watchedSplits = new WeakSet<SplitTabComponent>()
     private injectDir = path.join(os.tmpdir(), INJECT_DIR_NAME)
+    private scraper: any = null
+    private lastStatus = new Map<string, string>()
 
     constructor (
         private app: AppService,
@@ -128,8 +159,13 @@ export class ClaudeAdapterService {
         args.push('--settings', settingsPath)
         tab.profile.options.args = args
 
+        // empty string beats any inherited value in mergeEnv and reads as unset
+        const envOverrides = Object.fromEntries(CLAUDE_ENV_MARKERS.map(k => [k, '']))
+        tab.profile.options.env = { ...tab.profile.options.env, ...envOverrides }
+
         this.sessionIds.set(tab, sessionId)
         this.panes.set(sessionId, tab)
+        this.startScraper()
 
         tab.sessionChanged$.subscribe(session => {
             console.debug(`[tabby-ai] adapter [${sessionId.slice(0, 8)}] sessionChanged: ${session ? 'live' : 'null'}`)
@@ -143,8 +179,64 @@ export class ClaudeAdapterService {
                 fs.unlinkSync(settingsPath)
             } catch { /* already gone */ }
             this.panes.delete(sessionId)
+            this.lastStatus.delete(sessionId)
             this.zone.run(() => this.bus.dropSession(sessionId))
         })
+    }
+
+    /**
+     * Live caption between hook events (plan §9 channel ②).
+     *
+     * Reads the *rendered* screen, never the PTY stream: claude repaints its
+     * status line differentially (it rewrites only changed cells and jumps the
+     * cursor between them), so `Spelunking…` arrives on the wire as
+     * `g✶Spelunkn✻✽i…kg✻nn✶ui…` — unrecoverable by any regex. Only xterm's
+     * buffer holds the phrase in reading order.
+     *
+     * Low confidence by design: fills the caption, never the state.
+     */
+    private startScraper (): void {
+        if (this.scraper) {
+            return
+        }
+        // outside Angular: a 600ms tick must not drive app-wide change detection
+        this.zone.runOutsideAngular(() => {
+            this.scraper = setInterval(() => this.scrapeOnce(), SCRAPE_INTERVAL_MS)
+        })
+    }
+
+    private scrapeOnce (): void {
+        for (const [sessionId, pane] of this.panes) {
+            if (this.bus.snapshotFor(sessionId)?.state !== 'working') {
+                continue
+            }
+            const status = this.readStatusLine(pane)
+            if (status && status !== this.lastStatus.get(sessionId)) {
+                this.lastStatus.set(sessionId, status)
+                this.zone.run(() => this.bus.setLiveStatus(sessionId, status))
+            }
+        }
+    }
+
+    /** Bottom-up scan of the visible rows — the freshest status line wins */
+    private readStatusLine (pane: TerminalTabComponent): string | null {
+        const xterm = (pane.frontend as { xterm?: any } | undefined)?.xterm
+        const buffer = xterm?.buffer?.active
+        if (!buffer) {
+            return null
+        }
+        // anchor on baseY, not viewportY: scrolling back must not freeze the caption
+        for (let y = buffer.baseY + (xterm.rows ?? 24) - 1; y >= buffer.baseY; y--) {
+            const line = buffer.getLine(y)?.translateToString(true)
+            if (!line) {
+                continue
+            }
+            const match = SPINNER_RE.exec(line)
+            if (match) {
+                return `${match[1]}… (${match[2].replace(SPINNER_HINT_RE, '')})`
+            }
+        }
+        return null
     }
 
     /** PTY died: crash unless a SessionEnd hook explains it within the grace window */

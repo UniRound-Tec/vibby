@@ -170,13 +170,23 @@
     }
 
     .caption {
+        display: flex;
+        align-items: baseline;
+        gap: 7px;
+        min-width: 0;
         font-family: var(--ai-mono);
         font-size: 12.5px;
-        opacity: .45;
         font-style: italic;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+
+        // both halves shrink; neither may push the row wider
+        .act, .live {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .act { opacity: .45; }
+        .live { opacity: .7; }
     }
 }
 
@@ -289,11 +299,12 @@
         padding: 20px 18px;
     }
 
+    // the caption is the product — narrow windows drop duration, never the caption
     .srow {
-        grid-template-columns: 84px minmax(0, 1fr) 64px;
+        grid-template-columns: 84px minmax(0, 150px) 1fr;
         gap: 12px;
 
-        .caption { display: none; }
+        .dur { display: none; }
         .feed { left: 0; right: 0; }
     }
 
