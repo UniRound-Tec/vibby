@@ -447,6 +447,11 @@ split-tab-spanner {
 
 window-controls {
     button svg {
-        fill: var(--theme-fg) !important;
+        // stroke icons (Tabler) — tint via color, not fill
+        color: var(--theme-fg) !important;
+    }
+
+    button.close:hover svg {
+        color: #fff !important;
     }
 }

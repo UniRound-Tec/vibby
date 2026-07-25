@@ -61,7 +61,7 @@ export class Window {
         const bwOptions: BrowserWindowConstructorOptions = {
             width: 800,
             height: 600,
-            title: 'Tabby',
+            title: 'vibby',
             minWidth: 400,
             minHeight: 300,
             webPreferences: {
@@ -92,13 +92,13 @@ export class Window {
 
         if (this.configStore.appearance?.frame === 'native') {
             bwOptions.frame = true
-        } else {
+        } else if (process.platform !== 'win32') {
+            // vibby: no titleBarStyle/titleBarOverlay on Windows. The WCO
+            // buttons are 32px tall against a 30px title bar and use the
+            // system's Segoe glyphs — always slightly off and off-brand.
+            // Windows goes plain frameless and window-controls (the HTML
+            // caption buttons Linux already uses) takes over.
             bwOptions.titleBarStyle = 'hidden'
-            if (process.platform === 'win32') {
-                bwOptions.titleBarOverlay = {
-                    color: '#00000000',
-                }
-            }
         }
 
         if (process.platform === 'darwin') {
@@ -404,18 +404,6 @@ export class Window {
 
         this.on('window-set-dark-mode', (_, mode) => {
             this.setDarkMode(mode)
-        })
-
-        this.on('window-set-window-controls-color', (_, theme) => {
-            if (process.platform === 'win32') {
-                const symbolColor: string = theme.foreground
-                this.window?.setTitleBarOverlay(
-                    {
-                        symbolColor: symbolColor,
-                        height: 32,
-                    },
-                )
-            }
         })
 
         this.on('window-set-title', (_, title) => {

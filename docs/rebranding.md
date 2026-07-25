@@ -52,7 +52,7 @@
 
 主进程：
 
-- 窗口标题 `app/lib/window.ts:64`
+- ~~窗口标题 `app/lib/window.ts:64`~~ ✅ 2026-07-25（随 Windows 自建标题栏改为 vibby）
 - 托盘提示 `app/lib/app.ts:213`、macOS 菜单 About/`app/lib/app.ts:312`、官网链接 `:376-378`
 - 启动失败弹窗 `app/lib/index.ts:113`
 - 启动画面 `app/index.pug:2,19-20`（`.tabby-logo`/`.tabby-title`）
@@ -60,7 +60,7 @@
 渲染层（pug 模板，字符串同时是 ngx-translate 的翻译 key，改英文原文后需同步 `locale/`，否则各语言回退英文）：
 
 - 欢迎页 `tabby-core/src/components/welcomeTab.component.pug:3-7,64,71`
-- 标题栏 `titleBar.component.pug:1`、起始页 `startPage.component.pug:4`、安全模式弹窗 `safeModeModal.component.pug`
+- ~~标题栏 `titleBar.component.pug:1`~~ ✅ 2026-07-25、起始页 `startPage.component.pug:4`、安全模式弹窗 `safeModeModal.component.pug`
 - 设置 About 区块 `tabby-settings/src/components/settingsTab.component.pug:12-16,67,85`
 - 其余含 "Tabby" 的设置页：`configSyncSettingsTab`(3)、`profilesSettingsTab`、`vaultSettingsTab`、`windowSettingsTab`、`terminalSettingsTab` 各 1 处
 

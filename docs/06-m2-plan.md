@@ -153,6 +153,12 @@ export interface AiSessionSnapshot {
 | `tabby-settings/src/icons/cog.svg` | Font Awesome → Tabler（描边） | 低（整文件替换） |
 | `tabby-core/src/commands.ts` | 「配置和连接」所有平台都用 `plus.svg`（上游仅 Web 用） | 低（3 行 + 删一个未用的注入） |
 | `tabby-settings/src/components/settingsTab.component.ts` | `miniHeader = true` | 低（新增成员） |
+| `app/lib/window.ts` | win32 不再设 `titleBarStyle`/`titleBarOverlay`（纯 `frame: false`）；删 `window-set-window-controls-color` 处理；初始标题改 vibby | 中（主进程窗口创建，合并时留意上游在此块的新增选项） |
+| `tabby-electron/src/index.ts` | 删 `updateWindowControlsColor()` 及两个调用点（WCO 已不存在） | 低（整段删除） |
+| `tabby-core/src/components/appRoot.component.pug` | `hideControls` 条件反转：仅 macOS/Web 隐藏窗口按钮（原仅 Linux 显示）；tab bar 内嵌 `window-controls` 条件加入 Windows，删 138px `.window-controls-spacer`（连同 scss 规则） | 低（两处 ngIf + 删一块） |
+| `tabby-core/src/components/windowControls.component.pug/.scss` | 图标为手调四枚（24 栅格 ~13×13 同光学盒，描边 2 圆角，无第三方版权）；按钮 46px 宽、高度 stretch 撑满宿主条；悬停态（close 红底白图标） | 低（整文件替换） |
+| `tabby-core/src/theme.new.scss` | `window-controls` 图标着色 `fill` → `color`（描边图标吃 color），补 close 悬停白图标 | 低（一个块） |
+| `tabby-core/src/components/titleBar.component.pug` | 标题文字 Tabby → vibby | 低（一词） |
 
 编号那三项是 Dashboard 作为 mini tab 不该占用序号的必然代价：编号既在头部渲染又在 `tab-N` 热键里，两处都在 core。
 
@@ -165,6 +171,10 @@ export interface AiSessionSnapshot {
 工具栏四个图标统一为 **Tabler Icons（MIT，描边 2px）**：主页和折叠在 `tabby-ai/src/icons/`，「+」和设置只能替换 core / settings 里的原文件（上游把图标路径写死在各自的 provider 里，没有替换点）。候选方案见 `docs/mockups/toolbar-icons.html`，由 `scripts/fetch-icons.mjs` + `scripts/build-icon-mockup.mjs` 生成，换图标不必手抄 SVG。
 
 描边图标有一个坑：主题（`theme.new.scss`）和 `appRoot.component.scss` 都给 `.btn-tab-bar svg` 强制 `fill`，会把描边图标灌成实心色块。注入样式表里用 `svg[stroke] { fill: none !important }` 兜住——按属性选择而不是按类，这样 core 那两个文件也覆盖到，且换成别的描边图标集时不用改。
+
+**Windows 自建标题栏**（2026-07-25）：原生 WCO 按钮行高 32px、HTML 标题栏 30px——图标中心 16px 对标题文字中心 15px，且按钮悬停背景会溢出标题栏底边 2px 盖住内容；Segoe 字形也与 Tabler 图标集不搭。改为 Windows 也渲染 `window-controls`（原本只给 Linux），主进程退回纯 `frame: false`。实测（DPR 1.5）：按钮 46×30、图标中心 y=15、标题文字中心 y=14.7；最小化/最大化/还原均正常，最大化不遮任务栏。已知取舍：失去 Win11 悬停最大化按钮的 Snap Layouts 弹层（拖拽标题栏到边缘的快照布局仍在），这是所有自绘窗口按钮应用的共性限制。
+
+同日补两处：**① tabsLocation=top/bottom 时按钮消失**——这两种布局走浏览器模式（`isTitleBarNeeded()` 为 false，无独立标题栏），窗口按钮由 tab bar 内嵌的第二个 `window-controls` 提供，而其 ngIf 上游只放行 Linux（Windows 原来靠 WCO）。已把 Windows 加入条件，并删掉为 WCO 预留的 `.window-controls-spacer`。按钮高度改为 stretch，在 30px 标题栏和 38px 横向 tab bar 里都撑满。**② 图标光学对齐**——Tabler 的 minus/square/x 视觉盒差异大（dash 9px 宽对方块 12px），用户看着不齐。改用手调四枚（dash 13、方块 13×13、× 11×11、还原 15 总宽，同 24 栅格描边 2 圆角），四枚视觉等大。候选对比（Tabler/Lucide/Phosphor/Codicon chrome/手调）在 `docs/mockups/caption-icons.html`。
 
 ## 7. 风险表
 

@@ -105,7 +105,6 @@ export default class ElectronModule {
             })
             this.registerGlobalHotkey()
             this.updateVibrancy()
-            this.updateWindowControlsColor()
         })
 
         config.changed$.subscribe(() => {
@@ -140,8 +139,6 @@ export default class ElectronModule {
             this.updateVibrancy()
             this.updateDarkMode()
         })
-
-        config.changed$.subscribe(() => this.updateWindowControlsColor())
 
         config.ready$.toPromise().then(() => {
             dockMenu.update()
@@ -185,15 +182,6 @@ export default class ElectronModule {
     private updateDarkMode () {
         const colorSchemeMode = this.config.store.appearance.colorSchemeMode
         this.electron.ipcRenderer.send('window-set-dark-mode', colorSchemeMode)
-    }
-
-    private updateWindowControlsColor () {
-        // if windows and not using native frame, WCO does not exist, return.
-        if (this.hostApp.platform === Platform.Windows && this.config.store.appearance.frame === 'native') {
-            return
-        }
-
-        this.electron.ipcRenderer.send('window-set-window-controls-color', this.config.store.terminal.colorScheme)
     }
 }
 

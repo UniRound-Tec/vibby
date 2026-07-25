@@ -1,7 +1,7 @@
 title-bar(
   *ngIf='ready && !hostWindow.isFullscreen && config.store.appearance.dock == "off" && isTitleBarNeeded()',
   (dblclick)='toggleMaximize()',
-  [hideControls]='hostApp.platform !== Platform.Linux && !hostWindow.isFullscreen',
+  [hideControls]='hostApp.platform === Platform.macOS || hostApp.platform === Platform.Web',
   [class.inset]='hostApp.platform == Platform.macOS && !hostWindow.isFullscreen'
 )
 
@@ -100,11 +100,7 @@ title-bar(
                 *ngIf='config.store.appearance.frame == "thin" \
                 && config.store.appearance.tabsLocation !== "left" \
                 && config.store.appearance.tabsLocation !== "right" \
-                && hostApp.platform == Platform.Linux',
-            )
-
-            div.window-controls-spacer(
-                *ngIf='config.store.appearance.frame == "thin" && (hostApp.platform == Platform.Windows) && (config.store.appearance.tabsLocation == "top")',
+                && (hostApp.platform == Platform.Linux || hostApp.platform == Platform.Windows)',
             )
         .content
             start-page.content-tab.content-tab-active(*ngIf='ready && app.tabs.length == 0')

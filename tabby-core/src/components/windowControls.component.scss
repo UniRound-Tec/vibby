@@ -1,3 +1,6 @@
+// vibby: on Windows these ARE the caption buttons now (the native overlay is
+// gone), so they follow Windows metrics — 46px wide, and as tall as whatever
+// bar hosts them (the 30px title bar, or the horizontal tab bar).
 :host {
     display: flex;
     background: transparent;
@@ -6,33 +9,35 @@
 
 button {
     flex: none;
-    border: none;
-    box-shadow: none;
-    border-radius: 0;
-    background: transparent !important;
-    color: inherit !important;
-    font-size: 8px;
-    width: 40px;
-    padding: 0;
-    line-height: 0;
-    text-align: center;
+    display: flex;
     align-items: center;
     justify-content: center;
-    
-    &:not(:hover):not(:active) {
-        background: transparent;
+    width: 46px;
+    align-self: stretch;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    color: inherit;
+    line-height: 0;
+
+    &:hover {
+        background: rgba(128, 128, 128, .22);
     }
 
     &:focus {
+        outline: none;
         box-shadow: none;
     }
 
-    svg {
-        width: 10px;
-        height: 10px;
+    &.close:hover {
+        background: #e81123;
+        color: #fff;
+    }
 
-        path {
-            fill: currentColor;
-        }
+    svg {
+        width: 16px;
+        height: 16px;
     }
 }
