@@ -97,8 +97,10 @@ export class AppRootComponent {
         this.hotkeys.hotkey$.subscribe((hotkey: string) => {
             if (hotkey.startsWith('tab-')) {
                 const index = parseInt(hotkey.split('-')[1])
-                if (index <= this.app.tabs.length) {
-                    this.app.selectTab(this.app.tabs[index - 1])
+                // mini (dashboard) tabs don't consume numbers
+                const numberedTabs = this.app.tabs.filter(t => !t['miniHeader'])
+                if (index <= numberedTabs.length) {
+                    this.app.selectTab(numberedTabs[index - 1])
                 }
             }
             if (this.app.activeTab) {

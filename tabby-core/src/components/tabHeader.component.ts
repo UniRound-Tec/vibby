@@ -27,6 +27,11 @@ export class TabHeaderComponent extends BaseComponent {
 
     @HostBinding('class.mini') get miniHeader (): boolean { return this.tab['miniHeader'] ?? false }
 
+    /** Position among non-mini tabs — mini (dashboard) tabs don't consume numbers */
+    get displayIndex (): number {
+        return this.app.tabs.filter(t => !t['miniHeader']).indexOf(this.tab) + 1
+    }
+
     constructor (
         public app: AppService,
         public config: ConfigService,
