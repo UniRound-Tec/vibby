@@ -50,6 +50,10 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
             name: cli.entry.name,
             icon: cli.entry.icon,
             isBuiltin: true,
+            // its own heading in the profile selector and the profiles settings
+            // tab, rather than being mixed in with the built-in shells — these
+            // are the product, not one more way to get a prompt
+            group: 'AI CLI',
             options: this.optionsFromCli(cli),
         }))
     }

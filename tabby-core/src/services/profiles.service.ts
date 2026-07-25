@@ -289,7 +289,9 @@ export class ProfilesService {
                     profiles = profiles.filter(x => !x.isBuiltin)
                 } else {
                     profiles = profiles.map(p => {
-                        if (p.isBuiltin) { p.group = 'Built-in' }
+                        // a built-in that names its own group keeps it, the way
+                        // getProfileGroups() already treats them
+                        if (p.isBuiltin && !p.group) { p.group = this.translate.instant('Built-in') }
                         if (!p.icon) { p.icon = 'fas fa-network-wired' }
                         return p
                     })
