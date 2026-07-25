@@ -24,6 +24,11 @@ profile-icon(
     (cdkDragEnded)='onTabDragEnd()',
 ) {{tab.customTitle || tab.title}}
 
+//- vibby: AI session badges, written by tabby-ai's AiTabStateService
+.ai-icon(*ngIf='tab["aiIcon"]', [fastHtmlBind]='tab["aiIcon"]', [title]='tab["aiKind"]')
+.ai-state(*ngIf='tab["aiStateLabel"]', [ngClass]='tab["aiState"]') {{tab["aiStateLabel"]}}
+.ai-summary(*ngIf='tab["aiSummary"]') {{tab["aiSummary"]}}
+
 .buttons
     button(*ngIf='!config.store.terminal.hideTabOptionsButton',(click)='onContextMenu($event)') !{require('../icons/tab-options.svg')}
 

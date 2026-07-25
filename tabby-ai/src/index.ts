@@ -2,7 +2,7 @@
 import { NgModule } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
-import TabbyCorePlugin, { AppService, CLIHandler, ConfigProvider, ConfigService, HotkeyProvider, HotkeysService, ProfileProvider } from 'tabby-core'
+import TabbyCorePlugin, { AppService, CLIHandler, CommandProvider, ConfigProvider, ConfigService, HotkeyProvider, HotkeysService, ProfileProvider } from 'tabby-core'
 import { SettingsTabProvider } from 'tabby-settings'
 
 import { AiConfigProvider } from './config'
@@ -10,13 +10,18 @@ import { AiCliProfileProvider } from './profiles'
 import { OpenDashboardCLIHandler } from './cli'
 import { AiHotkeyProvider } from './hotkeys'
 import { AiSettingsTabProvider } from './settings'
+import { AiCommandProvider } from './commands'
 import { CliScannerService } from './services/cliScanner.service'
 import { DashboardService } from './services/dashboard.service'
 import { HookIngressService } from './services/hookIngress.service'
 import { ClaudeAdapterService } from './services/claudeAdapter.service'
 import { AiAttentionService } from './services/attention.service'
+import { AiTabStateService } from './services/tabState.service'
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
+
+/** vibby brand accent. Kept in sync by hand with $accent in dashboardTab.component.scss */
+const ACCENT = '#ff4500'
 
 @NgModule({
     imports: [
@@ -30,6 +35,7 @@ import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
         { provide: CLIHandler, useClass: OpenDashboardCLIHandler, multi: true },
         { provide: HotkeyProvider, useClass: AiHotkeyProvider, multi: true },
         { provide: SettingsTabProvider, useClass: AiSettingsTabProvider, multi: true },
+        { provide: CommandProvider, useClass: AiCommandProvider, multi: true },
     ],
     declarations: [
         DashboardTabComponent,
@@ -46,6 +52,7 @@ export default class AiModule {
         ingress: HookIngressService,
         claudeAdapter: ClaudeAdapterService,
         attention: AiAttentionService,
+        tabState: AiTabStateService,
     ) {
         scanner.ensureScanned()
         ingress.start().then(() => {
@@ -53,7 +60,8 @@ export default class AiModule {
         }).catch(() => null)
         claudeAdapter.activate()
         attention.activate()
-        this.injectMiniTabStyles()
+        tabState.activate()
+        this.injectTabBarStyles()
 
         hotkeys.hotkey$.subscribe(hotkey => {
             if (hotkey === 'toggle-dashboard') {
@@ -70,12 +78,17 @@ export default class AiModule {
         })
     }
 
-    /** Compact icon-only header for the pinned dashboard tab (targets tab-header.mini) */
-    private injectMiniTabStyles (): void {
+    /**
+     * Everything vibby changes about tabby's own tab bar, as one injected
+     * stylesheet — restyling from here instead of editing core's SCSS keeps
+     * the upstream diff at the single markup hook in tabHeader.component.pug.
+     */
+    private injectTabBarStyles (): void {
         const homeIcon: string = require('./icons/home.svg')
         const mask = `url("data:image/svg+xml,${encodeURIComponent(homeIcon)}") center / contain no-repeat`
         const style = document.createElement('style')
         style.textContent = `
+            /* ---- home tab: icon only on horizontal bars, a labelled row on side bars ---- */
             tab-header.mini {
                 width: 52px !important;
                 flex: 0 0 52px !important;
@@ -85,21 +98,322 @@ export default class AiModule {
             tab-header.mini .pin-indicator,
             tab-header.mini .buttons,
             tab-header.mini .name { display: none !important; }
-            tab-header.mini::after {
+
+            /* a flex item, not an overlay: it can hold the index column open on
+               side bars and centre itself with auto margins on horizontal ones */
+            tab-header.mini::before {
                 content: '';
-                position: absolute;
-                left: 50%;
-                top: 50%;
+                flex: none;
                 width: 14px;
                 height: 14px;
-                transform: translate(-50%, -50%);
+                margin: auto;
+                align-self: center;
                 background: currentColor;
                 opacity: .6;
                 -webkit-mask: ${mask};
                 mask: ${mask};
                 pointer-events: none;
             }
-            tab-header.mini.active::after { opacity: 1; }
+            tab-header.mini.active::before { opacity: 1; }
+
+            /* on side bars the list is sessions only — home is a toolbar button */
+            .tabs-on-left tab-header.mini,
+            .tabs-on-right tab-header.mini { display: none !important; }
+
+            /* ---- side bar: a list, not a strip of tabs ---- */
+            /* cards need more room than upstream's 200px name-only rail */
+            .content.tabs-on-left,
+            .content.tabs-on-right {
+                --side-tab-width: calc(236px * var(--spaciness));
+            }
+            .content.tabs-on-left > .tab-bar,
+            .content.tabs-on-right > .tab-bar {
+                position: relative;
+                overflow: hidden !important;
+                padding-bottom: 62px;
+            }
+            .content.tabs-on-left > .tab-bar > .tabs,
+            .content.tabs-on-right > .tab-bar > .tabs {
+                box-sizing: border-box;
+                flex: 1 1 auto !important;
+                min-height: 0;
+                overflow-y: auto;
+                padding: 8px 8px 0 !important;
+            }
+            .content.tabs-on-left > .tab-bar tab-header,
+            .content.tabs-on-right > .tab-bar tab-header {
+                border-radius: 8px;
+                margin-bottom: 3px;
+                /* core clips the header; the group heading sits above the card */
+                overflow: visible !important;
+            }
+
+            /* ---- group headings ---- the service labels a tab whenever the
+               group changes, so this stays honest under any tab order */
+            .content.tabs-on-left > .tab-bar tab-header[data-ai-group],
+            .content.tabs-on-right > .tab-bar tab-header[data-ai-group] {
+                margin-top: 30px;
+            }
+            /* the first heading has the title bar right above it, so it needs
+               more clearance than the ones between groups */
+            .content.tabs-on-left > .tab-bar .tabs > tab-header[data-ai-group]:first-child,
+            .content.tabs-on-right > .tab-bar .tabs > tab-header[data-ai-group]:first-child {
+                margin-top: 28px;
+            }
+            .content.tabs-on-left > .tab-bar tab-header[data-ai-group]::before,
+            .content.tabs-on-right > .tab-bar tab-header[data-ai-group]::before {
+                content: attr(data-ai-group);
+                position: absolute;
+                left: 3px;
+                /* clear of the card below it, not sitting on its edge */
+                top: -19px;
+                font-size: 10px;
+                font-weight: 600;
+                letter-spacing: .16em;
+                /* never inherit: core tints the whole header when a tab has
+                   unread activity, and the heading is not about that tab */
+                color: var(--bs-body-color, currentColor);
+                opacity: .38;
+                pointer-events: none;
+            }
+
+            /* ---- AI sessions are cards; plain shells stay one thin row ----
+               two rows, not three: identity and state share the top line and
+               the event gets the bottom one. grid because the top row's items
+               are core's own elements and have to keep their order. */
+            .content.tabs-on-left > .tab-bar tab-header:has(.ai-state),
+            .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) {
+                display: grid !important;
+                grid-template-columns: auto auto minmax(0, 1fr) auto;
+                grid-template-areas: "index icon name state" "sum sum sum sum";
+                align-items: center;
+                row-gap: 2px;
+                column-gap: 7px;
+                flex: none !important;
+                height: auto !important;
+                padding: 8px 10px !important;
+                margin-bottom: 8px;
+                background: rgba(128, 128, 128, .08);
+                border: 1px solid rgba(128, 128, 128, .18);
+            }
+            /* the card's own border carries the selection here — the leading
+               bar would collide with it */
+            .content.tabs-on-left > .tab-bar tab-header:has(.ai-state).active,
+            .content.tabs-on-right > .tab-bar tab-header:has(.ai-state).active {
+                border-color: color-mix(in srgb, ${ACCENT} 50%, transparent);
+                background: color-mix(in srgb, ${ACCENT} 6%, rgba(128, 128, 128, .08));
+            }
+            .content.tabs-on-left > .tab-bar tab-header:has(.ai-state) .current-tab-indicator,
+            .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) .current-tab-indicator {
+                display: none !important;
+            }
+            .content.tabs-on-left > .tab-bar tab-header:has(.ai-state) .index,
+            .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) .index {
+                grid-area: index;
+                width: auto !important;
+                min-width: 11px;
+                font-size: 11px;
+            }
+            .content.tabs-on-left > .tab-bar tab-header:has(.ai-state) .name,
+            .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) .name {
+                grid-area: name;
+                font-size: 13px;
+                font-weight: 600;
+                margin-left: 0 !important;
+            }
+
+            .content.tabs-on-left > .tab-bar .ai-icon,
+            .content.tabs-on-right > .tab-bar .ai-icon {
+                grid-area: icon;
+                display: flex;
+                align-items: center;
+                opacity: .75;
+            }
+            .ai-icon svg { width: 14px; height: 14px; display: block; }
+
+            .content.tabs-on-left > .tab-bar .ai-state,
+            .content.tabs-on-right > .tab-bar .ai-state {
+                grid-area: state;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                font-size: 10px;
+                line-height: 1.7;
+                padding: 0 6px;
+                border-radius: 5px;
+                background: rgba(128, 128, 128, .18);
+            }
+            /* core's options/close overlay lands on the same corner as the chip;
+               it wins on hover, the chip steps aside */
+            .content.tabs-on-left > .tab-bar tab-header:hover .ai-state,
+            .content.tabs-on-right > .tab-bar tab-header:hover .ai-state {
+                opacity: 0;
+                transition: .15s opacity;
+            }
+            /* and the overlay stays on the identity row, off the event line */
+            .content.tabs-on-left > .tab-bar tab-header:has(.ai-state) .buttons,
+            .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) .buttons {
+                top: 6px !important;
+                height: 24px !important;
+            }
+
+            .ai-state::before {
+                content: '';
+                width: 5px;
+                height: 5px;
+                border-radius: 50%;
+                background: currentColor;
+                flex: none;
+            }
+            .ai-state.working { color: var(--bs-blue, #61afef); background: color-mix(in srgb, var(--bs-blue, #61afef) 16%, transparent); }
+            .ai-state.idle { color: var(--bs-green, #98c379); background: color-mix(in srgb, var(--bs-green, #98c379) 16%, transparent); }
+            .ai-state.error { color: var(--bs-red, #e06c75); background: color-mix(in srgb, var(--bs-red, #e06c75) 18%, transparent); }
+            .ai-state.untracked { color: var(--bs-body-color, currentColor); opacity: .5; }
+            .ai-state.needs-you {
+                color: var(--bs-yellow, #f0c674);
+                background: color-mix(in srgb, var(--bs-yellow, #f0c674) 20%, transparent);
+                animation: vibby-dot-breathe 2.2s ease-in-out infinite;
+            }
+            .content.tabs-on-left > .tab-bar .ai-summary,
+            .content.tabs-on-right > .tab-bar .ai-summary {
+                grid-area: sum;
+                font-family: monospace;
+                font-size: 10.5px;
+                line-height: 1.5;
+                /* upstream tints the whole header when a tab has unread output;
+                   only the state chip is allowed to carry colour in here */
+                color: var(--bs-body-color, currentColor);
+                opacity: .45;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            /* horizontal bars: no room for the event line, and the chip shrinks
+               to its dot alone (font-size 0 leaves ::before at its own size) */
+            .content:not(.tabs-on-left):not(.tabs-on-right) .ai-summary,
+            .content:not(.tabs-on-left):not(.tabs-on-right) .ai-icon { display: none; }
+            .content:not(.tabs-on-left):not(.tabs-on-right) .ai-state {
+                display: flex;
+                flex: none;
+                align-items: center;
+                align-self: center;
+                margin-left: 7px;
+                font-size: 0;
+                padding: 0;
+                background: none !important;
+            }
+            .content.tabs-on-left > .tab-bar tab-header:not(.active):hover,
+            .content.tabs-on-right > .tab-bar tab-header:not(.active):hover {
+                background: rgba(128, 128, 128, .12);
+            }
+            /* the current-tab bar is designed for horizontal strips (2px along
+               the top edge); on a side bar it has to ride the leading edge */
+            .content.tabs-on-left > .tab-bar .current-tab-indicator,
+            .content.tabs-on-right > .tab-bar .current-tab-indicator {
+                top: 7px !important;
+                bottom: 7px !important;
+                left: 0 !important;
+                right: auto !important;
+                width: 3px !important;
+                height: auto !important;
+                border-radius: 0 3px 3px 0;
+                background: ${ACCENT} !important;
+            }
+
+            /* ---- side bar: one toolbar pinned at the bottom ---- */
+            .content.tabs-on-left > .tab-bar > .btn-group,
+            .content.tabs-on-right > .tab-bar > .btn-group {
+                position: absolute;
+                bottom: 10px;
+                left: 10px;
+                gap: 6px;
+                z-index: 2;
+            }
+            .content.tabs-on-left > .tab-bar > .btn-space ~ .btn-group,
+            .content.tabs-on-right > .tab-bar > .btn-space ~ .btn-group {
+                left: auto;
+                right: 10px;
+            }
+            .content.tabs-on-left > .tab-bar::after,
+            .content.tabs-on-right > .tab-bar::after {
+                content: '';
+                position: absolute;
+                left: 10px;
+                right: 10px;
+                bottom: 56px;
+                height: 1px;
+                background: rgba(128, 128, 128, .18);
+            }
+            .content.tabs-on-left > .tab-bar .btn-tab-bar,
+            .content.tabs-on-right > .tab-bar .btn-tab-bar {
+                width: 40px !important;
+                height: 36px !important;
+                border-radius: 8px;
+                opacity: .75;
+            }
+            .content.tabs-on-left > .tab-bar .btn-tab-bar svg,
+            .content.tabs-on-right > .tab-bar .btn-tab-bar svg {
+                width: 17px;
+                height: 17px;
+            }
+            .content.tabs-on-left > .tab-bar .btn-tab-bar:hover,
+            .content.tabs-on-right > .tab-bar .btn-tab-bar:hover { opacity: 1; }
+
+            /* home is the first button of the leading group (weight -10) */
+            /* !important: the theme colours every .tab-bar button from a
+               deeper selector than anything we can write here */
+            .content.tabs-on-left > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar,
+            .content.tabs-on-right > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar {
+                color: ${ACCENT} !important;
+                background: color-mix(in srgb, ${ACCENT} 13%, transparent);
+                opacity: 1;
+            }
+            /* the icon's own fill="currentColor" loses to a global svg rule */
+            .content.tabs-on-left > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar svg,
+            .content.tabs-on-left > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar svg path,
+            .content.tabs-on-right > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar svg,
+            .content.tabs-on-right > .tab-bar > .btn-group .d-flex:first-child .btn-tab-bar svg path {
+                fill: ${ACCENT} !important;
+            }
+            .content.tabs-on-left > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar svg,
+            .content.tabs-on-left > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar svg path,
+            .content.tabs-on-right > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar svg,
+            .content.tabs-on-right > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar svg path {
+                fill: currentColor !important;
+            }
+            /* ...but not the trailing group's, which starts with settings */
+            .content.tabs-on-left > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar,
+            .content.tabs-on-right > .tab-bar > .btn-space ~ .btn-group .d-flex:first-child .btn-tab-bar {
+                color: inherit !important;
+                background: none;
+                opacity: .75;
+            }
+
+            /* ---- AI session state dot (markup hook lives in tabHeader.component.pug) ---- */
+            tab-header .ai-state-dot {
+                flex: none;
+                align-self: center;
+                width: 7px;
+                height: 7px;
+                margin-left: 8px;
+                border-radius: 50%;
+                background: rgba(128, 128, 128, .5);
+            }
+            tab-header .ai-state-dot.working { background: var(--bs-blue, #61afef); }
+            tab-header .ai-state-dot.idle { background: var(--bs-green, #98c379); }
+            tab-header .ai-state-dot.error { background: var(--bs-red, #e06c75); }
+            tab-header .ai-state-dot.needs-you {
+                background: var(--bs-yellow, #f0c674);
+                animation: vibby-dot-breathe 2.2s ease-in-out infinite;
+            }
+            /* the hover buttons overlay the same corner */
+            tab-header:hover .ai-state-dot { opacity: 0; }
+
+            @keyframes vibby-dot-breathe {
+                0%, 100% { opacity: 1; }
+                50% { opacity: .3; }
+            }
         `
         document.head.appendChild(style)
     }

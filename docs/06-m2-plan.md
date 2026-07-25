@@ -144,8 +144,13 @@ export interface AiSessionSnapshot {
 | `tabby-core/src/components/tabHeader.component.ts` | `miniHeader` HostBinding + `displayIndex` getter | 低（新增成员） |
 | `tabby-core/src/components/tabHeader.component.pug` | `{{index + 1}}` → `{{displayIndex}}`（2 处） | 低（单点替换） |
 | `tabby-core/src/components/appRoot.component.ts` | `tab-N` 热键跳过 mini tab | 低（3 行） |
+| `tabby-core/src/components/tabHeader.component.pug` | 3 行 vibby 挂载点（`.ai-icon`/`.ai-state`/`.ai-summary`，全部 `*ngIf` 兜底） | 低（纯追加） |
+| `tabby-core/src/components/tabHeader.component.ts` | `data-ai-group` HostBinding | 低（新增成员） |
+| `tabby-core/src/configDefaults.yaml` | `tabsLocation: top` → `left` | 低（单值） |
 
-后三项是 Dashboard 作为 mini tab 不该占用序号的必然代价：编号既在头部渲染又在 `tab-N` 热键里，两处都在 core。
+编号那三项是 Dashboard 作为 mini tab 不该占用序号的必然代价：编号既在头部渲染又在 `tab-N` 热键里，两处都在 core。
+
+侧栏其余外观（卡片布局、分组标题、底部工具栏、状态色）**全部走 tabby-ai 注入的样式表**，core 不含任何 vibby 专属样式——挂载点只提供 DOM 和数据，样式留在插件侧，这是刻意的合并纪律。
 
 ## 7. 风险表
 
