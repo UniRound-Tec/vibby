@@ -2597,8 +2597,8 @@ msgid "Launch only · no event monitoring yet"
 msgstr "仅启动 · 暂无事件监听"
 
 #: tabby-ai/src/components/dashboardTab.component.pug:25
-msgid "No running AI sessions — pick a CLI below to start one."
-msgstr "没有运行中的 AI 会话 —— 从下方选择一个 CLI 开始。"
+msgid "No running AI sessions — pick a CLI above to start one."
+msgstr "没有运行中的 AI 会话 —— 从上方选择一个 CLI 开始。"
 
 #: tabby-ai/src/components/dashboardTab.component.pug:28
 msgid "Available CLIs"
@@ -2753,13 +2753,17 @@ msgid "Toggle sidebar"
 msgstr "折叠 / 展开侧边栏"
 
 #: tabby-ai/src/services/rail.service.ts
-msgid "No sessions yet"
-msgstr "暂无会话"
-
-#: tabby-ai/src/services/rail.service.ts
-msgid "Choose an AI CLI on Home to get started."
-msgstr "前往主页选择一个 AI CLI，开始新的会话。"
-
-#: tabby-ai/src/services/rail.service.ts
 msgid "New session"
 msgstr "新建会话"
+
+#: tabby-ai/src/components/dashboardTab.component.pug
+msgid "Previous page"
+msgstr "上一页"
+
+#: tabby-ai/src/components/dashboardTab.component.pug
+msgid "Next page"
+msgstr "下一页"
+
+#: tabby-ai/src/components/dashboardTab.component.pug
+msgid "Not detected"
+msgstr "未检测到"

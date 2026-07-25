@@ -69,10 +69,6 @@ export class RailService {
             return
         }
         empty.hidden = this.app.tabs.some(tab => !tab['miniHeader'])
-        empty.querySelector<HTMLElement>('.vibby-rail-empty-title')!.textContent =
-            this.translate.instant('No sessions yet')
-        empty.querySelector<HTMLElement>('.vibby-rail-empty-copy')!.textContent =
-            this.translate.instant('Choose an AI CLI on Home to get started.')
         empty.querySelector<HTMLButtonElement>('button')!.textContent =
             `＋ ${this.translate.instant('New session')}`
     }
@@ -95,14 +91,6 @@ export class RailService {
         brand.src = VIBBY_WORDMARK
         brand.alt = 'Vibby'
         empty.appendChild(brand)
-
-        const title = document.createElement('div')
-        title.className = 'vibby-rail-empty-title'
-        empty.appendChild(title)
-
-        const copy = document.createElement('div')
-        copy.className = 'vibby-rail-empty-copy'
-        empty.appendChild(copy)
 
         const button = document.createElement('button')
         button.type = 'button'

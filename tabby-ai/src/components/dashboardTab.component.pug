@@ -1,7 +1,7 @@
 .ai-dashboard
     img.dashboard-brand([src]='wordmark', alt='Vibby')
 
-    section.panel
+    section.panel.sessions-panel
         .panel-head
             h2.title(translate) Sessions
             .counters(*ngIf='rows.length')
@@ -11,7 +11,7 @@
 
         .board(*ngIf='rows.length')
             .scard(
-                *ngFor='let row of rows',
+                *ngFor='let row of pagedRows',
                 [ngClass]='row.state',
                 (click)='focusRow(row)',
                 tabindex='0',
@@ -32,10 +32,27 @@
                     .act {{captionFor(row)}}
                     .live(*ngIf='liveFor(row)') {{liveFor(row)}}
 
-        .empty(*ngIf='!rows.length')
-            span(translate) No running AI sessions — pick a CLI below to start one.
+        .empty.session-empty(*ngIf='!rows.length')
+            span(translate) No running AI sessions — pick a CLI above to start one.
 
-    section.panel
+        .pagination([class.pagination-hidden]='sessionPageCount <= 1')
+            button.page-button(
+                type='button',
+                [disabled]='sessionPage === 0',
+                (click)='changeSessionPage(-1)',
+                [attr.aria-label]='"Previous page" | translate',
+                [title]='"Previous page" | translate',
+            ) ‹
+            span.page-status {{sessionPage + 1}} / {{sessionPageCount}}
+            button.page-button(
+                type='button',
+                [disabled]='sessionPage + 1 >= sessionPageCount',
+                (click)='changeSessionPage(1)',
+                [attr.aria-label]='"Next page" | translate',
+                [title]='"Next page" | translate',
+            ) ›
+
+    section.panel.launch-panel
         .panel-head
             h2.title(translate) Launch
             button.action((click)='rescan()', [disabled]='scanning')
@@ -43,10 +60,10 @@
                 span(*ngIf='scanning', translate) Scanning…
 
         .strip
-            .chip.terminal-chip(
+            button.chip.terminal-chip(
+                *ngIf='launchPage === 0',
+                type='button',
                 (click)='launchTerminal()',
-                tabindex='0',
-                (keyup.enter)='launchTerminal()',
             )
                 .glyph([innerHTML]='terminalIcon')
                 .chip-text
@@ -54,40 +71,72 @@
                     .sub
                         span(translate) Profiles & connections
 
-            .chip(
-                *ngFor='let cli of clis',
-                (click)='launch(cli)',
-                tabindex='0',
-                (keyup.enter)='launch(cli)',
+            button.chip.cli-chip(
+                *ngFor='let card of pagedCliCards',
+                type='button',
+                [disabled]='!card.detected',
+                (click)='launchCard(card)',
             )
-                .glyph([innerHTML]='iconForKind(cli.entry.id)')
+                .glyph([innerHTML]='iconForKind(card.entry.id)')
                 .chip-text
-                    .nm {{cli.entry.name}}
+                    .nm {{card.entry.name}}
                     .sub
-                        span.ver(*ngIf='cli.version') {{cli.version}}
-                        span.tier([class.full]='cli.entry.tier === "full"')
-                            span(*ngIf='cli.entry.tier === "full"', translate) Full monitoring
-                            span(*ngIf='cli.entry.tier !== "full"', translate) Launch only
+                        span.ver(*ngIf='card.detected?.version') {{card.detected.version}}
+                        span.tier(*ngIf='card.detected', [class.full]='card.entry.tier === "full"')
+                            span(*ngIf='card.entry.tier === "full"', translate) Full monitoring
+                            span(*ngIf='card.entry.tier !== "full"', translate) Launch only
+                        span.not-detected(*ngIf='!card.detected', translate) Not detected
 
-        .empty(*ngIf='!clis.length && !scanning')
-            span(translate) No AI CLIs found on this machine.
+        .pagination([class.pagination-hidden]='launchPageCount <= 1')
+            button.page-button(
+                type='button',
+                [disabled]='launchPage === 0',
+                (click)='changeLaunchPage(-1)',
+                [attr.aria-label]='"Previous page" | translate',
+                [title]='"Previous page" | translate',
+            ) ‹
+            span.page-status {{launchPage + 1}} / {{launchPageCount}}
+            button.page-button(
+                type='button',
+                [disabled]='launchPage + 1 >= launchPageCount',
+                (click)='changeLaunchPage(1)',
+                [attr.aria-label]='"Next page" | translate',
+                [title]='"Next page" | translate',
+            ) ›
 
-    section.panel
+    section.panel.activity-panel
         .panel-head
             h2.title(translate) Recent activity
 
         .timeline(*ngIf='recent.length')
-            .tl-row(*ngFor='let event of recent')
+            .tl-row(*ngFor='let event of pagedRecent')
                 span.t {{feedTime(event)}}
                 span.who {{sessionNameFor(event.sessionId)}}
                 span.dot([ngClass]='dotFor(event)')
                 span.kind {{kindLabel(event.kind)}}
                 span.sum {{event.summary}}
 
-        .empty(*ngIf='!recent.length')
+        .empty.activity-empty(*ngIf='!recent.length')
             span(translate) Nothing has happened yet.
 
-    section.panel
+        .pagination([class.pagination-hidden]='activityPageCount <= 1')
+            button.page-button(
+                type='button',
+                [disabled]='activityPage === 0',
+                (click)='changeActivityPage(-1)',
+                [attr.aria-label]='"Previous page" | translate',
+                [title]='"Previous page" | translate',
+            ) ‹
+            span.page-status {{activityPage + 1}} / {{activityPageCount}}
+            button.page-button(
+                type='button',
+                [disabled]='activityPage + 1 >= activityPageCount',
+                (click)='changeActivityPage(1)',
+                [attr.aria-label]='"Next page" | translate',
+                [title]='"Next page" | translate',
+            ) ›
+
+    section.panel.settings-panel
         .panel-head
             h2.title(translate) Quick settings
 

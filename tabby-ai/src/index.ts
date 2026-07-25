@@ -22,8 +22,8 @@ import { STARTUP_COVER_CLASS, StartupCoverService } from './services/startupCove
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
 
-/** vibby brand accent. Kept in sync by hand with $accent in dashboardTab.component.scss */
-const ACCENT = '#ff4500'
+/** Follows the active Tabby theme instead of imposing a fixed brand colour. */
+const ACCENT = 'var(--theme-primary)'
 
 @NgModule({
     imports: [
@@ -213,21 +213,6 @@ export default class AiModule {
                 margin-bottom: 25px;
                 opacity: .88;
                 filter: brightness(0) invert(var(--vibby-logo-invert, 0));
-            }
-            .vibby-rail-empty-title {
-                margin-bottom: 7px;
-                font-size: 13px;
-                font-weight: 600;
-                letter-spacing: .02em;
-                opacity: .78;
-            }
-            .vibby-rail-empty-copy {
-                max-width: none;
-                margin-bottom: 16px;
-                font-size: 10.5px;
-                line-height: 1.65;
-                white-space: nowrap;
-                opacity: .48;
             }
             .vibby-rail-empty button {
                 min-width: 118px;

@@ -4,7 +4,7 @@ import { interval } from 'rxjs'
 import { BaseTabComponent, AppService, ConfigService, ProfilesService, SplitTabComponent, TranslateService } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
-import { DetectedCli } from '../api'
+import { AiCliRegistryEntry, DetectedCli } from '../api'
 import { VIBBY_WORDMARK } from '../branding'
 import { AiEvent, AiEventKind, AiSessionSnapshot, stateAfter } from '../events'
 import { AI_CLI_REGISTRY } from '../registry'
@@ -23,8 +23,16 @@ export interface AiSessionRow {
     state: AiRowState
 }
 
+export interface AiCliLaunchCard {
+    entry: AiCliRegistryEntry
+    detected: DetectedCli|null
+}
+
 /** Rows shown in the activity timeline — the bus keeps more than anyone wants to read */
 const TIMELINE_LENGTH = 20
+const SESSION_PAGE_SIZE = 4
+const ACTIVITY_PAGE_SIZE = 6
+const LAUNCH_PAGE_SIZE = 6
 
 const STATE_RANK: Record<AiRowState, number> = {
     'needs-you': 0,
@@ -47,6 +55,9 @@ export class DashboardTabComponent extends BaseTabComponent {
     rows: AiSessionRow[] = []
     counters: { state: AiRowState, count: number }[] = []
     recent: AiEvent[] = []
+    sessionPage = 0
+    activityPage = 0
+    launchPage = 0
 
     /** Mirrors tabby's own Tabs location setting — same store key, same values */
     readonly tabsLocations = [
@@ -56,7 +67,7 @@ export class DashboardTabComponent extends BaseTabComponent {
         { value: 'bottom', label: 'Bottom' },
     ]
 
-    clis: DetectedCli[] = []
+    cliCards: AiCliLaunchCard[] = AI_CLI_REGISTRY.map(entry => ({ entry, detected: null }))
     scanning = false
     now = Date.now()
     readonly wordmark = VIBBY_WORDMARK
@@ -90,9 +101,10 @@ export class DashboardTabComponent extends BaseTabComponent {
         this.subscribeUntilDestroyed(this.bus.snapshots$, snapshots => {
             this.snapshots = snapshots
             this.recent = this.bus.recentEvents.slice(0, TIMELINE_LENGTH)
+            this.activityPage = this.clampPage(this.activityPage, this.activityPageCount)
             this.refreshRows()
         })
-        this.subscribeUntilDestroyed(this.scanner.scanResults$, clis => this.clis = clis)
+        this.subscribeUntilDestroyed(this.scanner.scanResults$, clis => this.updateCliCards(clis))
         this.subscribeUntilDestroyed(this.scanner.scanning$, scanning => this.scanning = scanning)
         this.subscribeUntilDestroyed(this.configService.changed$, () => this.applyThemeVars())
         this.subscribeUntilDestroyed(interval(5000), () => this.now = Date.now())
@@ -131,6 +143,7 @@ export class DashboardTabComponent extends BaseTabComponent {
         }
         rows.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state])
         this.rows = rows
+        this.sessionPage = this.clampPage(this.sessionPage, this.sessionPageCount)
         for (const row of rows) {
             if (row.sessionId) {
                 this.sessionNames.set(row.sessionId, this.nameFor(row))
@@ -144,6 +157,46 @@ export class DashboardTabComponent extends BaseTabComponent {
         this.counters = [...counts.entries()]
             .sort((a, b) => STATE_RANK[a[0]] - STATE_RANK[b[0]])
             .map(([state, count]) => ({ state, count }))
+    }
+
+    get pagedRows (): AiSessionRow[] {
+        const start = this.sessionPage * SESSION_PAGE_SIZE
+        return this.rows.slice(start, start + SESSION_PAGE_SIZE)
+    }
+
+    get sessionPageCount (): number {
+        return Math.max(1, Math.ceil(this.rows.length / SESSION_PAGE_SIZE))
+    }
+
+    get pagedRecent (): AiEvent[] {
+        const start = this.activityPage * ACTIVITY_PAGE_SIZE
+        return this.recent.slice(start, start + ACTIVITY_PAGE_SIZE)
+    }
+
+    get activityPageCount (): number {
+        return Math.max(1, Math.ceil(this.recent.length / ACTIVITY_PAGE_SIZE))
+    }
+
+    get pagedCliCards (): AiCliLaunchCard[] {
+        const start = Math.max(0, this.launchPage * LAUNCH_PAGE_SIZE - 1)
+        const count = LAUNCH_PAGE_SIZE - (this.launchPage === 0 ? 1 : 0)
+        return this.cliCards.slice(start, start + count)
+    }
+
+    get launchPageCount (): number {
+        return Math.max(1, Math.ceil((this.cliCards.length + 1) / LAUNCH_PAGE_SIZE))
+    }
+
+    changeSessionPage (delta: number): void {
+        this.sessionPage = this.clampPage(this.sessionPage + delta, this.sessionPageCount)
+    }
+
+    changeActivityPage (delta: number): void {
+        this.activityPage = this.clampPage(this.activityPage + delta, this.activityPageCount)
+    }
+
+    changeLaunchPage (delta: number): void {
+        this.launchPage = this.clampPage(this.launchPage + delta, this.launchPageCount)
     }
 
     stateLabel (state: AiRowState): string {
@@ -245,6 +298,12 @@ export class DashboardTabComponent extends BaseTabComponent {
         }
     }
 
+    async launchCard (card: AiCliLaunchCard): Promise<void> {
+        if (card.detected) {
+            await this.launch(card.detected)
+        }
+    }
+
     async launchTerminal (): Promise<void> {
         const profile = await this.profilesService.showProfileSelector().catch(() => null)
         if (profile) {
@@ -282,6 +341,18 @@ export class DashboardTabComponent extends BaseTabComponent {
     private baseName (dir: string|null|undefined): string|null {
         const name = dir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
         return name ? name : null
+    }
+
+    private clampPage (page: number, pageCount: number): number {
+        return Math.max(0, Math.min(page, pageCount - 1))
+    }
+
+    private updateCliCards (clis: DetectedCli[]): void {
+        const detected = new Map(clis.map(cli => [cli.entry.id, cli]))
+        this.cliCards = AI_CLI_REGISTRY
+            .map(entry => ({ entry, detected: detected.get(entry.id) ?? null }))
+            .sort((a, b) => Number(!!b.detected) - Number(!!a.detected))
+        this.launchPage = this.clampPage(this.launchPage, this.launchPageCount)
     }
 
     /** One shot per pane, and only once its session exists — the answer never changes for a CLI */
