@@ -2683,3 +2683,67 @@ msgstr "每个回合结束时发送静默通知"
 #: tabby-ai/src/services/attention.service.ts:64
 msgid "AI session"
 msgstr "AI 会话"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:38
+msgid "Launch"
+msgstr "启动"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:62
+msgid "Recent activity"
+msgstr "最近活动"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:56
+msgid "Full monitoring"
+msgstr "全监听"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:57
+msgid "Launch only"
+msgstr "仅启动"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:75
+msgid "Nothing has happened yet."
+msgstr "还没有任何事件。"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:172
+msgid "session start"
+msgstr "会话开始"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:173
+msgid "prompt sent"
+msgstr "提问"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:174
+msgid "tool call"
+msgstr "工具"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:175
+msgid "approval"
+msgstr "等你批准"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:176
+msgid "turn done"
+msgstr "回合结束"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:177
+msgid "notice"
+msgstr "提醒"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:178
+msgid "session end"
+msgstr "会话结束"
+
+#: tabby-ai/src/components/dashboardTab.component.ts:179
+msgid "exited"
+msgstr "进程退出"
+
+#: tabby-ai/src/components/dashboardTab.component.pug:79
+msgid "Quick settings"
+msgstr "快速设置"
+
+#: tabby-ai/src/services/tabState.service.ts:44
+msgid "AI sessions"
+msgstr "AI 会话"
+
+#: tabby-ai/src/services/tabState.service.ts:45
+msgid "Terminals"
+msgstr "终端"

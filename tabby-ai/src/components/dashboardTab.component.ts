@@ -5,7 +5,7 @@ import { BaseTabComponent, AppService, ConfigService, ProfilesService, SplitTabC
 import { TerminalTabComponent } from 'tabby-local'
 
 import { DetectedCli } from '../api'
-import { AiEvent, AiSessionSnapshot } from '../events'
+import { AiEvent, AiEventKind, AiSessionSnapshot, stateAfter } from '../events'
 import { AI_CLI_REGISTRY } from '../registry'
 import { CliScannerService } from '../services/cliScanner.service'
 import { AiEventBusService } from '../services/eventBus.service'
@@ -21,6 +21,9 @@ export interface AiSessionRow {
     snapshot: AiSessionSnapshot|null
     state: AiRowState
 }
+
+/** Rows shown in the activity timeline — the bus keeps more than anyone wants to read */
+const TIMELINE_LENGTH = 20
 
 const STATE_RANK: Record<AiRowState, number> = {
     'needs-you': 0,
@@ -42,6 +45,15 @@ export class DashboardTabComponent extends BaseTabComponent {
 
     rows: AiSessionRow[] = []
     counters: { state: AiRowState, count: number }[] = []
+    recent: AiEvent[] = []
+
+    /** Mirrors tabby's own Tabs location setting — same store key, same values */
+    readonly tabsLocations = [
+        { value: 'left', label: 'Left' },
+        { value: 'top', label: 'Top' },
+        { value: 'right', label: 'Right' },
+        { value: 'bottom', label: 'Bottom' },
+    ]
     clis: DetectedCli[] = []
     scanning = false
     now = Date.now()
@@ -52,6 +64,8 @@ export class DashboardTabComponent extends BaseTabComponent {
     /** Only for panes whose profile carries no cwd — asked once per pane, never per render */
     private liveCwdNames = new Map<TerminalTabComponent, string>()
     private cwdAsked = new WeakSet<TerminalTabComponent>()
+    /** Outlives the rows: the timeline still names sessions whose tab is long gone */
+    private sessionNames = new Map<string, string>()
 
     constructor (
         injector: Injector,
@@ -70,6 +84,7 @@ export class DashboardTabComponent extends BaseTabComponent {
         this.subscribeUntilDestroyed(this.app.tabsChanged$, () => this.refreshRows())
         this.subscribeUntilDestroyed(this.bus.snapshots$, snapshots => {
             this.snapshots = snapshots
+            this.recent = this.bus.recentEvents.slice(0, TIMELINE_LENGTH)
             this.refreshRows()
         })
         this.subscribeUntilDestroyed(this.scanner.scanResults$, clis => this.clis = clis)
@@ -111,6 +126,11 @@ export class DashboardTabComponent extends BaseTabComponent {
         }
         rows.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state])
         this.rows = rows
+        for (const row of rows) {
+            if (row.sessionId) {
+                this.sessionNames.set(row.sessionId, this.nameFor(row))
+            }
+        }
 
         const counts = new Map<AiRowState, number>()
         for (const row of rows) {
@@ -137,8 +157,9 @@ export class DashboardTabComponent extends BaseTabComponent {
      * the prompt text, which the caption already shows.
      */
     nameFor (row: AiSessionRow): string {
-        if (row.pane.customTitle) {
-            return row.pane.customTitle
+        // the rail names the split container, not the pane inside it
+        if (row.pane.customTitle || row.topTab.customTitle) {
+            return row.pane.customTitle || row.topTab.customTitle
         }
         const configured = row.pane.profile?.options?.cwd
         return this.baseName(configured) ?? this.liveCwdNames.get(row.pane) ?? row.pane.title
@@ -177,8 +198,26 @@ export class DashboardTabComponent extends BaseTabComponent {
         return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
     }
 
-    feedFor (row: AiSessionRow): AiEvent[] {
-        return row.sessionId ? this.bus.feedFor(row.sessionId) : []
+    kindLabel (kind: AiEventKind): string {
+        switch (kind) {
+            case 'session-started': return this.translate.instant('session start')
+            case 'prompt-submitted': return this.translate.instant('prompt sent')
+            case 'tool-call': return this.translate.instant('tool call')
+            case 'permission-request': return this.translate.instant('approval')
+            case 'turn-completed': return this.translate.instant('turn done')
+            case 'notification': return this.translate.instant('notice')
+            case 'session-ended': return this.translate.instant('session end')
+            case 'process-exited': return this.translate.instant('exited')
+        }
+    }
+
+    /** Timeline dot colour = the state the event puts the session in */
+    dotFor (event: AiEvent): string {
+        return stateAfter(event.kind) ?? 'neutral'
+    }
+
+    sessionNameFor (sessionId: string): string {
+        return this.sessionNames.get(sessionId) ?? sessionId.slice(0, 8)
     }
 
     feedTime (event: AiEvent): string {
@@ -203,6 +242,15 @@ export class DashboardTabComponent extends BaseTabComponent {
 
     rescan (): void {
         this.scanner.scan()
+    }
+
+    get tabsLocation (): string {
+        return this.configService.store.appearance.tabsLocation
+    }
+
+    setTabsLocation (value: string): void {
+        this.configService.store.appearance.tabsLocation = value
+        this.configService.save()
     }
 
     iconForKind (kind: string|null): SafeHtml|null {

@@ -1,61 +1,91 @@
 .ai-dashboard
-    .board-head
-        .eyebrow(translate) Sessions
-        .counters(*ngIf='rows.length')
-            ng-container(*ngFor='let c of counters; let last = last')
-                .counter([ngClass]='c.state')
-                    .n {{c.count}}
-                    .l {{stateLabel(c.state)}}
-                .sep(*ngIf='!last') /
+    section.panel
+        .panel-head
+            h2.title(translate) Sessions
+            .counters(*ngIf='rows.length')
+                .counter([ngClass]='c.state', *ngFor='let c of counters')
+                    span.n {{c.count}}
+                    span.l {{stateLabel(c.state)}}
 
-    .board(*ngIf='rows.length')
-        .scard(
-            *ngFor='let row of rows',
-            [ngClass]='row.state',
-            (click)='focusRow(row)',
-            tabindex='0',
-            (keyup.enter)='focusRow(row)',
-        )
-            .card-top
-                .stword {{stateLabel(row.state)}}
-                .dur {{durationFor(row)}}
-            .card-name
-                .cli-icon(*ngIf='iconForKind(row.kind)', [innerHTML]='iconForKind(row.kind)', [title]='row.kind')
-                .name {{nameFor(row)}}
-                button.rename(
-                    (click)='rename(row, $event)',
-                    [attr.aria-label]='"Rename" | translate',
-                    [title]='"Rename" | translate',
-                ) ✎
-            .card-body
-                .act {{captionFor(row)}}
-                .live(*ngIf='liveFor(row)') {{liveFor(row)}}
-            .feed(*ngIf='feedFor(row).length')
-                .feed-line(*ngFor='let event of feedFor(row)')
-                    span.t {{feedTime(event)}}
-                    span {{event.summary}}
+        .board(*ngIf='rows.length')
+            .scard(
+                *ngFor='let row of rows',
+                [ngClass]='row.state',
+                (click)='focusRow(row)',
+                tabindex='0',
+                (keyup.enter)='focusRow(row)',
+            )
+                .card-top
+                    .stword {{stateLabel(row.state)}}
+                    .dur {{durationFor(row)}}
+                .card-name
+                    .cli-icon(*ngIf='iconForKind(row.kind)', [innerHTML]='iconForKind(row.kind)', [title]='row.kind')
+                    .name {{nameFor(row)}}
+                    button.rename(
+                        (click)='rename(row, $event)',
+                        [attr.aria-label]='"Rename" | translate',
+                        [title]='"Rename" | translate',
+                    ) ✎
+                .card-body
+                    .act {{captionFor(row)}}
+                    .live(*ngIf='liveFor(row)') {{liveFor(row)}}
 
-    .empty-board(*ngIf='!rows.length')
-        span(translate) No running AI sessions — pick a CLI below to start one.
+        .empty(*ngIf='!rows.length')
+            span(translate) No running AI sessions — pick a CLI below to start one.
 
-    .strip-head
-        span.label(translate) Available CLIs
-        span.count {{clis.length}}
-        button.rescan((click)='rescan()', [disabled]='scanning')
-            span(*ngIf='!scanning', translate) Rescan
-            span(*ngIf='scanning', translate) Scanning…
+    section.panel
+        .panel-head
+            h2.title(translate) Launch
+            button.action((click)='rescan()', [disabled]='scanning')
+                span(*ngIf='!scanning', translate) Rescan
+                span(*ngIf='scanning', translate) Scanning…
 
-    .strip(*ngIf='clis.length')
-        .chip(
-            *ngFor='let cli of clis',
-            (click)='launch(cli)',
-            tabindex='0',
-            (keyup.enter)='launch(cli)',
-        )
-            .glyph([innerHTML]='iconForKind(cli.entry.id)')
-            .nm {{cli.entry.name}}
-            .ver(*ngIf='cli.version') {{cli.version}}
-            .tier([class.full]='cli.entry.tier === "full"')
+        .strip(*ngIf='clis.length')
+            .chip(
+                *ngFor='let cli of clis',
+                (click)='launch(cli)',
+                tabindex='0',
+                (keyup.enter)='launch(cli)',
+            )
+                .glyph([innerHTML]='iconForKind(cli.entry.id)')
+                .chip-text
+                    .nm {{cli.entry.name}}
+                    .sub
+                        span.ver(*ngIf='cli.version') {{cli.version}}
+                        span.tier([class.full]='cli.entry.tier === "full"')
+                            span(*ngIf='cli.entry.tier === "full"', translate) Full monitoring
+                            span(*ngIf='cli.entry.tier !== "full"', translate) Launch only
 
-    .strip-empty(*ngIf='!clis.length && !scanning')
-        span(translate) No AI CLIs found on this machine.
+        .empty(*ngIf='!clis.length && !scanning')
+            span(translate) No AI CLIs found on this machine.
+
+    section.panel
+        .panel-head
+            h2.title(translate) Recent activity
+
+        .timeline(*ngIf='recent.length')
+            .tl-row(*ngFor='let event of recent')
+                span.t {{feedTime(event)}}
+                span.who {{sessionNameFor(event.sessionId)}}
+                span.dot([ngClass]='dotFor(event)')
+                span.kind {{kindLabel(event.kind)}}
+                span.sum {{event.summary}}
+
+        .empty(*ngIf='!recent.length')
+            span(translate) Nothing has happened yet.
+
+    section.panel
+        .panel-head
+            h2.title(translate) Quick settings
+
+        .settings-card
+            .setting-row
+                .label(translate) Tabs location
+                .segmented
+                    button(
+                        *ngFor='let option of tabsLocations',
+                        [class.active]='tabsLocation === option.value',
+                        (click)='setTabsLocation(option.value)',
+                    )
+                        span.diagram([ngClass]='option.value')
+                        span {{option.label | translate}}

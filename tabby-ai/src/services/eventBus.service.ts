@@ -15,6 +15,9 @@ export interface AiAttentionPulse {
 /** Per-session ring buffer size for the dashboard hover feed */
 export const FEED_LENGTH = 30
 
+/** Cross-session ring buffer size for the dashboard activity timeline */
+export const RECENT_LENGTH = 60
+
 /**
  * In-app event bus (D6): adapters publish, the dashboard / notifications /
  * (M3) device output subscribe. State machine lives in events.ts as a pure
@@ -24,6 +27,7 @@ export const FEED_LENGTH = 30
 export class AiEventBusService {
     private snapshots = new Map<string, AiSessionSnapshot>()
     private feeds = new Map<string, AiEvent[]>()
+    private recent: AiEvent[] = []
 
     private events = new Subject<AiEvent>()
     private attention = new Subject<AiAttentionPulse>()
@@ -43,6 +47,9 @@ export class AiEventBusService {
         const feed = this.feeds.get(event.sessionId) ?? []
         feed.push(event)
         this.feeds.set(event.sessionId, feed.slice(-FEED_LENGTH))
+
+        // newest first — the timeline reads top-down
+        this.recent = [event, ...this.recent].slice(0, RECENT_LENGTH)
 
         console.debug(`[tabby-ai] event [${event.sessionId.slice(0, 8)}] ${event.kind}: ${event.summary} → ${next.state}`)
         this.events.next(event)
@@ -76,6 +83,11 @@ export class AiEventBusService {
 
     feedFor (sessionId: string): AiEvent[] {
         return this.feeds.get(sessionId) ?? []
+    }
+
+    /** Every session's events interleaved, newest first — survives the tabs that produced them */
+    get recentEvents (): readonly AiEvent[] {
+        return this.recent
     }
 
     /** Forget a session entirely (its tab is gone) */

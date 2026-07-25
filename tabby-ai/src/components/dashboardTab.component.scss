@@ -7,73 +7,136 @@
     overflow-y: auto;
 }
 
+// full-bleed on purpose: this is a control surface, not an article
 .ai-dashboard {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 30px 36px;
+    padding: 22px 26px 44px;
 }
 
-// theme-agnostic tints derived from currentColor / gray overlays;
-// ANSI accents arrive via --ai-* custom properties set from the terminal color scheme
-.board-head {
-    margin-bottom: 22px;
+// Two surfaces, theme-agnostic: the panel is the page tinted grey, the cards
+// inside it drop back to the page colour — so they read as raised on light
+// themes and inset on dark ones without either being hardcoded.
+/** vibby brand accent — deliberately not theme-derived, it is the one constant */
+$accent: #ff4500;
 
-    .eyebrow {
-        font-family: var(--ai-mono);
-        font-size: 11px;
-        letter-spacing: .22em;
-        text-transform: uppercase;
-        opacity: .45;
-        margin-bottom: 10px;
+$panel-bg: rgba(128, 128, 128, .09);
+$panel-line: rgba(128, 128, 128, .2);
+$card-line: rgba(128, 128, 128, .24);
+$card-line-hover: rgba(128, 128, 128, .48);
+
+@mixin inner-card {
+    background: var(--body-bg);
+    border: 1px solid $card-line;
+    border-radius: 9px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
+}
+
+.panel {
+    background: $panel-bg;
+    border: 1px solid $panel-line;
+    border-radius: 13px;
+    padding: 15px 17px 17px;
+    margin-bottom: 16px;
+
+    &:last-child {
+        margin-bottom: 0;
+    }
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 13px;
+    padding: 0 2px;
+
+    .title {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: .02em;
+
+        // the one decorative flourish, and it is three pixels wide
+        &::before {
+            content: '';
+            width: 3px;
+            height: 14px;
+            border-radius: 2px;
+            background: $accent;
+        }
     }
 
     .counters {
+        margin-left: auto;
         display: flex;
         align-items: baseline;
-        gap: 18px;
+        gap: 15px;
         font-family: var(--ai-mono);
 
         .counter {
             display: flex;
             align-items: baseline;
-            gap: 8px;
+            gap: 5px;
 
-            .n { font-size: 28px; font-weight: 700; line-height: 1; }
-            .l { font-size: 12px; opacity: .6; }
+            .n { font-size: 14px; font-weight: 700; }
+            .l { font-size: 11.5px; opacity: .55; }
 
             &.needs-you .n { color: var(--ai-yellow); }
             &.working .n { color: var(--ai-blue); }
             &.idle .n { color: var(--ai-green); }
             &.error .n { color: var(--ai-red); }
-            &.untracked .n { opacity: .35; }
+            &.untracked .n { opacity: .4; }
         }
+    }
 
-        .sep { font-size: 20px; opacity: .25; }
+    .action {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: inherit;
+        font-family: var(--ai-mono);
+        font-size: 11.5px;
+        cursor: pointer;
+        opacity: .6;
+        padding: 0;
+
+        &:hover { opacity: 1; text-decoration: underline; }
+        &[disabled] { cursor: default; opacity: .35; text-decoration: none; }
     }
 }
 
+.empty {
+    @include inner-card;
+    padding: 22px 18px;
+    font-family: var(--ai-mono);
+    font-size: 12.5px;
+    opacity: .5;
+    text-align: center;
+}
+
+// ---- sessions ----
+
 .board {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 12px;
-    margin-bottom: 34px;
+    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+    gap: 11px;
 }
 
 .scard {
+    @include inner-card;
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 9px;
-    padding: 13px 15px 14px;
-    background: rgba(128, 128, 128, .07);
-    border: 1px solid rgba(128, 128, 128, .3);
-    border-radius: 8px;
+    gap: 8px;
+    padding: 12px 14px 13px;
     cursor: pointer;
     outline: none;
 
     &:hover, &:focus-visible {
-        background: rgba(128, 128, 128, .15);
-        border-color: rgba(128, 128, 128, .5);
+        border-color: $card-line-hover;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, .1);
     }
 
     .card-top {
@@ -84,8 +147,8 @@
 
     .stword {
         font-weight: 700;
-        font-size: 13px;
-        letter-spacing: .28em;
+        font-size: 12.5px;
+        letter-spacing: .16em;
     }
 
     .dur {
@@ -98,8 +161,7 @@
 
     // the only animated element on the whole board (design §2.5)
     &.needs-you {
-        border-color: color-mix(in srgb, var(--ai-yellow) 45%, rgba(128, 128, 128, .3));
-        background: linear-gradient(160deg, color-mix(in srgb, var(--ai-yellow) 10%, transparent), rgba(128, 128, 128, .07) 70%);
+        border-color: color-mix(in srgb, var(--ai-yellow) 55%, $card-line);
 
         .stword {
             color: var(--ai-yellow);
@@ -111,14 +173,14 @@
     &.idle .stword { color: var(--ai-green); }
 
     &.error {
-        border-color: color-mix(in srgb, var(--ai-red) 40%, rgba(128, 128, 128, .3));
+        border-color: color-mix(in srgb, var(--ai-red) 50%, $card-line);
         .stword { color: var(--ai-red); }
     }
 
     &.untracked .stword {
         font-weight: 400;
         font-size: 11.5px;
-        letter-spacing: .14em;
+        letter-spacing: .12em;
         opacity: .45;
     }
 
@@ -141,7 +203,7 @@
 
         .name {
             font-weight: 600;
-            font-size: 15px;
+            font-size: 14.5px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -168,7 +230,7 @@
     &:hover .card-name .rename { opacity: .45; }
 
     .card-body {
-        border-top: 1px solid rgba(128, 128, 128, .25);
+        border-top: 1px solid rgba(128, 128, 128, .18);
         padding-top: 8px;
         min-height: 3.1em;
         font-family: var(--ai-mono);
@@ -176,7 +238,7 @@
         line-height: 1.55;
 
         .act {
-            opacity: .55;
+            opacity: .6;
             // two lines of room: a prompt is worth reading, an ellipsis is not
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -193,130 +255,196 @@
             text-overflow: ellipsis;
         }
     }
-
-    .feed {
-        display: none;
-        position: absolute;
-        left: -1px;
-        right: -1px;
-        top: calc(100% - 2px);
-        z-index: 10;
-        background: var(--body-bg, #1a1a1a);
-        border: 1px solid rgba(128, 128, 128, .4);
-        border-radius: 6px;
-        padding: 9px 14px;
-        font-family: var(--ai-mono);
-        font-size: 11.5px;
-        line-height: 1.9;
-        opacity: .97;
-        box-shadow: 0 14px 34px rgba(0, 0, 0, .35);
-
-        .t {
-            opacity: .45;
-            margin-right: 10px;
-        }
-    }
-
-    &:hover .feed, &:focus-visible .feed {
-        display: block;
-    }
 }
 
-.empty-board {
-    border-top: 1px solid rgba(128, 128, 128, .3);
-    border-bottom: 1px solid rgba(128, 128, 128, .3);
-    padding: 36px 4px;
-    margin-bottom: 34px;
-    font-family: var(--ai-mono);
-    font-size: 13px;
-    opacity: .5;
-}
-
-.strip-head {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    font-family: var(--ai-mono);
-    font-size: 11px;
-    letter-spacing: .22em;
-    text-transform: uppercase;
-    opacity: .7;
-    margin-bottom: 12px;
-
-    .label { opacity: .65; }
-    .count { opacity: .45; }
-
-    .rescan {
-        margin-left: auto;
-        background: none;
-        border: none;
-        color: inherit;
-        font: inherit;
-        letter-spacing: inherit;
-        text-transform: inherit;
-        cursor: pointer;
-        opacity: .65;
-        padding: 0;
-
-        &:hover { opacity: 1; text-decoration: underline; }
-        &[disabled] { cursor: default; opacity: .35; text-decoration: none; }
-    }
-}
+// ---- launcher ----
 
 .strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 11px;
 }
 
 .chip {
+    @include inner-card;
+    flex: 0 1 246px;
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 9px 14px;
-    background: rgba(128, 128, 128, .10);
-    border: 1px solid rgba(128, 128, 128, .3);
-    border-radius: 6px;
+    gap: 12px;
+    padding: 11px 14px;
     cursor: pointer;
     outline: none;
 
     &:hover, &:focus-visible {
-        background: rgba(128, 128, 128, .18);
-        border-color: rgba(128, 128, 128, .5);
+        border-color: $card-line-hover;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, .1);
     }
 
-    .glyph ::ng-deep svg {
-        width: 16px;
-        height: 16px;
-        display: block;
+    .glyph {
+        flex: none;
+
+        ::ng-deep svg {
+            width: 20px;
+            height: 20px;
+            display: block;
+        }
     }
 
-    .nm { font-weight: 600; font-size: 13px; }
+    .chip-text {
+        min-width: 0;
+    }
 
-    .ver {
+    .nm {
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .sub {
+        display: flex;
+        align-items: baseline;
+        gap: 9px;
+        margin-top: 2px;
         font-family: var(--ai-mono);
-        font-size: 10.5px;
-        opacity: .45;
+        font-size: 11px;
+        opacity: .5;
     }
 
-    .tier {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        margin-left: 3px;
-        border: 1.5px solid rgba(128, 128, 128, .5);
+    .tier.full {
+        color: var(--ai-green);
+        opacity: .95;
+    }
+}
 
-        &.full {
-            border: none;
-            background: var(--ai-green);
+// ---- activity timeline ----
+
+// one card holding the whole list, rather than a card per line
+.timeline {
+    @include inner-card;
+    padding: 3px 14px;
+    font-family: var(--ai-mono);
+    font-size: 12px;
+}
+
+.tl-row {
+    display: grid;
+    grid-template-columns: 50px minmax(0, 150px) 8px minmax(0, 88px) 1fr;
+    align-items: center;
+    gap: 13px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(128, 128, 128, .14);
+
+    &:last-child {
+        border-bottom: none;
+    }
+
+    .t { opacity: .4; }
+
+    .who {
+        font-weight: 600;
+        opacity: .8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(128, 128, 128, .5);
+
+        &.working { background: var(--ai-blue); }
+        &.needs-you { background: var(--ai-yellow); }
+        &.idle { background: var(--ai-green); }
+        &.error { background: var(--ai-red); }
+    }
+
+    .kind {
+        opacity: .5;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .sum {
+        opacity: .85;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+// ---- quick settings ----
+
+.settings-card {
+    @include inner-card;
+    padding: 12px 15px;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+
+    .label {
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .segmented {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+
+        button {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 11px;
+            background: none;
+            border: 1px solid $card-line;
+            border-radius: 7px;
+            color: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: .7;
+
+            &:hover {
+                opacity: 1;
+                border-color: $card-line-hover;
+            }
+
+            &.active {
+                opacity: 1;
+                color: $accent;
+                border-color: $accent;
+                background: color-mix(in srgb, #{$accent} 10%, transparent);
+            }
         }
     }
 }
 
-.strip-empty {
-    font-family: var(--ai-mono);
-    font-size: 12.5px;
-    opacity: .5;
+// 16×12 window sketch with the tab strip filled in on one edge
+.diagram {
+    position: relative;
+    box-sizing: border-box;
+    width: 16px;
+    height: 12px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    opacity: .75;
+
+    &::before {
+        content: '';
+        position: absolute;
+        background: currentColor;
+    }
+
+    &.top::before { left: 0; right: 0; top: 0; height: 3px; }
+    &.bottom::before { left: 0; right: 0; bottom: 0; height: 3px; }
+    &.left::before { top: 0; bottom: 0; left: 0; width: 4px; }
+    &.right::before { top: 0; bottom: 0; right: 0; width: 4px; }
 }
 
 @keyframes ai-word-breathe {
@@ -328,32 +456,34 @@
 
 @media (max-width: 900px) {
     .ai-dashboard {
-        padding: 20px 18px;
+        padding: 18px 14px 40px;
     }
 
-    .board-head .counters {
-        flex-wrap: wrap;
-        gap: 16px;
+    .tl-row {
+        grid-template-columns: 46px minmax(0, 110px) 8px 1fr;
+        gap: 10px;
 
-        .counter .n { font-size: 22px; }
+        .kind { display: none; }
     }
 }
 
 @media (max-width: 560px) {
     .ai-dashboard {
-        padding: 14px 12px;
+        padding: 12px 10px 32px;
     }
 
-    // one column, and no popover — there is nowhere to put it
     .board {
         grid-template-columns: 1fr;
     }
 
-    .scard .feed {
-        display: none !important;
-    }
-
     .chip {
         flex: 1 1 100%;
+    }
+
+    // the summary is the point — the rest is scaffolding
+    .tl-row {
+        grid-template-columns: 46px 8px 1fr;
+
+        .who { display: none; }
     }
 }
