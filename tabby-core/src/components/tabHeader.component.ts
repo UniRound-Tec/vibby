@@ -99,7 +99,7 @@ export class TabHeaderComponent extends BaseComponent {
         })
     }
 
-    focusAiPane (pane: BaseTabComponent, event: MouseEvent): void {
+    focusAiPane (pane: BaseTabComponent, event: Event): void {
         event.stopPropagation()
         this.app.selectTab(this.tab)
         if (this.tab instanceof SplitTabComponent) {
@@ -109,6 +109,32 @@ export class TabHeaderComponent extends BaseComponent {
 
     isAiPaneFocused (pane: BaseTabComponent): boolean {
         return this.tab instanceof SplitTabComponent && this.tab.getFocusedTab() === pane
+    }
+
+    async closeAiPane (pane: BaseTabComponent, event: Event): Promise<void> {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!pane.effectivelyPinned && await pane.canClose()) {
+            pane.destroy()
+        }
+    }
+
+    async onAiPaneContextMenu (pane: BaseTabComponent, event: MouseEvent): Promise<void> {
+        event.preventDefault()
+        event.stopPropagation()
+        this.app.selectTab(this.tab)
+        if (this.tab instanceof SplitTabComponent) {
+            this.tab.focus(pane)
+        }
+
+        let items: MenuItemOptions[] = []
+        for (const section of await Promise.all(this.contextMenuProviders.map(x => x.getItems(pane, true)))) {
+            if (section.length) {
+                items.push({ type: 'separator' })
+                items = items.concat(section)
+            }
+        }
+        this.platform.popupContextMenu(items.slice(1), event)
     }
 
     @HostBinding('class.flex-width') get isFlexWidthEnabled (): boolean {

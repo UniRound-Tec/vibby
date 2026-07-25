@@ -397,8 +397,14 @@ export class AppService {
         const modal = this.ngbModal.open(RenameTabModalComponent)
         modal.componentInstance.value = tab.customTitle || tab.title
         modal.result.then(result => {
-            tab.setTitle(result)
-            tab.customTitle = result
+            const linkedTab = tab['linkedRenameTab'] as BaseTabComponent | null
+            for (const target of [tab, linkedTab]) {
+                if (target) {
+                    target.setTitle(result)
+                    target.customTitle = result
+                    target['aiAutoName'] = null
+                }
+            }
             this.emitTabsChanged()
         }).catch(() => null)
     }

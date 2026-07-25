@@ -93,6 +93,7 @@ export class AiTabStateService {
             tab['aiPanes'] = aiPanes.length > 1
                 ? aiPanes.map((pane, index) => this.paneCard(pane, index))
                 : null
+            this.linkSinglePaneName(tab, aiPanes)
             if (aiPane?.profile.type === 'ai-cli') {
                 this.nameFromCwd(tab, aiPane)
             }
@@ -183,6 +184,45 @@ export class AiTabStateService {
         }
     }
 
+    /**
+     * A one-pane SplitTab is an implementation detail, not a user-visible
+     * group. Keep its wrapper and pane title linked so renaming from either
+     * the rail or dashboard cannot create two conflicting names.
+     *
+     * Once there are multiple panes the wrapper becomes the group name and
+     * each pane keeps its own independent name.
+     */
+    private linkSinglePaneName (tab: BaseTabComponent, aiPanes: TerminalTabComponent[]): void {
+        const oldPeer = tab['linkedRenameTab'] as BaseTabComponent | null
+        if (oldPeer?.['linkedRenameTab'] === tab) {
+            oldPeer['linkedRenameTab'] = null
+        }
+        tab['linkedRenameTab'] = null
+
+        if (aiPanes.length !== 1 || tab === aiPanes[0]) {
+            return
+        }
+
+        const pane = aiPanes[0]
+        const paneHasUserName = !!pane.customTitle && pane.customTitle !== pane['aiAutoName']
+        const tabHasUserName = this.userNamed(tab)
+
+        // Older builds could rename these independently. The pane is the
+        // actual session, so its explicit name wins during one-time repair.
+        if (paneHasUserName && pane.customTitle !== tab.customTitle) {
+            tab.setTitle(pane.customTitle)
+            tab.customTitle = pane.customTitle
+            tab['aiAutoName'] = null
+        } else if (tabHasUserName && tab.customTitle !== pane.customTitle) {
+            pane.setTitle(tab.customTitle)
+            pane.customTitle = tab.customTitle
+            pane['aiAutoName'] = null
+        }
+
+        tab['linkedRenameTab'] = pane
+        pane['linkedRenameTab'] = tab
+    }
+
     private watchSplit (tab: BaseTabComponent): void {
         if (!(tab instanceof SplitTabComponent) || this.watchedSplits.has(tab)) {
             return
@@ -269,8 +309,12 @@ export class AiTabStateService {
         if (!name || this.userNamed(tab)) {
             return
         }
-        tab['aiAutoName'] = name
-        tab.customTitle = name
+        for (const target of [tab, tab['linkedRenameTab'] as BaseTabComponent | null]) {
+            if (target) {
+                target['aiAutoName'] = name
+                target.customTitle = name
+            }
+        }
     }
 
     private baseName (dir: string|null|undefined): string|null {

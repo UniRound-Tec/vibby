@@ -425,8 +425,8 @@ export default class AiModule {
             .content.tabs-on-left > .tab-bar .ai-pane,
             .content.tabs-on-right > .tab-bar .ai-pane {
                 display: grid;
-                grid-template-columns: 13px 14px minmax(0, 1fr) auto;
-                grid-template-areas: "pane-index pane-icon pane-name pane-state" "pane-summary pane-summary pane-summary pane-summary";
+                grid-template-columns: 13px 14px minmax(0, 1fr) auto 18px;
+                grid-template-areas: "pane-index pane-icon pane-name pane-state pane-close" "pane-summary pane-summary pane-summary pane-summary pane-close";
                 align-items: center;
                 gap: 2px 6px;
                 width: 100%;
@@ -489,6 +489,31 @@ export default class AiModule {
                 white-space: nowrap;
                 text-overflow: ellipsis;
                 opacity: .5;
+            }
+            .ai-pane-close {
+                grid-area: pane-close;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 18px;
+                height: 18px;
+                padding: 0;
+                border: 0;
+                border-radius: 4px;
+                background: transparent;
+                color: inherit;
+                font: 16px/1 sans-serif;
+                opacity: 0;
+                transition: opacity .15s ease, background-color .15s ease;
+                -webkit-app-region: no-drag;
+            }
+            .ai-pane:hover .ai-pane-close,
+            .ai-pane-close:focus-visible {
+                opacity: .62;
+            }
+            .ai-pane .ai-pane-close:hover {
+                background: rgba(128, 128, 128, .18);
+                opacity: 1;
             }
 
             /* horizontal bars: no room for the event line, and the chip shrinks

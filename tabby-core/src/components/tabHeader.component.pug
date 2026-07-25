@@ -31,11 +31,14 @@ profile-icon(
 .ai-state(*ngIf='tab["aiStateLabel"]', [ngClass]='tab["aiState"]') {{tab["aiStateLabel"]}}
 .ai-summary(*ngIf='tab["aiSummary"]') {{tab["aiSummary"]}}
 .ai-pane-list(*ngIf='tab["aiPanes"]?.length > 1')
-    button.ai-pane(
+    .ai-pane(
         *ngFor='let pane of tab["aiPanes"]',
-        type='button',
+        role='button',
+        tabindex='0',
         [class.active]='isAiPaneFocused(pane.pane)',
         (click)='focusAiPane(pane.pane, $event)',
+        (keydown.enter)='focusAiPane(pane.pane, $event)',
+        (contextmenu)='onAiPaneContextMenu(pane.pane, $event)',
         [title]='pane.name',
     )
         span.ai-pane-index {{pane.index}}
@@ -43,6 +46,13 @@ profile-icon(
         span.ai-pane-name {{pane.name}}
         span.ai-pane-state([ngClass]='pane.state') {{pane.stateLabel}}
         span.ai-pane-summary(*ngIf='pane.summary') {{pane.summary}}
+        button.ai-pane-close(
+            *ngIf='!pane.pane.effectivelyPinned',
+            type='button',
+            title='Close',
+            aria-label='Close',
+            (click)='closeAiPane(pane.pane, $event)',
+        ) &times;
 
 .buttons
     button(*ngIf='!config.store.terminal.hideTabOptionsButton',(click)='onContextMenu($event)') !{require('../icons/tab-options.svg')}

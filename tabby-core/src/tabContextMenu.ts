@@ -28,10 +28,11 @@ export class TabManagementContextMenu extends TabContextMenuItemProvider {
     }
 
     async getItems (tab: BaseTabComponent): Promise<MenuItemOptions[]> {
+        const isPane = tab.parent instanceof SplitTabComponent
         let items: MenuItemOptions[] = [
             {
-                label: this.translate.instant('Close'),
-                commandLabel: this.translate.instant('Close tab'),
+                label: this.translate.instant(isPane ? 'Close focused pane' : 'Close'),
+                commandLabel: this.translate.instant(isPane ? 'Close focused pane' : 'Close tab'),
                 enabled: !tab.effectivelyPinned,
                 click: () => {
                     if (this.app.tabs.includes(tab)) {
