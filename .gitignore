@@ -37,3 +37,6 @@ sentry-symbols.js
 
 crowdin.yml
 .crowdin.env
+
+# fetch-icons.mjs cache; re-fetched on demand, not part of the build
+scripts/.icons.json
