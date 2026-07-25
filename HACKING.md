@@ -10,6 +10,12 @@ First of all, clone this repository.
 - [Node.js](https://nodejs.org/en/download/) **version 15 or newer*
 - [Yarn](https://yarnpkg.com/)
 
+## Windows native build requirements
+
+Install **Visual Studio 2022 Build Tools** with the **Desktop development with C++** workload. In the *Individual components* tab, also select the Spectre-mitigated libraries for the MSVC toolset and target architecture you use (at minimum, **MSVC v143 - VS 2022 C++ x64/x86 Spectre-mitigated libs**).
+
+The `@tabby-gang/windows-process-tree` native module is compiled during dependency installation. Without these Spectre-mitigated libraries, MSBuild fails with `MSB8040` and the Windows native build cannot complete.
+
 First, from within the `tabby` directory install the dependencies via yarn:
 
 ```
