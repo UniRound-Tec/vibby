@@ -2747,3 +2747,7 @@ msgstr "AI 会话"
 #: tabby-ai/src/services/tabState.service.ts:45
 msgid "Terminals"
 msgstr "终端"
+
+#: tabby-ai/src/commands.ts:31
+msgid "Toggle sidebar"
+msgstr "折叠 / 展开侧边栏"

@@ -152,6 +152,8 @@ export interface AiSessionSnapshot {
 
 侧栏其余外观（卡片布局、分组标题、底部工具栏、状态色）**全部走 tabby-ai 注入的样式表**，core 不含任何 vibby 专属样式——挂载点只提供 DOM 和数据，样式留在插件侧，这是刻意的合并纪律。
 
+侧栏收缩（`aiCli.rail.collapsed`）同样零 core 触点：`RailService` 只往 `<body>` 挂 `vibby-rail-collapsed` 类，收缩态的全部布局在同一张注入样式表里。其中 `body.vibby-rail-collapsed .window { min-height: 0 }` 是必需的——工具栏在窄栏里改为竖排后，flex item 默认的 `min-height: auto` 会把整个窗口布局顶出视口底部 30px（标题栏高度）。
+
 ## 7. 风险表
 
 | 风险 | 位置 | 预案 |

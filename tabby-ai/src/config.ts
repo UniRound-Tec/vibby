@@ -16,6 +16,10 @@ export class AiConfigProvider extends ConfigProvider {
                 notifications: true,
                 notifyOnIdle: false,
             },
+            rail: {
+                /** Side tab bar narrowed to icons only. Ignored on horizontal bars. */
+                collapsed: false,
+            },
         },
         hotkeys: {
             'toggle-dashboard': ['Ctrl-Shift-H'],

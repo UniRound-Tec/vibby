@@ -17,6 +17,7 @@ import { HookIngressService } from './services/hookIngress.service'
 import { ClaudeAdapterService } from './services/claudeAdapter.service'
 import { AiAttentionService } from './services/attention.service'
 import { AiTabStateService } from './services/tabState.service'
+import { COLLAPSED_CLASS, RailService } from './services/rail.service'
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
 
@@ -53,6 +54,7 @@ export default class AiModule {
         claudeAdapter: ClaudeAdapterService,
         attention: AiAttentionService,
         tabState: AiTabStateService,
+        rail: RailService,
     ) {
         scanner.ensureScanned()
         ingress.start().then(() => {
@@ -61,6 +63,7 @@ export default class AiModule {
         claudeAdapter.activate()
         attention.activate()
         tabState.activate()
+        rail.activate()
         this.injectTabBarStyles()
 
         hotkeys.hotkey$.subscribe(hotkey => {
@@ -86,8 +89,38 @@ export default class AiModule {
     private injectTabBarStyles (): void {
         const homeIcon: string = require('./icons/home.svg')
         const mask = `url("data:image/svg+xml,${encodeURIComponent(homeIcon)}") center / contain no-repeat`
+        // every collapsed rule shares this prefix; :is() keeps the block
+        // readable where spelling both sides out would double its length
+        const collapsed = `body.${COLLAPSED_CLASS} .content:is(.tabs-on-left, .tabs-on-right) > .tab-bar`
         const style = document.createElement('style')
         style.textContent = `
+            /* ---- scrollbars ---- upstream's are 10px over a filled track,
+               which reads as a piece of UI rather than an affordance. The
+               \`body \` prefix outranks the theme's \`*\` rules whichever order
+               the two stylesheets end up in — themes.service appends its
+               <style> whenever the theme is first applied. */
+            body ::-webkit-scrollbar {
+                width: 6px;
+                height: 6px;
+                background: transparent;
+            }
+            body ::-webkit-scrollbar-thumb {
+                background: color-mix(in srgb, ${ACCENT} 45%, transparent);
+                border-radius: 3px;
+            }
+            body ::-webkit-scrollbar-thumb:hover { background: ${ACCENT}; }
+            /* in the rail it shows only while the pointer is in there. Only the
+               thumb's colour changes, never the track's width, so revealing it
+               cannot shift the cards sideways. */
+            .content.tabs-on-left > .tab-bar .tabs::-webkit-scrollbar-thumb,
+            .content.tabs-on-right > .tab-bar .tabs::-webkit-scrollbar-thumb {
+                background: transparent;
+            }
+            .content.tabs-on-left > .tab-bar:hover .tabs::-webkit-scrollbar-thumb,
+            .content.tabs-on-right > .tab-bar:hover .tabs::-webkit-scrollbar-thumb {
+                background: color-mix(in srgb, ${ACCENT} 55%, transparent);
+            }
+
             /* ---- home tab: icon only on horizontal bars, a labelled row on side bars ---- */
             tab-header.mini {
                 width: 52px !important;
@@ -146,6 +179,18 @@ export default class AiModule {
                 margin-bottom: 3px;
                 /* core clips the header; the group heading sits above the card */
                 overflow: visible !important;
+                /* the theme paints every tab header in --theme-fg-more-2, its
+                   secondary foreground. That reads fine on a 38px strip of
+                   chrome; in a rail this wide the tab list *is* the content,
+                   so it opts back into the body colour and lets the individual
+                   rules below decide what gets dimmed. */
+                color: var(--bs-body-color);
+            }
+            /* ...except the theme dims the number to .4 from a selector deep
+               enough that only !important reaches it */
+            .content.tabs-on-left > .tab-bar tab-header .index,
+            .content.tabs-on-right > .tab-bar tab-header .index {
+                opacity: .72 !important;
             }
 
             /* ---- group headings ---- the service labels a tab whenever the
@@ -170,10 +215,10 @@ export default class AiModule {
                 font-size: 10px;
                 font-weight: 600;
                 letter-spacing: .16em;
-                /* never inherit: core tints the whole header when a tab has
-                   unread activity, and the heading is not about that tab */
+                /* never inherit: the heading is not about the tab it hangs on,
+                   so it must not pick up that tab's active/dimmed colour */
                 color: var(--bs-body-color, currentColor);
-                opacity: .38;
+                opacity: .58;
                 pointer-events: none;
             }
 
@@ -227,7 +272,6 @@ export default class AiModule {
                 grid-area: icon;
                 display: flex;
                 align-items: center;
-                opacity: .75;
             }
             .ai-icon svg { width: 14px; height: 14px; display: block; }
 
@@ -268,7 +312,7 @@ export default class AiModule {
             .ai-state.working { color: var(--bs-blue, #61afef); background: color-mix(in srgb, var(--bs-blue, #61afef) 16%, transparent); }
             .ai-state.idle { color: var(--bs-green, #98c379); background: color-mix(in srgb, var(--bs-green, #98c379) 16%, transparent); }
             .ai-state.error { color: var(--bs-red, #e06c75); background: color-mix(in srgb, var(--bs-red, #e06c75) 18%, transparent); }
-            .ai-state.untracked { color: var(--bs-body-color, currentColor); opacity: .5; }
+            .ai-state.untracked { color: var(--bs-body-color, currentColor); opacity: .78; }
             .ai-state.needs-you {
                 color: var(--bs-yellow, #f0c674);
                 background: color-mix(in srgb, var(--bs-yellow, #f0c674) 20%, transparent);
@@ -280,10 +324,10 @@ export default class AiModule {
                 font-family: monospace;
                 font-size: 10.5px;
                 line-height: 1.5;
-                /* upstream tints the whole header when a tab has unread output;
-                   only the state chip is allowed to carry colour in here */
+                /* only the state chip is allowed to carry colour in a card, so
+                   the event line never inherits an active tab's highlight */
                 color: var(--bs-body-color, currentColor);
-                opacity: .45;
+                opacity: .65;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -349,13 +393,25 @@ export default class AiModule {
             .content.tabs-on-right > .tab-bar .btn-tab-bar {
                 width: 40px !important;
                 height: 36px !important;
-                border-radius: 8px;
-                opacity: .75;
+                /* !important: appRoot's own component-scoped rule squares these
+                   off, and an [_ngcontent] attribute outranks anything we can
+                   write from outside the component */
+                border-radius: 9px !important;
+                opacity: .9;
             }
             .content.tabs-on-left > .tab-bar .btn-tab-bar svg,
             .content.tabs-on-right > .tab-bar .btn-tab-bar svg {
                 width: 17px;
                 height: 17px;
+            }
+            /* the theme dims every toolbar icon to .75 fill on top of the
+               button's own opacity — .56 effective, which is where the "faint"
+               look comes from. The rail dims once, not twice. */
+            .content.tabs-on-left > .tab-bar .btn-tab-bar svg,
+            .content.tabs-on-left > .tab-bar .btn-tab-bar svg path,
+            .content.tabs-on-right > .tab-bar .btn-tab-bar svg,
+            .content.tabs-on-right > .tab-bar .btn-tab-bar svg path {
+                fill-opacity: 1;
             }
             .content.tabs-on-left > .tab-bar .btn-tab-bar:hover,
             .content.tabs-on-right > .tab-bar .btn-tab-bar:hover { opacity: 1; }
@@ -409,6 +465,109 @@ export default class AiModule {
             }
             /* the hover buttons overlay the same corner */
             tab-header:hover .ai-state-dot { opacity: 0; }
+
+            /* ---- collapsed rail ---- icons only; RailService owns the body
+               class, so nothing outside this block knows the state exists.
+               The action is meaningless on horizontal bars, so is its button. */
+            .content:not(.tabs-on-left):not(.tabs-on-right) .btn-tab-bar:has(svg.vibby-rail-toggle) {
+                display: none !important;
+            }
+            body.${COLLAPSED_CLASS} .btn-tab-bar:has(svg.vibby-rail-toggle) {
+                background: rgba(128, 128, 128, .2);
+                opacity: 1;
+            }
+            body.${COLLAPSED_CLASS} .content.tabs-on-left,
+            body.${COLLAPSED_CLASS} .content.tabs-on-right {
+                --side-tab-width: calc(58px * var(--spaciness));
+            }
+            /* the toolbar stops being one row pinned to the bottom and becomes
+               a column, which is the only thing that fits at this width */
+            ${collapsed} { padding-bottom: 8px; min-height: 0; }
+            /* a stacked toolbar raises the rail's min-content height above the
+               viewport, and a flex item defaults to min-height:auto — without
+               this the whole window layout is pushed past the bottom edge */
+            body.${COLLAPSED_CLASS} .window { min-height: 0; }
+            ${collapsed}::after { display: none; }
+            ${collapsed} > .btn-group {
+                position: static !important;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+            }
+            ${collapsed} > .btn-space { flex: none !important; height: 0 !important; }
+            ${collapsed} > .tabs + .btn-group {
+                margin: 6px 9px 0;
+                padding-top: 8px;
+                border-top: 1px solid rgba(128, 128, 128, .18);
+            }
+
+            /* one square per tab: the icon carries the identity and the tooltip
+               (core binds it to the title) carries the name */
+            ${collapsed} tab-header {
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+                flex: none !important;
+                height: 38px !important;
+                padding: 0 !important;
+                margin-bottom: 4px;
+            }
+            /* home is a toolbar button on side bars, collapsed or not */
+            ${collapsed} tab-header.mini { display: none !important; }
+            ${collapsed} tab-header .name,
+            ${collapsed} tab-header .ai-summary,
+            ${collapsed} tab-header .buttons { display: none !important; }
+            /* no room for a close button — the right-click menu still has one */
+            ${collapsed} tab-header .index {
+                grid-area: auto;
+                min-width: 0 !important;
+                font-size: 11px;
+            }
+            /* the number is a fallback: it only shows when nothing better does */
+            ${collapsed} tab-header:has(.ai-icon) .index,
+            ${collapsed} tab-header:has(profile-icon) .index { display: none !important; }
+            ${collapsed} .ai-icon { opacity: .85; }
+            ${collapsed} .ai-icon svg { width: 16px; height: 16px; }
+
+            /* the state chip shrinks to a badge on the icon's corner */
+            ${collapsed} .ai-state {
+                position: absolute;
+                top: 4px;
+                right: 4px;
+                display: block !important;
+                width: 6px;
+                height: 6px;
+                padding: 0 !important;
+                border-radius: 50%;
+                font-size: 0 !important;
+                line-height: 0 !important;
+                background: currentColor !important;
+            }
+            ${collapsed} .ai-state::before { display: none; }
+            /* nothing overlays it here, so it has no reason to fade on hover */
+            ${collapsed} tab-header:hover .ai-state { opacity: 1; }
+            ${collapsed} tab-header:hover .ai-state.untracked { opacity: .78; }
+
+            /* group headings have no room for a label — a rule says the same */
+            ${collapsed} tab-header[data-ai-group] { margin-top: 15px; }
+            ${collapsed} tab-header[data-ai-group]::before {
+                content: '';
+                left: 5px;
+                right: 5px;
+                top: -8px;
+                height: 1px;
+                background: rgba(128, 128, 128, .3);
+                opacity: 1;
+            }
+            /* ...and the first group needs no divider: nothing is above it.
+               the hidden home tab still counts as :first-child, so the second
+               selector catches the case where it is open */
+            ${collapsed} .tabs > tab-header[data-ai-group]:first-child,
+            ${collapsed} .tabs > tab-header.mini + tab-header[data-ai-group] { margin-top: 6px; }
+            ${collapsed} .tabs > tab-header[data-ai-group]:first-child::before,
+            ${collapsed} .tabs > tab-header.mini + tab-header[data-ai-group]::before { display: none; }
 
             @keyframes vibby-dot-breathe {
                 0%, 100% { opacity: 1; }

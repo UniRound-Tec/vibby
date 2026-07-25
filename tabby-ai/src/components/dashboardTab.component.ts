@@ -54,6 +54,7 @@ export class DashboardTabComponent extends BaseTabComponent {
         { value: 'right', label: 'Right' },
         { value: 'bottom', label: 'Bottom' },
     ]
+
     clis: DetectedCli[] = []
     scanning = false
     now = Date.now()
