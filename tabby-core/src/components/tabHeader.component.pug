@@ -22,12 +22,27 @@ profile-icon(
     [cdkDragData]='tab',
     (cdkDragStarted)='onTabDragStart(tab)',
     (cdkDragEnded)='onTabDragEnd()',
-) {{tab.customTitle || tab.title}}
+)
+    | {{tab.customTitle || tab.title}}
+    span.ai-pane-count(*ngIf='tab["aiPaneCount"]') ×{{tab["aiPaneCount"]}}
 
 //- vibby: AI session badges, written by tabby-ai's AiTabStateService
 .ai-icon(*ngIf='tab["aiIcon"]', [fastHtmlBind]='tab["aiIcon"]', [title]='tab["aiKind"]')
 .ai-state(*ngIf='tab["aiStateLabel"]', [ngClass]='tab["aiState"]') {{tab["aiStateLabel"]}}
 .ai-summary(*ngIf='tab["aiSummary"]') {{tab["aiSummary"]}}
+.ai-pane-list(*ngIf='tab["aiPanes"]?.length > 1')
+    button.ai-pane(
+        *ngFor='let pane of tab["aiPanes"]',
+        type='button',
+        [class.active]='isAiPaneFocused(pane.pane)',
+        (click)='focusAiPane(pane.pane, $event)',
+        [title]='pane.name',
+    )
+        span.ai-pane-index {{pane.index}}
+        span.ai-pane-icon(*ngIf='pane.icon', [fastHtmlBind]='pane.icon', [title]='pane.kind')
+        span.ai-pane-name {{pane.name}}
+        span.ai-pane-state([ngClass]='pane.state') {{pane.stateLabel}}
+        span.ai-pane-summary(*ngIf='pane.summary') {{pane.summary}}
 
 .buttons
     button(*ngIf='!config.store.terminal.hideTabOptionsButton',(click)='onContextMenu($event)') !{require('../icons/tab-options.svg')}

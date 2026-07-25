@@ -1,7 +1,8 @@
 import { Observable, Subject, takeWhile } from 'rxjs'
-import { Component, Injectable, ViewChild, ViewContainerRef, EmbeddedViewRef, AfterViewInit, OnDestroy, Injector } from '@angular/core'
+import { Component, Injectable, ViewChild, ViewContainerRef, EmbeddedViewRef, AfterViewInit, OnDestroy, Injector, Inject, Optional } from '@angular/core'
 import { BaseTabComponent, BaseTabProcess, GetRecoveryTokenOptions } from './baseTab.component'
 import { TabRecoveryProvider, RecoveryToken } from '../api/tabRecovery'
+import { SplitTabHandler } from '../api/splitTabHandler'
 import { TabsService, NewTabParameters } from '../services/tabs.service'
 import { HotkeysService } from '../services/hotkeys.service'
 import { TabRecoveryService } from '../services/tabRecovery.service'
@@ -260,6 +261,7 @@ export class SplitTabComponent extends BaseTabComponent implements AfterViewInit
         private hotkeys: HotkeysService,
         private tabsService: TabsService,
         private tabRecovery: TabRecoveryService,
+        @Optional() @Inject(SplitTabHandler) private splitTabHandlers: SplitTabHandler[]|null,
         injector: Injector,
     ) {
         super(injector)
@@ -705,7 +707,10 @@ export class SplitTabComponent extends BaseTabComponent implements AfterViewInit
     }
 
     async splitTab (tab: BaseTabComponent, dir: SplitDirection): Promise<BaseTabComponent|null> {
-        const newTab = await this.tabsService.duplicate(tab)
+        const handler = this.splitTabHandlers?.find(x => x.supports(tab))
+        const newTab = handler
+            ? await handler.create(tab)
+            : await this.tabsService.duplicate(tab)
         if (newTab) {
             await this.addTab(newTab, tab, dir)
         }

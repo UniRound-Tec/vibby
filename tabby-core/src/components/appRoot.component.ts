@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import { Component, Input, HostListener, HostBinding, ViewChildren, ViewChild } from '@angular/core'
+import { Component, Input, HostListener, HostBinding, ViewChildren, ViewChild, ElementRef } from '@angular/core'
 import { trigger, style, animate, transition, state } from '@angular/animations'
 import { NgbDropdown, NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { CdkDragDrop } from '@angular/cdk/drag-drop'
@@ -72,10 +72,41 @@ export class AppRootComponent {
     @HostBinding('class.no-tabs') noTabs = true
     @ViewChildren(TabBodyComponent) tabBodies: TabBodyComponent[]
     @ViewChild('activeTransfersDropdown') activeTransfersDropdown: NgbDropdown
+    @ViewChild('modalViewport', { read: ElementRef })
+    set modalViewport (viewport: ElementRef<HTMLElement>|undefined) {
+        this.modalViewportResizeObserver?.disconnect()
+        this.modalViewportMutationObserver?.disconnect()
+
+        if (!viewport) {
+            return
+        }
+
+        const update = () => {
+            const rect = viewport.nativeElement.getBoundingClientRect()
+            document.body.style.setProperty('--modal-viewport-left', `${rect.left}px`)
+            document.body.style.setProperty('--modal-viewport-top', `${rect.top}px`)
+            document.body.style.setProperty('--modal-viewport-width', `${rect.width}px`)
+            document.body.style.setProperty('--modal-viewport-height', `${rect.height}px`)
+        }
+
+        this.modalViewportResizeObserver = new ResizeObserver(update)
+        this.modalViewportResizeObserver.observe(viewport.nativeElement)
+
+        this.modalViewportMutationObserver = new MutationObserver(update)
+        this.modalViewportMutationObserver.observe(viewport.nativeElement.parentElement!, {
+            attributes: true,
+            attributeFilter: ['class'],
+        })
+
+        update()
+    }
+
     unsortedTabs: BaseTabComponent[] = []
     updatesAvailable = false
     activeTransfers: FileTransfer[] = []
     private logger: Logger
+    private modalViewportResizeObserver: ResizeObserver|null = null
+    private modalViewportMutationObserver: MutationObserver|null = null
 
     constructor (
         private hotkeys: HotkeysService,

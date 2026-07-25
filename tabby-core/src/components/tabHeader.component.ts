@@ -99,6 +99,18 @@ export class TabHeaderComponent extends BaseComponent {
         })
     }
 
+    focusAiPane (pane: BaseTabComponent, event: MouseEvent): void {
+        event.stopPropagation()
+        this.app.selectTab(this.tab)
+        if (this.tab instanceof SplitTabComponent) {
+            this.tab.focus(pane)
+        }
+    }
+
+    isAiPaneFocused (pane: BaseTabComponent): boolean {
+        return this.tab instanceof SplitTabComponent && this.tab.getFocusedTab() === pane
+    }
+
     @HostBinding('class.flex-width') get isFlexWidthEnabled (): boolean {
         return this.config.store.appearance.flexTabs
     }

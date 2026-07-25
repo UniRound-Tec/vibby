@@ -69,6 +69,8 @@ export abstract class ProfileProvider<P extends Profile> {
 
     abstract getNewTabParameters (profile: P): Promise<NewTabParameters<BaseTabComponent>>
 
+    configureForLaunch? (profile: P): Promise<PartialProfile<P>|null>
+
     getSuggestedName (profile: PartialProfile<P>): string|null {
         return null
     }

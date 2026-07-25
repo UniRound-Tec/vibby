@@ -1,10 +1,14 @@
 import { Injectable } from '@angular/core'
-import { ProfileProvider, NewTabParameters, Profile, PartialProfile, AppService, SplitTabComponent } from 'tabby-core'
+import { DomSanitizer } from '@angular/platform-browser'
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
+import * as shellQuote from 'shell-quote'
+import { ProfileProvider, NewTabParameters, Profile, PartialProfile, AppService, SplitTabComponent, TranslateService } from 'tabby-core'
 import { TerminalTabComponent, SessionOptions } from 'tabby-local'
 
 import { AiCliMetadata, DetectedCli } from './api'
 import { AI_CLI_REGISTRY } from './registry'
 import { CliScannerService, wrapCommand } from './services/cliScanner.service'
+import { CliLaunchModalComponent, CliLaunchOptions } from './components/cliLaunchModal.component'
 
 export interface AiCliProfile extends Profile {
     options: SessionOptions & { aiCli: AiCliMetadata }
@@ -40,6 +44,9 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
     constructor (
         private app: AppService,
         private scanner: CliScannerService,
+        private modal: NgbModal,
+        private sanitizer: DomSanitizer,
+        private translate: TranslateService,
     ) {
         super()
     }
@@ -87,6 +94,47 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
         }
     }
 
+    async configureForLaunch (profile: AiCliProfile): Promise<PartialProfile<AiCliProfile>|null> {
+        const kind = profile.options.aiCli.kind
+        const entry = AI_CLI_REGISTRY.find(x => x.id === kind)
+        const fallbackCwd = await this.fallbackWorkingDirectory(profile)
+        const modal = this.modal.open(CliLaunchModalComponent, {
+            centered: true,
+        })
+        modal.componentInstance.cliName = entry?.name ?? profile.name
+        modal.componentInstance.cliIcon = entry
+            ? this.sanitizer.bypassSecurityTrustHtml(entry.icon)
+            : null
+        modal.componentInstance.fallbackName = this.baseName(fallbackCwd) ?? profile.name
+        modal.componentInstance.fallbackCwd = fallbackCwd
+        modal.componentInstance.fallbackArguments = entry?.launchArgs?.length
+            ? shellQuote.quote(entry.launchArgs)
+            : this.translate.instant('No additional arguments')
+
+        const launchOptions = await modal.result.catch(() => null) as CliLaunchOptions|null
+        if (!launchOptions) {
+            return null
+        }
+
+        const customName = launchOptions.name.trim()
+        return {
+            ...profile,
+            name: customName ? customName : profile.name,
+            options: {
+                ...profile.options,
+                cwd: launchOptions.cwd ? launchOptions.cwd : profile.options.cwd,
+                args: [
+                    ...profile.options.args,
+                    ...launchOptions.args,
+                ],
+                aiCli: {
+                    ...profile.options.aiCli,
+                    ...customName ? { sessionName: customName } : {},
+                },
+            },
+        }
+    }
+
     getSuggestedName (profile: PartialProfile<AiCliProfile>): string|null {
         const kind = profile.options?.aiCli?.kind
         const entry = AI_CLI_REGISTRY.find(x => x.id === kind)
@@ -113,5 +161,32 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
                 version: cli.version,
             },
         }
+    }
+
+    private baseName (dir: string|null|undefined): string|null {
+        const name = dir?.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
+        return name ?? null
+    }
+
+    private async fallbackWorkingDirectory (profile: AiCliProfile): Promise<string> {
+        if (profile.options.cwd) {
+            return profile.options.cwd
+        }
+        if (this.app.activeTab instanceof TerminalTabComponent && this.app.activeTab.session) {
+            const cwd = await this.app.activeTab.session.getWorkingDirectory()
+            if (cwd) {
+                return cwd
+            }
+        }
+        if (this.app.activeTab instanceof SplitTabComponent) {
+            const focusedTab = this.app.activeTab.getFocusedTab()
+            if (focusedTab instanceof TerminalTabComponent && focusedTab.session) {
+                const cwd = await focusedTab.session.getWorkingDirectory()
+                if (cwd) {
+                    return cwd
+                }
+            }
+        }
+        return process.env.HOME ?? process.cwd()
     }
 }

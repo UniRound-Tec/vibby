@@ -168,6 +168,15 @@ export class ProfilesService {
         return null
     }
 
+    async configureProfileForLaunch <P extends Profile> (profile: PartialProfile<P>): Promise<PartialProfile<P>|null> {
+        const fullProfile = this.getConfigProxyForProfile(profile)
+        const provider = this.providerForProfile(fullProfile)
+        if (!provider?.configureForLaunch) {
+            return profile
+        }
+        return provider.configureForLaunch(fullProfile) as Promise<PartialProfile<P>|null>
+    }
+
     async newTabParametersForProfile <P extends Profile> (profile: PartialProfile<P>): Promise<NewTabParameters<BaseTabComponent>|null> {
         const fullProfile = this.getConfigProxyForProfile(profile)
         const params = await this.providerForProfile(fullProfile)?.getNewTabParameters(fullProfile) ?? null
@@ -188,7 +197,11 @@ export class ProfilesService {
     }
 
     async launchProfile (profile: PartialProfile<Profile>): Promise<void> {
-        await this.openNewTabForProfile(profile)
+        const configuredProfile = await this.configureProfileForLaunch(profile)
+        if (!configuredProfile) {
+            return
+        }
+        await this.openNewTabForProfile(configuredProfile)
 
         let recentProfiles: PartialProfile<Profile>[] = JSON.parse(window.localStorage['recentProfiles'] ?? '[]')
         if (this.config.store.terminal.showRecentProfiles > 0) {

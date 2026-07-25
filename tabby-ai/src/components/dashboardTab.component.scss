@@ -102,6 +102,7 @@ $card-line-hover: rgba(128, 128, 128, .48);
             &.needs-you .n { color: var(--ai-yellow); }
             &.working .n { color: var(--ai-blue); }
             &.idle .n { color: var(--ai-green); }
+            &.listening .n { color: var(--ai-blue); }
             &.error .n { color: var(--ai-red); }
             &.untracked .n { opacity: .4; }
         }
@@ -243,6 +244,7 @@ $card-line-hover: rgba(128, 128, 128, .48);
 
     &.working .stword { color: var(--ai-blue); }
     &.idle .stword { color: var(--ai-green); }
+    &.listening .stword { color: var(--ai-blue); }
 
     &.error {
         border-color: color-mix(in srgb, var(--ai-red) 50%, $card-line);

@@ -13,6 +13,16 @@ body {
     -webkit-app-region: no-drag;
 }
 
+// Modals are attached to <body>, so Bootstrap centers them against the whole
+// window. AppRoot publishes the live content-panel bounds to keep every modal
+// centered over the workspace when a tab rail or profile tree is visible.
+body > ngb-modal-window.modal {
+    left: var(--modal-viewport-left, 0);
+    top: var(--modal-viewport-top, 0);
+    width: var(--modal-viewport-width, 100%);
+    height: var(--modal-viewport-height, 100%);
+}
+
 .selectable {
     user-select: text;
 }

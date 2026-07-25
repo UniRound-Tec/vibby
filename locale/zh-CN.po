@@ -2592,6 +2592,9 @@ msgstr "会话"
 msgid "Untracked"
 msgstr "未监听"
 
+msgid "Listening"
+msgstr "监听中"
+
 #: tabby-ai/src/components/dashboardTab.component.pug:22
 msgid "Launch only · no event monitoring yet"
 msgstr "仅启动 · 暂无事件监听"

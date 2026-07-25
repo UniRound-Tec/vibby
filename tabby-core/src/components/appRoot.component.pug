@@ -102,7 +102,7 @@ title-bar(
                 && config.store.appearance.tabsLocation !== "right" \
                 && (hostApp.platform == Platform.Linux || hostApp.platform == Platform.Windows)',
             )
-        .content
+        .content(#modalViewport)
             start-page.content-tab.content-tab-active(*ngIf='ready && app.tabs.length == 0')
 
             tab-body.content-tab(

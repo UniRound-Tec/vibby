@@ -24,6 +24,8 @@ const SEVERITY: Record<AiSessionState, number> = {
  */
 @Injectable({ providedIn: 'root' })
 export class AiTabStateService {
+    private watchedSplits = new WeakSet<SplitTabComponent>()
+
     constructor (
         private app: AppService,
         private bus: AiEventBusService,
@@ -66,13 +68,15 @@ export class AiTabStateService {
     private refresh (): void {
         let previousGroup: string | null = null
         for (const tab of this.app.tabs) {
+            this.watchSplit(tab)
             // the dashboard is not in the side rail's list, so it must not
             // take part in grouping either — it would eat a heading
             if (tab['miniHeader']) {
                 tab['aiGroup'] = null
                 continue
             }
-            const aiPane = this.aiPaneOf(tab)
+            const aiPanes = this.aiPanesOf(tab)
+            const aiPane = aiPanes[0] ?? null
             const group = aiPane
                 ? this.translate.instant('AI sessions')
                 : this.translate.instant('Terminals')
@@ -85,6 +89,10 @@ export class AiTabStateService {
             tab['aiKind'] = kind
             // the icon replaces the kind's name in the rail; the name stays as its tooltip
             tab['aiIcon'] = AI_CLI_REGISTRY.find(x => x.id === kind)?.icon ?? null
+            tab['aiPaneCount'] = aiPanes.length > 1 ? aiPanes.length : null
+            tab['aiPanes'] = aiPanes.length > 1
+                ? aiPanes.map((pane, index) => this.paneCard(pane, index))
+                : null
             if (aiPane?.profile.type === 'ai-cli') {
                 this.nameFromCwd(tab, aiPane)
             }
@@ -99,10 +107,12 @@ export class AiTabStateService {
             const monitoringSessionId = this.adapter.sessionIdForPane(aiPane, kind)
             // an AI tab is a card even before its first event — a session that
             // never reports is exactly what the rail has to make visible
-            tab['aiState'] = snapshot?.state ?? 'untracked'
+            tab['aiState'] = snapshot?.state ?? (monitoringSessionId ? 'listening' : 'untracked')
             tab['aiStateLabel'] = snapshot
                 ? this.stateLabel(snapshot.state)
-                : this.translate.instant('Untracked')
+                : monitoringSessionId
+                    ? this.translate.instant('Listening')
+                    : this.translate.instant('Untracked')
             // the scraped status line is fresher than the last hook event
             tab['aiSummary'] = snapshot
                 ? snapshot.liveStatus ?? snapshot.lastEvent?.summary ?? null
@@ -123,15 +133,64 @@ export class AiTabStateService {
         }
     }
 
-    /** First AI pane in the tab, or null if this is an ordinary terminal */
-    private aiPaneOf (tab: BaseTabComponent): TerminalTabComponent | null {
+    /** Every AI pane in the tab — split panes remain individually observable. */
+    private aiPanesOf (tab: BaseTabComponent): TerminalTabComponent[] {
         const panes = tab instanceof SplitTabComponent ? tab.getAllTabs() : [tab]
+        const result: TerminalTabComponent[] = []
         for (const pane of panes) {
             if (pane instanceof TerminalTabComponent && this.runtimeDetector.kindForPane(pane)) {
-                return pane
+                result.push(pane)
             }
         }
-        return null
+        return result
+    }
+
+    /** First AI pane in the tab, or null if this is an ordinary terminal. */
+    private aiPaneOf (tab: BaseTabComponent): TerminalTabComponent | null {
+        return this.aiPanesOf(tab)[0] ?? null
+    }
+
+    private paneCard (pane: TerminalTabComponent, index: number): Record<string, unknown> {
+        const kind = this.runtimeDetector.kindForPane(pane)
+        const sessionId = this.adapter.sessionIdForPane(pane, kind)
+        const snapshot = sessionId ? this.bus.snapshotFor(sessionId) : null
+        const launchName = pane.profile?.options?.['aiCli']?.sessionName?.trim()
+        const name = pane.customTitle ||
+            launchName ||
+            this.baseName(pane.profile?.options?.cwd) ||
+            pane.profile?.name ||
+            pane.title
+
+        return {
+            pane,
+            index: index + 1,
+            name,
+            icon: AI_CLI_REGISTRY.find(x => x.id === kind)?.icon ?? null,
+            kind,
+            state: snapshot?.state ?? (sessionId ? 'listening' : 'untracked'),
+            stateLabel: snapshot
+                ? this.stateLabel(snapshot.state)
+                : sessionId
+                    ? this.translate.instant('Listening')
+                    : this.translate.instant('Untracked'),
+            summary: snapshot
+                ? snapshot.liveStatus ?? snapshot.lastEvent?.summary ?? null
+                : this.runtimeDetector.isRuntimeDetected(pane) && !sessionId
+                    ? this.translate.instant('Detected in terminal · event monitoring unavailable')
+                    : sessionId
+                        ? this.translate.instant('Event monitoring enabled · waiting for CLI activity')
+                        : this.translate.instant('Launch only · no event monitoring yet'),
+        }
+    }
+
+    private watchSplit (tab: BaseTabComponent): void {
+        if (!(tab instanceof SplitTabComponent) || this.watchedSplits.has(tab)) {
+            return
+        }
+        this.watchedSplits.add(tab)
+        tab.tabAdded$.subscribe(() => this.refresh())
+        tab.tabRemoved$.subscribe(() => this.refresh())
+        tab.focusChanged$.subscribe(() => this.refresh())
     }
 
     private onRuntimeChange (change: RuntimeCliChange): void {

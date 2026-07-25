@@ -3,7 +3,7 @@ import { NgModule } from '@angular/core'
 import { CommonModule } from '@angular/common'
 import { FormsModule } from '@angular/forms'
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap'
-import TabbyCorePlugin, { AppService, CLIHandler, CommandProvider, ConfigProvider, ConfigService, HotkeyProvider, HotkeysService, ProfileProvider } from 'tabby-core'
+import TabbyCorePlugin, { AppService, CLIHandler, CommandProvider, ConfigProvider, ConfigService, HotkeyProvider, HotkeysService, ProfileProvider, SplitTabHandler } from 'tabby-core'
 import { SettingsTabProvider } from 'tabby-settings'
 
 import { AiConfigProvider } from './config'
@@ -19,6 +19,7 @@ import { ClaudeAdapterService } from './services/claudeAdapter.service'
 import { AiAttentionService } from './services/attention.service'
 import { AiTabStateService } from './services/tabState.service'
 import { RuntimeCliDetectorService } from './services/runtimeCliDetector.service'
+import { AiCliSplitTabHandler } from './services/aiCliSplitTabHandler.service'
 import { COLLAPSED_CLASS, RailService } from './services/rail.service'
 import { STARTUP_COVER_CLASS, StartupCoverService } from './services/startupCover.service'
 import { DashboardTabComponent } from './components/dashboardTab.component'
@@ -42,6 +43,7 @@ const ACCENT = 'var(--theme-primary)'
         { provide: HotkeyProvider, useClass: AiHotkeyProvider, multi: true },
         { provide: SettingsTabProvider, useClass: AiSettingsTabProvider, multi: true },
         { provide: CommandProvider, useClass: AiCommandProvider, multi: true },
+        { provide: SplitTabHandler, useClass: AiCliSplitTabHandler, multi: true },
     ],
     declarations: [
         DashboardTabComponent,
@@ -300,7 +302,7 @@ export default class AiModule {
             .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) {
                 display: grid !important;
                 grid-template-columns: auto auto minmax(0, 1fr) auto;
-                grid-template-areas: "index icon name state" "sum sum sum sum";
+                grid-template-areas: "index icon name state" "sum sum sum sum" "panes panes panes panes";
                 align-items: center;
                 row-gap: 2px;
                 column-gap: 7px;
@@ -335,6 +337,12 @@ export default class AiModule {
                 font-size: 13px;
                 font-weight: 600;
                 margin-left: 0 !important;
+            }
+            .ai-pane-count {
+                margin-left: 5px;
+                font-size: 10px;
+                font-weight: 500;
+                opacity: .58;
             }
 
             .content.tabs-on-left > .tab-bar .ai-icon,
@@ -381,6 +389,7 @@ export default class AiModule {
             }
             .ai-state.working { color: var(--bs-blue, #61afef); background: color-mix(in srgb, var(--bs-blue, #61afef) 16%, transparent); }
             .ai-state.idle { color: var(--bs-green, #98c379); background: color-mix(in srgb, var(--bs-green, #98c379) 16%, transparent); }
+            .ai-state.listening { color: var(--bs-blue, #61afef); background: color-mix(in srgb, var(--bs-blue, #61afef) 12%, transparent); }
             .ai-state.error { color: var(--bs-red, #e06c75); background: color-mix(in srgb, var(--bs-red, #e06c75) 18%, transparent); }
             .ai-state.untracked { color: var(--bs-body-color, currentColor); opacity: .78; }
             .ai-state.needs-you {
@@ -403,10 +412,90 @@ export default class AiModule {
                 text-overflow: ellipsis;
             }
 
+            .content.tabs-on-left > .tab-bar .ai-pane-list,
+            .content.tabs-on-right > .tab-bar .ai-pane-list {
+                grid-area: panes;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                margin-top: 3px;
+                padding-top: 6px;
+                border-top: 1px solid rgba(128, 128, 128, .16);
+            }
+            .content.tabs-on-left > .tab-bar .ai-pane,
+            .content.tabs-on-right > .tab-bar .ai-pane {
+                display: grid;
+                grid-template-columns: 13px 14px minmax(0, 1fr) auto;
+                grid-template-areas: "pane-index pane-icon pane-name pane-state" "pane-summary pane-summary pane-summary pane-summary";
+                align-items: center;
+                gap: 2px 6px;
+                width: 100%;
+                min-width: 0;
+                padding: 4px 5px;
+                border: 1px solid transparent;
+                border-radius: 6px;
+                background: transparent;
+                color: inherit;
+                text-align: left;
+                -webkit-app-region: no-drag;
+            }
+            .content.tabs-on-left > .tab-bar .ai-pane:hover,
+            .content.tabs-on-right > .tab-bar .ai-pane:hover {
+                background: rgba(128, 128, 128, .1);
+            }
+            .content.tabs-on-left > .tab-bar .ai-pane.active,
+            .content.tabs-on-right > .tab-bar .ai-pane.active {
+                border-color: color-mix(in srgb, ${ACCENT} 38%, transparent);
+                background: color-mix(in srgb, ${ACCENT} 7%, transparent);
+            }
+            .ai-pane-index {
+                grid-area: pane-index;
+                font: 600 9px/1 monospace;
+                opacity: .45;
+            }
+            .ai-pane-icon {
+                grid-area: pane-icon;
+                display: flex;
+                align-items: center;
+            }
+            .ai-pane-icon svg {
+                display: block;
+                width: 12px;
+                height: 12px;
+            }
+            .ai-pane-name {
+                grid-area: pane-name;
+                overflow: hidden;
+                font-size: 10.5px;
+                font-weight: 600;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+            }
+            .ai-pane-state {
+                grid-area: pane-state;
+                font-size: 9px;
+                white-space: nowrap;
+                opacity: .72;
+            }
+            .ai-pane-state.working { color: var(--bs-blue, #61afef); }
+            .ai-pane-state.idle { color: var(--bs-green, #98c379); }
+            .ai-pane-state.listening { color: var(--bs-blue, #61afef); }
+            .ai-pane-state.error { color: var(--bs-red, #e06c75); }
+            .ai-pane-state.needs-you { color: var(--bs-yellow, #f0c674); }
+            .ai-pane-summary {
+                grid-area: pane-summary;
+                overflow: hidden;
+                font: 9px/1.35 monospace;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+                opacity: .5;
+            }
+
             /* horizontal bars: no room for the event line, and the chip shrinks
                to its dot alone (font-size 0 leaves ::before at its own size) */
             .content:not(.tabs-on-left):not(.tabs-on-right) .ai-summary,
-            .content:not(.tabs-on-left):not(.tabs-on-right) .ai-icon { display: none; }
+            .content:not(.tabs-on-left):not(.tabs-on-right) .ai-icon,
+            .content:not(.tabs-on-left):not(.tabs-on-right) .ai-pane-list { display: none; }
             .content:not(.tabs-on-left):not(.tabs-on-right) .ai-state {
                 display: flex;
                 flex: none;

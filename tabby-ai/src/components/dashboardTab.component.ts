@@ -1,8 +1,6 @@
 import { Component, ElementRef, Injector } from '@angular/core'
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser'
-import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { interval } from 'rxjs'
-import * as shellQuote from 'shell-quote'
 import { BaseTabComponent, AppService, ConfigService, PartialProfile, ProfilesService, SplitTabComponent, TranslateService } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
@@ -15,9 +13,8 @@ import { CliScannerService } from '../services/cliScanner.service'
 import { AiEventBusService } from '../services/eventBus.service'
 import { ClaudeAdapterService } from '../services/claudeAdapter.service'
 import { RuntimeCliDetectorService } from '../services/runtimeCliDetector.service'
-import { CliLaunchModalComponent, CliLaunchOptions } from './cliLaunchModal.component'
 
-export type AiRowState = 'needs-you' | 'working' | 'idle' | 'error' | 'untracked'
+export type AiRowState = 'needs-you' | 'working' | 'idle' | 'listening' | 'error' | 'untracked'
 
 export interface AiSessionRow {
     topTab: BaseTabComponent
@@ -44,8 +41,9 @@ const STATE_RANK: Record<AiRowState, number> = {
     'needs-you': 0,
     working: 1,
     idle: 2,
-    error: 3,
-    untracked: 4,
+    listening: 3,
+    error: 4,
+    untracked: 5,
 }
 
 /** @hidden */
@@ -99,7 +97,6 @@ export class DashboardTabComponent extends BaseTabComponent {
         private sanitizer: DomSanitizer,
         private host: ElementRef,
         private translate: TranslateService,
-        private ngbModal: NgbModal,
         private runtimeDetector: RuntimeCliDetectorService,
     ) {
         super(injector)
@@ -146,7 +143,7 @@ export class DashboardTabComponent extends BaseTabComponent {
                         kind,
                         sessionId,
                         snapshot,
-                        state: snapshot?.state ?? 'untracked',
+                        state: snapshot?.state ?? (sessionId ? 'listening' : 'untracked'),
                         runtimeDetected: this.runtimeDetector.isRuntimeDetected(pane) && !sessionId,
                     })
                 }
@@ -215,6 +212,7 @@ export class DashboardTabComponent extends BaseTabComponent {
             case 'needs-you': return this.translate.instant('Needs you')
             case 'working': return this.translate.instant('Working')
             case 'idle': return this.translate.instant('Idle')
+            case 'listening': return this.translate.instant('Listening')
             case 'error': return this.translate.instant('Error')
             case 'untracked': return this.translate.instant('Untracked')
         }
@@ -307,49 +305,11 @@ export class DashboardTabComponent extends BaseTabComponent {
         }
     }
 
-    async launch (cli: DetectedCli, profile: PartialProfile<AiCliProfile>, launchOptions: CliLaunchOptions): Promise<void> {
-        const customName = launchOptions.name.trim()
-        const currentMetadata = profile.options?.aiCli
-        const configuredProfile: PartialProfile<AiCliProfile> = {
-            ...profile,
-            name: customName || profile.name,
-            options: {
-                ...profile.options,
-                cwd: launchOptions.cwd || profile.options?.cwd,
-                args: [
-                    ...profile.options?.args ?? [],
-                    ...launchOptions.args,
-                ],
-                aiCli: {
-                    kind: currentMetadata?.kind ?? cli.entry.id,
-                    version: currentMetadata?.version ?? cli.version,
-                    ...customName ? { sessionName: customName } : {},
-                },
-            },
-        }
-        await this.profilesService.launchProfile(configuredProfile)
-    }
-
     async launchCard (card: AiCliLaunchCard): Promise<void> {
         if (card.detected) {
             const profile = await this.profileFor(card.detected)
-            if (!profile) {
-                return
-            }
-            const fallbackCwd = await this.fallbackWorkingDirectory(profile)
-            const modal = this.ngbModal.open(CliLaunchModalComponent, {
-                centered: true,
-            })
-            modal.componentInstance.cliName = card.entry.name
-            modal.componentInstance.cliIcon = this.iconForKind(card.entry.id)
-            modal.componentInstance.fallbackName = this.baseName(fallbackCwd) ?? profile.name
-            modal.componentInstance.fallbackCwd = fallbackCwd
-            modal.componentInstance.fallbackArguments = card.entry.launchArgs?.length
-                ? shellQuote.quote(card.entry.launchArgs)
-                : this.translate.instant('No additional arguments')
-            const launchOptions = await modal.result.catch(() => null) as CliLaunchOptions|null
-            if (launchOptions) {
-                await this.launch(card.detected, profile, launchOptions)
+            if (profile) {
+                await this.profilesService.launchProfile(profile)
             }
         }
     }
@@ -400,32 +360,6 @@ export class DashboardTabComponent extends BaseTabComponent {
     private async profileFor (cli: DetectedCli): Promise<PartialProfile<AiCliProfile>|undefined> {
         const profiles = await this.profilesService.getProfiles()
         return profiles.find(x => x.id === `ai-cli:${cli.entry.id}`) as PartialProfile<AiCliProfile>|undefined
-    }
-
-    /** Mirrors AiCliProfileProvider and LocalSession so the modal shows the value that an empty field will really use. */
-    private async fallbackWorkingDirectory (profile: PartialProfile<AiCliProfile>): Promise<string> {
-        if (profile.options?.cwd) {
-            return profile.options.cwd
-        }
-        if (this.app.activeTab instanceof TerminalTabComponent && this.app.activeTab.session) {
-            const cwd = await this.app.activeTab.session.getWorkingDirectory()
-            if (cwd) {
-                return cwd
-            }
-        }
-        if (this.app.activeTab instanceof SplitTabComponent) {
-            const focusedTab = this.app.activeTab.getFocusedTab()
-            if (focusedTab instanceof TerminalTabComponent && focusedTab.session) {
-                const cwd = await focusedTab.session.getWorkingDirectory()
-                if (cwd) {
-                    return cwd
-                }
-            }
-        }
-        if (process.env.HOME) {
-            return process.env.HOME
-        }
-        return process.cwd()
     }
 
     private updateCliCards (clis: DetectedCli[]): void {
