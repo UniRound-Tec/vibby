@@ -28,7 +28,7 @@ export class HookIngressService {
     ) { }
 
     start (): Promise<void> {
-        this.starting ??= new Promise((resolve, reject) => {
+        this.starting ??= new Promise<void>((resolve, reject) => {
             const server = http.createServer((req, res) => this.handle(req, res))
             server.on('error', err => {
                 console.error('[tabby-ai] hook ingress failed to start', err)
@@ -44,8 +44,20 @@ export class HookIngressService {
                     resolve()
                 }
             })
+            // a failed attempt must not be cached as the answer forever — the
+            // next session to arm gets to try again
+        }).catch(err => {
+            this.starting = null
+            throw err
         })
         return this.starting
+    }
+
+    stop (): void {
+        this.server?.close()
+        this.server = null
+        this.port = null
+        this.starting = null
     }
 
     get running (): boolean {
@@ -60,9 +72,19 @@ export class HookIngressService {
         return `http://127.0.0.1:${this.port}/vibby/${this.token}/event/${sessionId}`
     }
 
+    /**
+     * Constant-time compare. The route only reaches here with 32 hex
+     * characters, so the buffers are always the same length as the token.
+     */
+    private tokenMatches (candidate: string): boolean {
+        const a = Buffer.from(candidate, 'utf8')
+        const b = Buffer.from(this.token, 'utf8')
+        return a.length === b.length && crypto.timingSafeEqual(a, b)
+    }
+
     private handle (req: http.IncomingMessage, res: http.ServerResponse): void {
         const match = /^\/vibby\/([0-9a-f]{32})\/event\/([\w-]{1,64})$/.exec(req.url ?? '')
-        if (req.method !== 'POST' || !match || match[1] !== this.token) {
+        if (req.method !== 'POST' || !match || !this.tokenMatches(match[1])) {
             res.statusCode = 404
             res.end()
             return

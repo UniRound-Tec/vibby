@@ -40,6 +40,7 @@ export const AI_CLI_REGISTRY: AiCliRegistryEntry[] = [
         id: 'opencode',
         name: 'OpenCode',
         binaries: ['opencode'],
+        runtimeMarkers: ['opencode-ai/', 'opencode/bin'],
         versionArgs: ['--version'],
         versionPattern: VERSION,
         icon: require('./icons/opencode.svg'),
@@ -50,6 +51,7 @@ export const AI_CLI_REGISTRY: AiCliRegistryEntry[] = [
         id: 'aider',
         name: 'Aider',
         binaries: ['aider'],
+        runtimeMarkers: ['aider_chat', 'aider-chat'],
         versionArgs: ['--version'],
         versionPattern: VERSION,
         icon: require('./icons/aider.svg'),
@@ -57,6 +59,9 @@ export const AI_CLI_REGISTRY: AiCliRegistryEntry[] = [
         docsUrl: 'https://aider.chat',
     },
     {
+        // two letters, and a word that turns up in ordinary arguments — this
+        // one leans on the marker and on being the process itself, never on a
+        // bare token (see cliMatch.looksInvoked)
         id: 'pi',
         name: 'pi',
         binaries: ['pi'],

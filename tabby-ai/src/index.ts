@@ -71,6 +71,8 @@ export default class AiModule {
         ingress.start().then(() => {
             console.debug(`[tabby-ai] ingress endpoint template: ${ingress.endpointFor('SESSION')}`)
         }).catch(() => null)
+        // a reloaded renderer would otherwise leave the old listener bound
+        window.addEventListener('beforeunload', () => ingress.stop())
         claudeAdapter.activate()
         runtimeDetector.activate()
         attention.activate()

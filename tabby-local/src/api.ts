@@ -41,7 +41,14 @@ export interface SessionOptions {
     args: string[]
     cwd: string | null
     env: Record<string, string>
-    /** Paths prepended after all environment sources have been merged. */
+    /**
+     * Paths prepended after all environment sources have been merged.
+     *
+     * Always present at runtime, including for a recovery token written before
+     * this field existed: every route to Session.start() resolves the profile
+     * through getConfigProxyForProfile, which merges the provider's
+     * configDefaults over whatever came off disk.
+     */
     pathPrefix: string[]
     width: number | null
     height: number | null

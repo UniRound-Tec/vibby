@@ -76,8 +76,13 @@ export class TerminalCliShimService {
         return `#!/bin/sh\nexec ${invocation}\n`
     }
 
+    /**
+     * `%%` as well as the quotes: cmd expands `%VAR%` when it runs the batch
+     * file, so a path or argument containing a percent sign would arrive
+     * mangled — or empty — without doubling it.
+     */
     private quoteCmd (value: string): string {
-        return `"${value.replace(/"/g, '""')}"`
+        return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`
     }
 
     private quoteSh (value: string): string {

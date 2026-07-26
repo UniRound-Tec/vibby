@@ -1,13 +1,12 @@
-import * as path from 'path'
 import { Injectable, NgZone } from '@angular/core'
 import { Subject } from 'rxjs'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
-import { ChildProcess, TerminalTabComponent } from 'tabby-local'
+import { TerminalTabComponent } from 'tabby-local'
 
+import { matchCli } from '../cliMatch'
 import { AI_CLI_REGISTRY } from '../registry'
 
 const POLL_INTERVAL_MS = 1200
-const EXECUTABLE_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1|sh|js|mjs|cjs|py)$/i
 
 /**
  * Reading a pane's process tree is not free — on Windows it walks every
@@ -104,38 +103,11 @@ export class RuntimeCliDetectorService {
     private async scanPane (pane: TerminalTabComponent): Promise<void> {
         let kind: string|null = null
         try {
-            kind = this.detect(await pane.session!.getChildProcesses())
+            kind = matchCli(await pane.session!.getChildProcesses(), AI_CLI_REGISTRY)
         } catch {
             // Process inspection is best-effort and can race a closing PTY.
         }
         this.update(pane, kind)
-    }
-
-    private detect (processes: ChildProcess[]): string|null {
-        for (const entry of AI_CLI_REGISTRY) {
-            const binaries = entry.binaries.map(binary => binary.toLowerCase())
-            for (const process of processes) {
-                if (binaries.includes(this.executableName(process.command))) {
-                    return entry.id
-                }
-                const commandLine = process.commandLine?.toLowerCase() ?? ''
-                if (entry.runtimeMarkers?.some(marker => commandLine.includes(marker.toLowerCase()))) {
-                    return entry.id
-                }
-                if (this.commandTokens(commandLine).some(token => binaries.includes(this.executableName(token)))) {
-                    return entry.id
-                }
-            }
-        }
-        return null
-    }
-
-    private commandTokens (commandLine: string): string[] {
-        return commandLine.match(/"[^"]*"|'[^']*'|\S+/g)?.map(token => token.replace(/^["']|["']$/g, '')) ?? []
-    }
-
-    private executableName (command: string): string {
-        return path.basename(command).replace(EXECUTABLE_SUFFIX_RE, '').toLowerCase()
     }
 
     private update (pane: TerminalTabComponent, kind: string|null): void {

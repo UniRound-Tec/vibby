@@ -1,3 +1,4 @@
+import * as os from 'os'
 import { Injectable } from '@angular/core'
 import { DomSanitizer } from '@angular/platform-browser'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
@@ -187,6 +188,8 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
                 }
             }
         }
-        return process.env.HOME ?? process.cwd()
+        // not process.env.HOME: it is usually unset on Windows, where the
+        // fallback would then be the packaged app's install directory
+        return os.homedir()
     }
 }

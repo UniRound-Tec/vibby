@@ -10,7 +10,7 @@
   "scripts": {
     "build": "webpack --progress --color --display-modules",
     "watch": "webpack --progress --color --watch",
-    "test": "tsc src/events.ts src/claudeHooks.ts src/paths.ts --outDir .test-build --module commonjs --target es2020 --strict --skipLibCheck && node test/events.test.cjs && node test/claudeHooks.test.cjs && node test/paths.test.cjs"
+    "test": "tsc src/events.ts src/claudeHooks.ts src/paths.ts src/cliMatch.ts --outDir .test-build --module commonjs --target es2020 --strict --skipLibCheck && node test/events.test.cjs && node test/claudeHooks.test.cjs && node test/paths.test.cjs && node test/cliMatch.test.cjs"
   },
   "files": [
     "dist",

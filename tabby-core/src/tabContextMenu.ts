@@ -28,7 +28,10 @@ export class TabManagementContextMenu extends TabContextMenuItemProvider {
     }
 
     async getItems (tab: BaseTabComponent): Promise<MenuItemOptions[]> {
-        const isPane = tab.parent instanceof SplitTabComponent
+        // Every tab is wrapped in a SplitTabComponent, so having one as a
+        // parent does not make this a pane in the user's sense — it only is
+        // once the split actually holds more than one.
+        const isPane = tab.parent instanceof SplitTabComponent && tab.parent.getAllTabs().length > 1
         let items: MenuItemOptions[] = [
             {
                 label: this.translate.instant(isPane ? 'Close focused pane' : 'Close'),

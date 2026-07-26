@@ -1,4 +1,4 @@
-import { spawn, exec } from 'child_process'
+import { spawn, exec, execFile } from 'child_process'
 import * as path from 'path'
 import * as fs from 'fs/promises'
 import * as os from 'os'
@@ -162,9 +162,13 @@ export class CliScannerService {
     }
 
     private async lookupInPath (bin: string): Promise<string|null> {
+        // execFile, not exec: `bin` comes from the registry today, but this
+        // repo has already had to fix two shell-injection bugs of exactly this
+        // shape (74f8e4f2, 2e4a5e6f) and there is no reason to spawn a shell
         const output = await new Promise<string|null>(resolve => {
-            exec(
-                WINDOWS ? `where "${bin}"` : `which "${bin}"`,
+            execFile(
+                WINDOWS ? 'where' : 'which',
+                [bin],
                 { timeout: PROBE_TIMEOUT, windowsHide: true },
                 (err, stdout) => resolve(err ? null : stdout),
             )
