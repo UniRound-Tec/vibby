@@ -74,6 +74,8 @@ export class CliScannerService {
     private npmGlobalBin: string|null|undefined = undefined
     private currentScan: Promise<DetectedCli[]>|null = null
     private firstScan: Promise<DetectedCli[]>|null = null
+    private shellPathProbe: Promise<string|null>|null = null
+    private shellPathValue: string|null = null
     private logger: Logger
 
     constructor (
@@ -86,6 +88,16 @@ export class CliScannerService {
     /** Resolves once the first scan has completed; starts one if needed */
     ensureScanned (): Promise<DetectedCli[]> {
         return this.firstScan ?? this.scan()
+    }
+
+    /**
+     * PATH as the user's login shell sees it; null on Windows (GUI processes
+     * already inherit the user environment there) or when probing failed.
+     * Launched profiles need it too: a CLI resolved through this PATH usually
+     * starts with `#!/usr/bin/env node`, which has to make the same lookup.
+     */
+    get shellPath (): string|null {
+        return this.shellPathValue
     }
 
     async scan (): Promise<DetectedCli[]> {
@@ -103,6 +115,9 @@ export class CliScannerService {
         await this.config.ready$.toPromise()
         this.scanning.next(true)
         try {
+            // must land before the first `which`: a GUI-launched app on
+            // macOS/Linux carries a minimal PATH without Homebrew/npm/nvm dirs
+            await this.ensureShellPath()
             const hidden: string[] = this.config.store.aiCli.scanner.hidden
             const entries = AI_CLI_REGISTRY.filter(x => !hidden.includes(x.id))
             const detections = await this.withTimeout(
@@ -144,7 +159,15 @@ export class CliScannerService {
 
         const dirs = [
             ...await this.getNpmGlobalBinDirs(),
-            ...WINDOWS ? [] : [path.join(os.homedir(), '.local', 'bin')],
+            // shellPath usually covers these, but a broken rc file must not
+            // take detection down with it — the usual suspects stay hardcoded
+            ...WINDOWS ? [] : [
+                path.join(os.homedir(), '.local', 'bin'),
+                '/opt/homebrew/bin',
+                '/usr/local/bin',
+                path.join(os.homedir(), '.bun', 'bin'),
+                path.join(os.homedir(), '.volta', 'bin'),
+            ],
             ...this.config.store.aiCli.scanner.extraPaths as string[],
         ]
         const extensions = WINDOWS ? ['.cmd', '.exe', '.bat', '.ps1'] : ['']
@@ -169,17 +192,51 @@ export class CliScannerService {
             execFile(
                 WINDOWS ? 'where' : 'which',
                 [bin],
-                { timeout: PROBE_TIMEOUT, windowsHide: true },
+                { timeout: PROBE_TIMEOUT, windowsHide: true, env: this.execEnv() },
                 (err, stdout) => resolve(err ? null : stdout),
             )
         })
         return output?.split(/\r?\n/).map(x => x.trim()).find(x => x) ?? null
     }
 
+    /**
+     * One `$SHELL -ilc env` per app run. Interactive as well as login: nvm
+     * and friends append to PATH from .zshrc/.bashrc, which a plain login
+     * shell never reads. Output is scanned for the PATH= line only, so rc
+     * banners and prompt noise cannot poison the result.
+     */
+    private ensureShellPath (): Promise<string|null> {
+        if (WINDOWS) {
+            return Promise.resolve(null)
+        }
+        this.shellPathProbe ??= new Promise<string|null>(resolve => {
+            execFile(
+                process.env.SHELL ?? '/bin/sh',
+                ['-i', '-l', '-c', 'env'],
+                { timeout: 4000 },
+                (err, stdout) => {
+                    const line = err ? undefined : stdout.split('\n').find(x => x.startsWith('PATH='))
+                    const value = line?.slice('PATH='.length).trim()
+                    resolve(value ? value : null)
+                },
+            )
+        }).then(shellPath => {
+            this.shellPathValue = shellPath
+            this.logger.info(shellPath ? `Login shell PATH: ${shellPath}` : 'Login shell PATH probe failed, using process PATH')
+            return shellPath
+        })
+        return this.shellPathProbe
+    }
+
+    /** Environment for probes and version checks — process env plus the real PATH */
+    private execEnv (): Record<string, string|undefined> {
+        return this.shellPathValue ? { ...process.env, PATH: this.shellPathValue } : process.env
+    }
+
     private async getNpmGlobalBinDirs (): Promise<string[]> {
         if (this.npmGlobalBin === undefined) {
             this.npmGlobalBin = await new Promise<string|null>(resolve => {
-                exec('npm prefix -g', { timeout: SCAN_TIMEOUT, windowsHide: true }, (err, stdout) => {
+                exec('npm prefix -g', { timeout: SCAN_TIMEOUT, windowsHide: true, env: this.execEnv() }, (err, stdout) => {
                     resolve(err ? null : stdout.trim())
                 })
             })
@@ -206,6 +263,9 @@ export class CliScannerService {
                 windowsHide: true,
                 detached: !WINDOWS,
                 stdio: ['ignore', 'pipe', 'pipe'],
+                // the CLI is usually an `#!/usr/bin/env node` script — the
+                // interpreter lookup needs the same PATH that found the CLI
+                env: this.execEnv(),
             })
             // holder rather than two bare locals: `finish` has to clear the
             // timer that is only armed after `finish` itself is defined

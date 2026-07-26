@@ -154,7 +154,9 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
         const wrapped = wrapCommand(cli.command, cli.entry.launchArgs ?? [], cli.launcher)
         return {
             ...this.configDefaults.options,
-            env: {},
+            // a GUI-launched app on macOS/Linux has a minimal PATH; the CLI's
+            // `#!/usr/bin/env node` line needs the login shell's one to resolve
+            env: this.scanner.shellPath ? { PATH: this.scanner.shellPath } : {},
             command: wrapped.command,
             args: wrapped.args,
             aiCli: {

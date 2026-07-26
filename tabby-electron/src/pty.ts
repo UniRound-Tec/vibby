@@ -1,4 +1,5 @@
 import * as psNode from 'ps-node'
+import { execFile } from 'child_process'
 import { ipcRenderer } from 'electron'
 import { ChildProcess, PTYInterface, PTYProxy } from 'tabby-local'
 import { getWorkingDirectoryFromPID } from 'native-process-working-directory'
@@ -12,6 +13,28 @@ try {
 try {
     var windowsProcessTree = require('@tabby-gang/windows-process-tree')  // eslint-disable-line @typescript-eslint/no-var-requires, no-var
 } catch { }
+
+/** Full command lines for a set of pids — best-effort, an empty map on any failure */
+function getMacCommandLines (pids: number[]): Promise<Map<number, string>> {
+    if (!pids.length) {
+        return Promise.resolve(new Map())
+    }
+    return new Promise(resolve => {
+        // -ww: never truncate the command column
+        execFile('ps', ['-ww', '-o', 'pid=,command=', '-p', pids.join(',')], { timeout: 2000 }, (err, stdout) => {
+            const map = new Map<number, string>()
+            if (!err) {
+                for (const line of stdout.split('\n')) {
+                    const match = /^\s*(\d+)\s+(.+)$/.exec(line)
+                    if (match) {
+                        map.set(Number(match[1]), match[2])
+                    }
+                }
+            }
+            resolve(map)
+        })
+    })
+}
 
 export class ElectronPTYInterface extends PTYInterface {
     async spawn (...options: any[]): Promise<PTYProxy> {
@@ -105,10 +128,16 @@ export class ElectronPTYProxy extends PTYProxy {
     async getChildProcessesInternal (truePID: number): Promise<ChildProcess[]> {
         if (process.platform === 'darwin') {
             const processes = await macOSNativeProcessList.getProcessList()
-            return processes.filter(x => x.ppid === truePID).map(p => ({
+            const children = processes.filter(x => x.ppid === truePID)
+            // the native list carries no arguments, but consumers matching on
+            // command lines (AI CLI runtime detection) need them — one ps call
+            // covers every child, and a failure just leaves commandLine unset
+            const commandLines = await getMacCommandLines(children.map(x => x.pid))
+            return children.map(p => ({
                 pid: p.pid,
                 ppid: p.ppid,
                 command: p.name,
+                commandLine: commandLines.get(p.pid),
             }))
         }
         if (process.platform === 'win32') {
@@ -134,7 +163,14 @@ export class ElectronPTYProxy extends PTYProxy {
                     reject(err)
                     return
                 }
-                resolve(processes as ChildProcess[])
+                // ps-node splits `ps` output into command + arguments — join
+                // them back so commandLine matching works the same as on Windows
+                resolve((processes as any[]).map(p => ({
+                    pid: Number(p.pid),
+                    ppid: Number(p.ppid ?? truePID),
+                    command: p.command,
+                    commandLine: [p.command, ...Array.isArray(p.arguments) ? p.arguments : []].join(' ').trim(),
+                })))
             })
         })
     }
