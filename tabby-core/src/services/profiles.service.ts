@@ -267,46 +267,6 @@ export class ProfilesService {
 
         return new Promise<PartialProfile<Profile>|null>(async (resolve, reject) => {
             try {
-                const recentProfiles = this.getRecentProfiles()
-
-                // Recents are not a page of their own: they duplicate entries
-                // that live on the other pages, so they ride along on all of
-                // them and sort to the top via a negative weight.
-                let options: SelectorOption<void>[] = recentProfiles.map((p, i): SelectorOption<void> => {
-                    const option = this.selectorOptionForProfile<Profile, never>(p)
-                    return {
-                        ...option,
-                        group: this.translate.instant('Recent'),
-                        icon: 'fas fa-history',
-                        color: p.color ?? undefined,
-                        allPages: true,
-                        // same rule as the pages below: an executable path is
-                        // implementation detail, an address is an identifier
-                        description: this.profileSelectorDescription(p, option.description),
-                        weight: i - (recentProfiles.length + 1),
-                        callback: async () => {
-                            if (p.id) {
-                                p = (await this.getProfiles()).find(x => x.id === p.id) ?? p
-                            }
-                            resolve(p)
-                        },
-                    }
-                })
-                if (recentProfiles.length) {
-                    options.push({
-                        name: this.translate.instant('Clear recent profiles'),
-                        group: this.translate.instant('Recent'),
-                        icon: 'fas fa-eraser',
-                        allPages: true,
-                        weight: -1,
-                        callback: async () => {
-                            window.localStorage.removeItem('recentProfiles')
-                            this.config.save()
-                            resolve(null)
-                        },
-                    })
-                }
-
                 let profiles = await this.getProfiles()
 
                 if (!this.config.store.terminal.showBuiltinProfiles) {
@@ -324,6 +284,49 @@ export class ProfilesService {
                 profiles = profiles.filter(x => !x.isTemplate)
 
                 profiles = profiles.filter(x => x.id && !this.config.store.profileBlacklist.includes(x.id))
+
+                // Recents are stored snapshots. One with an id is a reference:
+                // it stays only while the profile is still in the list above,
+                // so deleting, hiding or blacklisting a profile removes it
+                // from Recent too — and the live profile, not the snapshot,
+                // is what gets shown and launched. An id-less entry is ad-hoc
+                // (quick connect) and is its own source of truth.
+                const recentProfiles = this.getRecentProfiles()
+                    .map(snapshot => snapshot.id ? profiles.find(x => x.id === snapshot.id) : snapshot)
+                    .filter((p): p is PartialProfile<Profile> => !!p)
+
+                // Recents are not a page of their own: they duplicate entries
+                // that live on the other pages, so they ride along on all of
+                // them and sort to the top via a negative weight.
+                let options: SelectorOption<void>[] = recentProfiles.map((p, i): SelectorOption<void> => {
+                    const option = this.selectorOptionForProfile<Profile, never>(p)
+                    return {
+                        ...option,
+                        group: this.translate.instant('Recent'),
+                        icon: 'fas fa-history',
+                        color: p.color ?? undefined,
+                        allPages: true,
+                        // same rule as the pages below: an executable path is
+                        // implementation detail, an address is an identifier
+                        description: this.profileSelectorDescription(p, option.description),
+                        weight: i - (recentProfiles.length + 1),
+                        callback: () => resolve(p),
+                    }
+                })
+                if (recentProfiles.length) {
+                    options.push({
+                        name: this.translate.instant('Clear recent profiles'),
+                        group: this.translate.instant('Recent'),
+                        icon: 'fas fa-eraser',
+                        allPages: true,
+                        weight: -1,
+                        callback: async () => {
+                            window.localStorage.removeItem('recentProfiles')
+                            this.config.save()
+                            resolve(null)
+                        },
+                    })
+                }
 
                 options = [...options, ...profiles.map((p): SelectorOption<void> => {
                     const page = this.profileSelectorPage(p)

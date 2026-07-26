@@ -27,6 +27,9 @@ export function commandTokens (commandLine: string): string[] {
     return commandLine.match(/"[^"]*"|'[^']*'|\S+/g)?.map(token => token.replace(/^["']|["']$/g, '')) ?? []
 }
 
+/** Rooted or explicitly relative — the shapes a path being executed takes */
+const PATHLIKE_RE = /^(?:[A-Za-z]:[\\/]|[\\/~]|\.{1,2}[\\/])/
+
 /**
  * A bare word is not evidence. `grep claude notes.md` and
  * `python train.py --model pi` both contain a token that matches a registry
@@ -34,12 +37,26 @@ export function commandTokens (commandLine: string): string[] {
  * `pi` is two letters and collides with ordinary arguments constantly.
  *
  * So a token only counts when it is shaped like something that was invoked:
- * it carries a path, or an executable extension. A CLI started by plain name
- * is already caught by the process's own command, and one started through a
- * package entry point by its runtime marker.
+ * a rooted path, or an executable extension. Merely containing a slash is
+ * not enough — `rg @openai/codex docs` holds a package name whose basename
+ * is a registry binary, but a package name is not a path to anything. A CLI
+ * started by plain name is already caught by the process's own command, and
+ * one started through a package entry point by its runtime marker.
  */
 export function looksInvoked (token: string): boolean {
-    return token.includes('/') || token.includes('\\') || EXECUTABLE_SUFFIX_RE.test(token)
+    return PATHLIKE_RE.test(token) || EXECUTABLE_SUFFIX_RE.test(token)
+}
+
+/**
+ * Launchers whose arguments are scripts being run. A package marker inside an
+ * argument only means something under one of these — `grep aider-chat README`
+ * and `rg @openai/codex docs` mention a marker without running anything.
+ * Shells are deliberately absent: `bash -c "grep aider-chat file"` carries the
+ * whole inner command as a single argument token.
+ */
+function isRuntimeLauncher (token: string): boolean {
+    const name = executableName(token)
+    return ['node', 'nodejs', 'bun', 'deno', 'py'].includes(name) || name.startsWith('python')
 }
 
 export function matchCli (processes: MatchableProcess[], registry: AiCliRegistryEntry[]): string | null {
@@ -54,13 +71,24 @@ export function matchCli (processes: MatchableProcess[], registry: AiCliRegistry
             if (!commandLine) {
                 continue
             }
-            // ② a package marker in the command line — highest confidence, and
-            //    the usual shape for a CLI installed as an npm entry point
-            if (entry.runtimeMarkers?.some(marker => commandLine.includes(marker.toLowerCase()))) {
-                return entry.id
+            const tokens = commandTokens(commandLine)
+            // ② a package marker in the command line — the usual shape for a
+            //    CLI installed as an npm/pipx entry point. Only tokens in an
+            //    executed position count: argv[0] itself, or a non-flag
+            //    argument of a script runtime. Anywhere else the marker is
+            //    merely being talked about (`rg @openai/codex docs`).
+            const markers = entry.runtimeMarkers?.map(marker => marker.toLowerCase()) ?? []
+            if (markers.length > 0) {
+                const runtime = tokens.length > 0 && isRuntimeLauncher(tokens[0])
+                if (tokens.some((token, i) =>
+                    (i === 0 || runtime && !token.startsWith('-')) &&
+                    markers.some(marker => token.includes(marker)),
+                )) {
+                    return entry.id
+                }
             }
             // ③ an argument that is itself an invocation of the binary
-            if (commandTokens(commandLine).some(token =>
+            if (tokens.some(token =>
                 looksInvoked(token) && binaries.includes(executableName(token)),
             )) {
                 return entry.id

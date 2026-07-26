@@ -40,7 +40,22 @@ assert.equal(match(proc('node', 'node /home/me/bin/claude.js')), 'claude-code')
 assert.equal(match(proc('sh', 'sh /usr/local/bin/aider')), 'aider')
 assert.equal(match(proc('python', 'python ./tools/pi.py')), 'pi')
 
+// a pipx venv puts the marker in argv[0] — the interpreter path itself
+assert.equal(
+    match(proc('python', '/home/me/.local/pipx/venvs/aider-chat/bin/python /home/me/.local/bin/aider')),
+    'aider',
+)
+
 // --- the false positives this all exists to prevent ---
+// a marker mentioned as data is not a marker in an executed position
+assert.equal(match(proc('grep', 'grep aider-chat README.md')), null, 'grep aider-chat')
+assert.equal(match(proc('rg', 'rg @openai/codex docs')), null, 'rg @openai/codex')
+assert.equal(match(proc('bash', 'bash -c "grep aider-chat file"')), null, 'marker inside a shell -c string')
+assert.equal(
+    match(proc('node', 'node server.js --plugin=@openai/codex-helper')),
+    null,
+    'marker inside a flag of an unrelated script',
+)
 // a bare word that happens to be a binary name is not evidence of anything
 assert.equal(match(proc('grep', 'grep claude notes.md')), null, 'grep claude')
 assert.equal(match(proc('bash', 'cd claude')), null, 'cd claude')
@@ -65,6 +80,9 @@ assert.equal(looksInvoked('./pi.py'), true, 'path')
 assert.equal(looksInvoked('claude.cmd'), true, 'executable extension')
 assert.equal(looksInvoked('/usr/bin/claude'), true, 'absolute path')
 assert.equal(looksInvoked('C:\\bin\\claude'), true, 'windows path')
+assert.equal(looksInvoked('~/bin/claude'), true, 'home-relative path')
+assert.equal(looksInvoked('@openai/codex'), false, 'a package name is not a path')
+assert.equal(looksInvoked('docs/codex'), false, 'an unrooted word pair is not an invocation')
 
 // --- registry order decides ties ---
 assert.equal(

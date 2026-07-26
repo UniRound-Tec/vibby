@@ -7,7 +7,7 @@ import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
 import {
-    HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName, isLegacyHookDirName,
+    HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName, isLegacyHookDirName, ownerPids,
 } from '../paths'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
@@ -53,6 +53,16 @@ function readDirOrEmpty (dir: string): string[] {
         return fs.readdirSync(dir)
     } catch {
         return []
+    }
+}
+
+/** kill(pid, 0) probes without signalling; EPERM still means someone is there */
+function isPidAlive (pid: number): boolean {
+    try {
+        process.kill(pid, 0)
+        return true
+    } catch (error) {
+        return (error as { code?: string }).code === 'EPERM'
     }
 }
 
@@ -161,7 +171,15 @@ export class ClaudeAdapterService {
         }
         this.armed.add(tab)
 
-        await this.ingress.start()
+        try {
+            await this.ingress.start()
+        } catch (error) {
+            // start() drops its cached failure, and un-arming lets the next
+            // tabsChanged sweep retry this terminal instead of skipping it
+            this.armed.delete(tab)
+            console.error('[tabby-ai] hook ingress unavailable, will retry on the next sweep', error)
+            return
+        }
         if (tab.session) {
             // spawn beat us to it — never inject into a live session's options
             console.warn('[tabby-ai] session spawned before hook injection, skipping', kind)
@@ -368,8 +386,11 @@ export class ClaudeAdapterService {
                     continue
                 }
                 // the name alone cannot prove the directory is ours, and this
-                // is a recursive delete — let the contents confirm it
-                if (holdsOnlyGeneratedFiles(fs.readdirSync(dir))) {
+                // is a recursive delete — let the contents confirm it. A live
+                // owner pid means another vibby instance is still using the
+                // directory, however old its mtime is.
+                const entries = fs.readdirSync(dir)
+                if (holdsOnlyGeneratedFiles(entries) && !ownerPids(entries).some(isPidAlive)) {
                     fs.rmSync(dir, { recursive: true, force: true })
                 }
             } catch { /* raced another instance's cleanup */ }

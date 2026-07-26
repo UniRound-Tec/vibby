@@ -51,6 +51,27 @@ export function holdsOnlyGeneratedFiles (entries: string[]): boolean {
     return entries.every(entry => entry.endsWith('.json') || entry.startsWith(SHIM_DIR_PREFIX))
 }
 
+const SETTINGS_PID_RE = /^(\d+)-/
+const SHIM_PID_RE = new RegExp(`^${SHIM_DIR_PREFIX}(\\d+)-`)
+
+/**
+ * Process ids embedded in a hook directory's entries. Settings files are named
+ * `<pid>-<session>.json` and shim directories `vibby-cli-<pid>-<session>`, so
+ * the directory itself records who wrote it. The sweep uses this to spare
+ * directories whose owner is still running — a vibby instance can easily
+ * outlive the 24h mtime cutoff.
+ */
+export function ownerPids (entries: string[]): number[] {
+    const pids = new Set<number>()
+    for (const entry of entries) {
+        const match = SHIM_PID_RE.exec(entry) ?? SETTINGS_PID_RE.exec(entry)
+        if (match) {
+            pids.add(Number(match[1]))
+        }
+    }
+    return [...pids]
+}
+
 /**
  * True for a path we generated — used to drop stale shim directories out of
  * `pathPrefix` before prepending a fresh one, so a recovered profile cannot

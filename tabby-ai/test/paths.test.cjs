@@ -9,6 +9,7 @@ const {
     isLegacyHookDirName,
     isGeneratedPath,
     holdsOnlyGeneratedFiles,
+    ownerPids,
     quoteCmd,
     quoteSh,
 } = require('../.test-build/paths.js')
@@ -36,6 +37,19 @@ assert.equal(holdsOnlyGeneratedFiles([]), true, 'empty directory is ours to drop
 assert.equal(holdsOnlyGeneratedFiles(['123-uuid.json', 'vibby-cli-123-uuid']), true)
 assert.equal(holdsOnlyGeneratedFiles(['123-uuid.json', 'important.txt']), false)
 assert.equal(holdsOnlyGeneratedFiles(['.ssh']), false)
+
+// --- owner pids: the sweep must spare a directory whose writer still runs ---
+assert.deepEqual(ownerPids([]), [])
+assert.deepEqual(ownerPids(['4312-uuid.json']), [4312], 'settings file carries its writer pid')
+assert.deepEqual(ownerPids(['vibby-cli-987-uuid']), [987], 'shim directory carries its writer pid')
+assert.deepEqual(
+    ownerPids(['4312-a.json', '4312-b.json', 'vibby-cli-4312-a', 'vibby-cli-77-b']).sort((a, b) => a - b),
+    [77, 4312],
+    'deduplicated across entries',
+)
+// entries without a parseable pid contribute nothing (and would already have
+// failed holdsOnlyGeneratedFiles anyway)
+assert.deepEqual(ownerPids(['settings.json', 'notes.txt']), [])
 
 // --- generated paths, as they appear in a profile's pathPrefix ---
 // shim directory under a current (mkdtemp) hook directory
