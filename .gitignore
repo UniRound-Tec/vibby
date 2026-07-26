@@ -30,8 +30,6 @@ docs/api
 .idea/
 
 .electron-symbols
-sentry.properties
-sentry-symbols.js
 
 *.psd
 
