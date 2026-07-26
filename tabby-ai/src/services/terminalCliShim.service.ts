@@ -4,6 +4,7 @@ import { Injectable } from '@angular/core'
 import { TerminalTabComponent } from 'tabby-local'
 
 import { DetectedCli } from '../api'
+import { isGeneratedPath } from '../paths'
 
 const WINDOWS = process.platform === 'win32'
 
@@ -42,7 +43,7 @@ export class TerminalCliShimService {
         const previous = tab.profile.options.pathPrefix ?? []
         tab.profile.options.pathPrefix = [
             directory,
-            ...previous.filter(item => !this.isGeneratedShimPath(item)),
+            ...previous.filter(item => !isGeneratedPath(item)),
         ]
 
         return {
@@ -81,10 +82,5 @@ export class TerminalCliShimService {
 
     private quoteSh (value: string): string {
         return `'${value.replace(/'/g, `'\\''`)}'`
-    }
-
-    private isGeneratedShimPath (value: string): boolean {
-        return path.basename(path.dirname(value)) === 'vibby-hooks' ||
-            path.basename(value).startsWith('vibby-cli-')
     }
 }

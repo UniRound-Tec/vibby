@@ -6,6 +6,7 @@ import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
+import { HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName } from '../paths'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
@@ -42,11 +43,16 @@ const SPINNER_HINT_RE = /\s*·\s*(esc|ctrl)\b.*$/i
 /** Status-line poll while a session is working — fast enough to look live, cheap enough to ignore */
 const SCRAPE_INTERVAL_MS = 600
 
-/** Marks generated settings paths so stale injections can be stripped idempotently */
-const INJECT_DIR_NAME = 'vibby-hooks'
-
 /** SessionEnd hook may still be in flight when the PTY dies — wait before calling it a crash */
 const EXIT_GRACE_MS = 1500
+
+function readDirOrEmpty (dir: string): string[] {
+    try {
+        return fs.readdirSync(dir)
+    } catch {
+        return []
+    }
+}
 
 /**
  * Claude Code event adapter (docs/06-m2-plan.md §3).
@@ -68,7 +74,8 @@ export class ClaudeAdapterService {
     private panes = new Map<string, TerminalTabComponent>()
     private armed = new WeakSet<TerminalTabComponent>()
     private watchedSplits = new WeakSet<SplitTabComponent>()
-    private injectDir = path.join(os.tmpdir(), INJECT_DIR_NAME)
+    /** Created on first use by ensureInjectDir(), never at construction */
+    private injectDir: string | null = null
     private scraper: any = null
     private lastStatus = new Map<string, string>()
     private shimInstallations = new WeakMap<TerminalTabComponent, TerminalCliShimInstallation>()
@@ -160,26 +167,23 @@ export class ClaudeAdapterService {
         }
 
         const sessionId = crypto.randomUUID()
-        const settingsPath = path.join(this.injectDir, `${process.pid}-${sessionId}.json`)
-        try {
-            fs.mkdirSync(this.injectDir, { recursive: true })
-            fs.writeFileSync(settingsPath, JSON.stringify(this.settingsFor(sessionId), null, 2))
-        } catch (error) {
-            console.error('[tabby-ai] could not write hook settings, session will be unmonitored', error)
+        const written = this.writeHookSettings(sessionId)
+        if (!written) {
             return
         }
+        const { injectDir, settingsPath } = written
 
         if (isDirectLaunch) {
             const args = (tab.profile.options.args ?? []).slice()
             for (let i = args.length - 2; i >= 0; i--) {
-                if (args[i] === '--settings' && String(args[i + 1]).includes(INJECT_DIR_NAME)) {
+                if (args[i] === '--settings' && String(args[i + 1]).includes(HOOK_DIR_PREFIX)) {
                     args.splice(i, 2)
                 }
             }
             args.push('--settings', settingsPath)
             tab.profile.options.args = args
         } else {
-            const shimDirectory = path.join(this.injectDir, `vibby-cli-${process.pid}-${sessionId}`)
+            const shimDirectory = path.join(injectDir, `${SHIM_DIR_PREFIX}${process.pid}-${sessionId}`)
             try {
                 this.shimInstallations.set(tab, this.terminalShim.install(
                     tab,
@@ -305,15 +309,54 @@ export class ClaudeAdapterService {
         return { hooks }
     }
 
-    private cleanupStaleFiles (): void {
+    /**
+     * One directory per process, created on first arm().
+     *
+     * mkdtemp rather than a fixed name under os.tmpdir(): on POSIX that is the
+     * shared /tmp, and a predictable name lets another local user own the
+     * directory before we get there. They would then be able to swap out the
+     * shim directory we prepend to the session's PATH. mkdtemp gives us 0700
+     * and an unguessable suffix in one call.
+     */
+    private ensureInjectDir (): string {
+        this.injectDir ??= fs.mkdtempSync(path.join(os.tmpdir(), `${HOOK_DIR_PREFIX}-`))
+        return this.injectDir
+    }
+
+    /** null when the session has to go unmonitored */
+    private writeHookSettings (sessionId: string): { injectDir: string, settingsPath: string } | null {
         try {
-            const cutoff = Date.now() - 24 * 3600 * 1000
-            for (const name of fs.readdirSync(this.injectDir)) {
-                const file = path.join(this.injectDir, name)
-                if (fs.statSync(file).mtimeMs < cutoff) {
-                    fs.rmSync(file, { recursive: true, force: true })
-                }
+            const injectDir = this.ensureInjectDir()
+            const settingsPath = path.join(injectDir, `${process.pid}-${sessionId}.json`)
+            // 0600: the file carries the ingress token
+            fs.writeFileSync(settingsPath, JSON.stringify(this.settingsFor(sessionId), null, 2), { mode: 0o600 })
+            return { injectDir, settingsPath }
+        } catch (error) {
+            console.error('[tabby-ai] could not write hook settings, session will be unmonitored', error)
+            return null
+        }
+    }
+
+    /** Drops hook directories left behind by processes that did not exit cleanly */
+    private cleanupStaleFiles (): void {
+        const cutoff = Date.now() - 24 * 3600 * 1000
+        for (const name of readDirOrEmpty(os.tmpdir())) {
+            if (!isHookDirName(name)) {
+                continue
             }
-        } catch { /* dir may not exist yet */ }
+            const dir = path.join(os.tmpdir(), name)
+            try {
+                // lstat, not stat: never follow a symlink planted in a shared /tmp
+                const stat = fs.lstatSync(dir)
+                if (!stat.isDirectory() || stat.mtimeMs >= cutoff || dir === this.injectDir) {
+                    continue
+                }
+                // the name alone cannot prove the directory is ours, and this
+                // is a recursive delete — let the contents confirm it
+                if (holdsOnlyGeneratedFiles(fs.readdirSync(dir))) {
+                    fs.rmSync(dir, { recursive: true, force: true })
+                }
+            } catch { /* raced another instance's cleanup */ }
+        }
     }
 }
