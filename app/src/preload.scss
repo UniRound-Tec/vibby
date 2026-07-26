@@ -43,12 +43,15 @@ app-root {
 
 
 
+// Global logo glyph: the splash renders it before Angular and the theme
+// variables exist (fallback color), the welcome/settings/start tabs inherit
+// --vibby-logo-color from the active theme.
 .tabby-logo {
   width: 120px;
   height: 120px;
-  background: url('../assets/logo.svg');
-  background-repeat: none;
-  background-size: contain;
+  background: var(--vibby-logo-color, #a1c5e4);
+  -webkit-mask: url('../assets/vibby-logo-black.png') center / contain no-repeat;
+  mask: url('../assets/vibby-logo-black.png') center / contain no-repeat;
   margin: auto;
 }
 
