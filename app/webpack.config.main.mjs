@@ -4,18 +4,20 @@ import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
 import * as url from 'url'
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
+const isDev = !!process.env.TABBY_DEV
+
 const config = {
     name: 'tabby-main',
     target: 'electron-main',
     entry: {
         main: path.resolve(__dirname, 'lib/index.ts'),
     },
-    mode: process.env.TABBY_DEV ? 'development' : 'production',
+    mode: isDev ? 'development' : 'production',
     context: __dirname,
-    devtool: 'source-map',
+    devtool: isDev || process.env.CI ? 'source-map' : false,
     output: {
         path: path.join(__dirname, 'dist'),
-        pathinfo: true,
+        pathinfo: isDev,
         filename: '[name].js',
     },
     resolve: {

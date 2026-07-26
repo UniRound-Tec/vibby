@@ -5,6 +5,7 @@ import * as url from 'url'
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
 import { AngularWebpackPlugin } from '@ngtools/webpack'
+import TerserPlugin from 'terser-webpack-plugin'
 import { createEs2015LinkerPlugin } from '@angular/compiler-cli/linker/babel'
 const linkerPlugin = createEs2015LinkerPlugin({
     linkerJitMode: true,
@@ -17,6 +18,8 @@ const linkerPlugin = createEs2015LinkerPlugin({
     },
 })
 
+const isDev = !!process.env.TABBY_DEV
+
 export default () => ({
     name: 'tabby',
     target: 'node',
@@ -25,15 +28,25 @@ export default () => ({
         preload: path.resolve(__dirname, 'src/entry.preload.ts'),
         bundle: path.resolve(__dirname, 'src/entry.ts'),
     },
-    mode: process.env.TABBY_DEV ? 'development' : 'production',
-    optimization:{
-        minimize: false,
+    mode: isDev ? 'development' : 'production',
+    optimization: {
+        minimize: !isDev,
+        minimizer: [
+            new TerserPlugin({
+                // config.service.ts derives persisted providerBlacklist IDs from
+                // constructor.name — mangling class names would orphan user settings
+                terserOptions: {
+                    keep_classnames: true,
+                    keep_fnames: true,
+                },
+            }),
+        ],
     },
     context: __dirname,
-    devtool: 'source-map',
+    devtool: isDev || process.env.CI ? 'source-map' : false,
     output: {
         path: path.join(__dirname, 'dist'),
-        pathinfo: true,
+        pathinfo: isDev,
         filename: '[name].js',
         publicPath: 'auto',
     },

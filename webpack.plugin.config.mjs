@@ -3,6 +3,7 @@ import * as path from 'path'
 import wp from 'webpack'
 import { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer'
 import { AngularWebpackPlugin } from '@ngtools/webpack'
+import TerserPlugin from 'terser-webpack-plugin'
 
 const bundleAnalyzer = new BundleAnalyzerPlugin({
     analyzerPort: 0,
@@ -45,13 +46,23 @@ export default options => {
         output: {
             path: path.resolve(options.dirname, 'dist'),
             filename: 'index.js',
-            pathinfo: true,
+            pathinfo: isDev,
             libraryTarget: 'umd',
             publicPath: 'auto',
         },
         mode: isDev ? 'development' : 'production',
-        optimization:{
-            minimize: false,
+        optimization: {
+            minimize: !isDev,
+            minimizer: [
+                new TerserPlugin({
+                    // config.service.ts derives persisted providerBlacklist IDs from
+                    // constructor.name — mangling class names would orphan user settings
+                    terserOptions: {
+                        keep_classnames: true,
+                        keep_fnames: true,
+                    },
+                }),
+            ],
         },
         cache: !isDev ? false : {
             type: 'filesystem',
@@ -170,7 +181,7 @@ export default options => {
             ...options.externals || [],
         ],
         plugins: [
-            new devtoolPlugin(sourceMapOptions),
+            ...isDev || process.env.CI ? [new devtoolPlugin(sourceMapOptions)] : [],
             new AngularWebpackPlugin({
                 tsconfig: path.resolve(options.dirname, 'tsconfig.json'),
                 directTemplateLoading: false,
