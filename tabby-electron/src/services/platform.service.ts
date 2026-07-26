@@ -87,14 +87,6 @@ export class ElectronPlatformService extends PlatformService {
         require('@electron/remote').clipboard.write(content)
     }
 
-    async installPlugin (name: string, version: string): Promise<void> {
-        await (promiseIpc as RendererProcessType).send('plugin-manager:install', name, version)
-    }
-
-    async uninstallPlugin (name: string): Promise<void> {
-        await (promiseIpc as RendererProcessType).send('plugin-manager:uninstall', name)
-    }
-
     async isProcessRunning (name: string): Promise<boolean> {
         if (this.hostApp.platform === Platform.Windows) {
             return new Promise<boolean>(resolve => {

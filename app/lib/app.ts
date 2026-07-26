@@ -9,7 +9,6 @@ import { Subject, throttleTime } from 'rxjs'
 
 import { saveConfig } from './config'
 import { Window, WindowOptions } from './window'
-import { pluginManager } from './pluginManager'
 import { PTYManager } from './pty'
 
 /* eslint-disable block-scoped-var */
@@ -50,14 +49,6 @@ export class Application {
 
         this.globalHotkey$.pipe(throttleTime(100)).subscribe(() => {
             this.onGlobalHotkey()
-        })
-
-        ;(promiseIpc as any).on('plugin-manager:install', (name, version) => {
-            return pluginManager.install(this.userPluginsPath, name, version)
-        })
-
-        ;(promiseIpc as any).on('plugin-manager:uninstall', (name) => {
-            return pluginManager.uninstall(this.userPluginsPath, name)
         })
 
         ;(promiseIpc as any).on('get-default-mac-shell', async () => {

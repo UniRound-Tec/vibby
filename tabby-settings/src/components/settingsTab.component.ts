@@ -11,13 +11,11 @@ import {
     HomeBaseService,
     PlatformService,
     HostWindowService,
-    AppService,
     LocaleService,
     TranslateService,
 } from 'tabby-core'
 
 import { SettingsTabProvider } from '../api'
-import { ReleaseNotesComponent } from './releaseNotesTab.component'
 
 /** @hidden */
 @Component({
@@ -51,7 +49,6 @@ export class SettingsTabComponent extends BaseTabComponent {
         public homeBase: HomeBaseService,
         public platform: PlatformService,
         public locale: LocaleService,
-        private app: AppService,
         @Inject(SettingsTabProvider) public settingsProviders: SettingsTabProvider[],
         translate: TranslateService,
         injector: Injector,
@@ -122,9 +119,4 @@ export class SettingsTabComponent extends BaseTabComponent {
         }
     }
 
-    showReleaseNotes () {
-        this.app.openNewTabRaw({
-            type: ReleaseNotesComponent,
-        })
-    }
 }

@@ -72,7 +72,6 @@ tabby
 ├─ tabby-core                        # Plugin that provides base UI and tab management
 ├─ tabby-electron                    # Plugin that provides Electron-specific functions
 ├─ tabby-local                       # Plugin that provides local shells and profiles
-├─ tabby-plugin-manager              # Plugin that installs other plugins
 ├─ tabby-settings                    # Plugin that provides the settings tab
 ├─ tabby-terminal                    # Plugin that provides terminal tabs
 └─ tabby-web                         # Plugin that provides web-specific functions
