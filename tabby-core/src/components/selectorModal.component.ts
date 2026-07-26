@@ -28,17 +28,28 @@ export class SelectorModalComponent<T> {
     }
 
     ngOnInit (): void {
-        const pageOrders = new Map(this.pageDefinitions.map(page => [page.name, page.order]))
+        // Only pages something actually landed on. A fixed list would show
+        // e.g. an empty "Hardware" page to everyone without a serial device,
+        // and could open the selector on a page with nothing in it.
+        // `allPages` options ride along on every page and so cannot fill one.
+        const pageOrders = new Map<string, number>()
+        const declaredOrder = new Map(this.pageDefinitions.map(page => [page.name, page.order]))
         for (const option of this.options) {
-            if (option.page) {
-                pageOrders.set(option.page, Math.min(pageOrders.get(option.page) ?? Number.MAX_SAFE_INTEGER, option.pageOrder ?? 0))
+            if (!option.page || option.allPages) {
+                continue
             }
+            const order = declaredOrder.get(option.page) ?? option.pageOrder ?? Number.MAX_SAFE_INTEGER
+            pageOrders.set(option.page, Math.min(pageOrders.get(option.page) ?? Number.MAX_SAFE_INTEGER, order))
         }
         this.pages = [...pageOrders].map(([name, order]) => ({ name, order }))
             .sort((a, b) => a.order - b.order)
         this.activePage = this.pages[0]?.name ?? null
         this.onFilterChange()
-        this.hasGroups = this.options.some(x => x.group)
+    }
+
+    /** Typing searches every page — the page bar only scopes browsing */
+    get searching (): boolean {
+        return !!this.filter.trim()
     }
 
     @HostListener('keydown', ['$event']) onKeyDown (event: KeyboardEvent): void {
@@ -92,11 +103,14 @@ export class SelectorModalComponent<T> {
 
     onFilterChange (): void {
         const f = this.filter.trim().toLowerCase()
-        const pageOptions = this.activePage
-            ? this.options.filter(option => option.page === this.activePage || option.allPages)
-            : this.options
+        // Browsing is scoped to the active page; searching is not. This is the
+        // one box you type a host name into, and it would be useless if the
+        // answer depended on which page you happened to be standing on.
+        const scope = f || !this.activePage
+            ? this.options
+            : this.options.filter(option => option.page === this.activePage || option.allPages)
         if (!f) {
-            this.filteredOptions = pageOptions.slice().sort(
+            this.filteredOptions = scope.slice().sort(
                 firstBy<SelectorOption<T>, number>(x => x.weight ?? 0)
                     .thenBy<SelectorOption<T>, string>(x => x.group ?? '')
                     .thenBy<SelectorOption<T>, string>(x => x.name),
@@ -105,19 +119,31 @@ export class SelectorModalComponent<T> {
         } else {
             // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
             this.filteredOptions = new FuzzySearch(
-                pageOptions,
-                ['name', 'group', 'description'],
+                scope,
+                ['name', 'group', 'page', 'description'],
                 { sort: true },
             ).search(f)
 
-            pageOptions.filter(x => x.freeInputPattern).sort(firstBy<SelectorOption<T>, number>(x => x.weight ?? 0)).forEach(freeOption => {
+            scope.filter(x => x.freeInputPattern).sort(firstBy<SelectorOption<T>, number>(x => x.weight ?? 0)).forEach(freeOption => {
                 if (!this.filteredOptions.includes(freeOption)) {
                     this.filteredOptions.push(freeOption)
                 }
             })
         }
+        // Searching always labels its results — the user has left the page
+        // context, so where a hit came from is the thing they need to know.
+        // Browsing only labels when the list spans more than one heading:
+        // otherwise it would repeat what the highlighted page button says.
+        // Options with no heading at all (Manage profiles) do not count.
+        const headings = this.filteredOptions.map(x => this.headingFor(x)).filter(x => x)
+        this.hasGroups = this.searching ? headings.length > 0 : new Set(headings).size > 1
         this.selectedIndex = Math.max(0, this.selectedIndex)
         this.selectedIndex = Math.min(this.filteredOptions.length - 1, this.selectedIndex)
+    }
+
+    /** Group heading for an option. Tolerates the [i-1] lookup at index 0. */
+    headingFor (option: SelectorOption<T>|undefined): string {
+        return option ? option.group ?? option.page ?? '' : ''
     }
 
     selectPage (page: string): void {

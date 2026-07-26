@@ -267,7 +267,39 @@ export class ProfilesService {
 
         return new Promise<PartialProfile<Profile>|null>(async (resolve, reject) => {
             try {
-                let options: SelectorOption<void>[] = []
+                const recentProfiles = this.getRecentProfiles()
+
+                // Recents are not a page of their own: they duplicate entries
+                // that live on the other pages, so they ride along on all of
+                // them and sort to the top via a negative weight.
+                let options: SelectorOption<void>[] = recentProfiles.map((p, i) => ({
+                    ...this.selectorOptionForProfile(p),
+                    group: this.translate.instant('Recent'),
+                    icon: 'fas fa-history',
+                    color: p.color ?? undefined,
+                    allPages: true,
+                    weight: i - (recentProfiles.length + 1),
+                    callback: async () => {
+                        if (p.id) {
+                            p = (await this.getProfiles()).find(x => x.id === p.id) ?? p
+                        }
+                        resolve(p)
+                    },
+                }))
+                if (recentProfiles.length) {
+                    options.push({
+                        name: this.translate.instant('Clear recent profiles'),
+                        group: this.translate.instant('Recent'),
+                        icon: 'fas fa-eraser',
+                        allPages: true,
+                        weight: -1,
+                        callback: async () => {
+                            window.localStorage.removeItem('recentProfiles')
+                            this.config.save()
+                            resolve(null)
+                        },
+                    })
+                }
 
                 let profiles = await this.getProfiles()
 
@@ -287,12 +319,12 @@ export class ProfilesService {
 
                 profiles = profiles.filter(x => x.id && !this.config.store.profileBlacklist.includes(x.id))
 
-                options = profiles.map((p): SelectorOption<void> => {
+                options = [...options, ...profiles.map((p): SelectorOption<void> => {
                     const page = this.profileSelectorPage(p)
                     const option = this.selectorOptionForProfile<Profile, never>(p)
                     return {
                         ...option,
-                        // The four pages replace the old provider/group headers.
+                        // The pages replace the old provider/group headers.
                         group: undefined,
                         page: page.name,
                         pageOrder: page.order,
@@ -304,7 +336,7 @@ export class ProfilesService {
                         weight: p.isBuiltin ? 2 : 1,
                         callback: () => resolve(p),
                     }
-                })
+                })]
 
                 try {
                     const { SettingsTabComponent } = window['nodeRequire']('tabby-settings')

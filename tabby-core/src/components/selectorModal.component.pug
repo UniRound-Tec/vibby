@@ -7,19 +7,21 @@
         (ngModelChange)='onFilterChange()'
     )
 
-    .selector-pages(*ngIf='pages.length')
+    //- dimmed while searching: results come from every page, so the bar is
+    //- no longer describing what is in the list below it
+    .selector-pages(*ngIf='pages.length', [class.dimmed]='searching')
         button.selector-page(
             *ngFor='let page of pages',
             type='button',
-            [class.active]='page.name === activePage',
+            [class.active]='!searching && page.name === activePage',
             (click)='selectPage(page.name)'
         ) {{ page.name }}
 
     .list-group.list-group-light(*ngIf='filteredOptions.length')
         ng-container(*ngFor='let option of filteredOptions; let i = index')
             label.group-header(
-                *ngIf='hasGroups && option.group !== filteredOptions[i - 1]?.group'
-            ) {{option.group}}
+                *ngIf='hasGroups && headingFor(option) && headingFor(option) !== headingFor(filteredOptions[i - 1])'
+            ) {{headingFor(option)}}
             a.list-group-item.list-group-item-action.d-flex.align-items-center(
                 #item,
                 (click)='selectOption(option)',
