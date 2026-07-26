@@ -1,5 +1,5 @@
 import { NgModule } from '@angular/core'
-import { PlatformService, LogService, UpdaterService, DockingService, HostAppService, ThemesService, Platform, AppService, ConfigService, WIN_BUILD_FLUENT_BG_SUPPORTED, isWindowsBuild, HostWindowService, HotkeyProvider, ConfigProvider, FileProvider } from 'tabby-core'
+import { PlatformService, LogService, DockingService, HostAppService, ThemesService, Platform, AppService, ConfigService, WIN_BUILD_FLUENT_BG_SUPPORTED, isWindowsBuild, HostWindowService, HotkeyProvider, ConfigProvider, FileProvider } from 'tabby-core'
 import { TerminalColorSchemeProvider, TerminalContextMenuItemProvider, TerminalDecorator } from 'tabby-terminal'
 import { SFTPContextMenuItemProvider, SSHProfileImporter, AutoPrivateKeyLocator } from 'tabby-ssh'
 import { PTYInterface, ShellProvider, UACService } from 'tabby-local'
@@ -8,7 +8,6 @@ import { auditTime } from 'rxjs'
 import { HyperColorSchemes } from './colorSchemes'
 import { ElectronPlatformService } from './services/platform.service'
 import { ElectronLogService } from './services/log.service'
-import { ElectronUpdaterService } from './services/updater.service'
 import { TouchbarService } from './services/touchbar.service'
 import { ElectronDockingService } from './services/docking.service'
 import { ElectronHostWindow } from './services/hostWindow.service'
@@ -47,7 +46,6 @@ import { VSDevToolsProvider } from './shells/vs'
         { provide: HostWindowService, useExisting: ElectronHostWindow },
         { provide: HostAppService, useExisting: ElectronHostAppService },
         { provide: LogService, useClass: ElectronLogService },
-        { provide: UpdaterService, useClass: ElectronUpdaterService },
         { provide: DockingService, useClass: ElectronDockingService },
         { provide: HotkeyProvider, useClass: ElectronHotkeyProvider, multi: true },
         { provide: ConfigProvider, useClass: ElectronConfigProvider, multi: true },

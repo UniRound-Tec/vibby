@@ -2,4 +2,3 @@ pluginBlacklist: ['local']
 terminal:
   recoverTabs: false
 enableWelcomeTab: false
-enableAutomaticUpdates: false

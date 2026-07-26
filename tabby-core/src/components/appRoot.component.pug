@@ -90,12 +90,6 @@ title-bar(
                         [fastHtmlBind]='button.icon'
                     )
 
-                button.btn.btn-secondary.btn-tab-bar.btn-update(
-                    *ngIf='updatesAvailable',
-                    [ngbTooltip]='"Update available - Click to install"|translate',
-                    (click)='updater.update()'
-                ) !{require('../icons/gift.svg')}
-
             window-controls.background(
                 *ngIf='config.store.appearance.frame == "thin" \
                 && config.store.appearance.tabsLocation !== "left" \
