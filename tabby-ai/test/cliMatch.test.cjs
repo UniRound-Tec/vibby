@@ -34,6 +34,11 @@ assert.equal(
     'codex',
 )
 assert.equal(match(proc('python', 'python -m aider_chat --model gpt-4')), 'aider')
+// runtime flags before the script are skipped, the script argument still counts
+assert.equal(
+    match(proc('node', 'node --max-old-space-size=4096 /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js')),
+    'claude-code',
+)
 
 // --- ③ an argument that is itself an invocation ---
 assert.equal(match(proc('node', 'node /home/me/bin/claude.js')), 'claude-code')
@@ -55,6 +60,17 @@ assert.equal(
     match(proc('node', 'node server.js --plugin=@openai/codex-helper')),
     null,
     'marker inside a flag of an unrelated script',
+)
+// ...and a data argument after the script is not an executed position either
+assert.equal(
+    match(proc('node', 'node server.js --plugin @openai/codex-helper')),
+    null,
+    'marker as a flag value of an unrelated script',
+)
+assert.equal(
+    match(proc('python', 'python train.py --dataset aider_chat')),
+    null,
+    'marker as a data argument of an unrelated script',
 )
 // a bare word that happens to be a binary name is not evidence of anything
 assert.equal(match(proc('grep', 'grep claude notes.md')), null, 'grep claude')

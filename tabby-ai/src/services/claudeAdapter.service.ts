@@ -48,6 +48,13 @@ const SCRAPE_INTERVAL_MS = 600
 /** SessionEnd hook may still be in flight when the PTY dies — wait before calling it a crash */
 const EXIT_GRACE_MS = 1500
 
+/**
+ * Backoff between ingress start attempts. Injection has to land before the
+ * PTY spawns on frontend-ready, so the whole budget is deliberately short:
+ * anything that has not come up within ~1.5s has missed the window anyway.
+ */
+const INGRESS_RETRY_DELAYS_MS = [250, 1000]
+
 function readDirOrEmpty (dir: string): string[] {
     try {
         return fs.readdirSync(dir)
@@ -171,13 +178,12 @@ export class ClaudeAdapterService {
         }
         this.armed.add(tab)
 
-        try {
-            await this.ingress.start()
-        } catch (error) {
-            // start() drops its cached failure, and un-arming lets the next
-            // tabsChanged sweep retry this terminal instead of skipping it
-            this.armed.delete(tab)
-            console.error('[tabby-ai] hook ingress unavailable, will retry on the next sweep', error)
+        // Retrying here, not on a later sweep: injection is only possible
+        // before the PTY spawns, and a sweep that arrives after spawn would
+        // bounce off the tab.session check below — a lottery, not a retry.
+        // When the budget runs out the session degrades to process detection,
+        // and the tab stays armed so the sweeps stop re-attempting it.
+        if (!await this.startIngressWithRetry()) {
             return
         }
         if (tab.session) {
@@ -246,6 +252,22 @@ export class ClaudeAdapterService {
             this.stopScraperIfIdle()
             this.zone.run(() => this.bus.dropSession(sessionId))
         })
+    }
+
+    /** True once the ingress is listening; false when every attempt failed */
+    private async startIngressWithRetry (): Promise<boolean> {
+        for (let attempt = 0; ; attempt++) {
+            try {
+                await this.ingress.start()
+                return true
+            } catch (error) {
+                if (attempt >= INGRESS_RETRY_DELAYS_MS.length) {
+                    console.error('[tabby-ai] hook ingress unavailable, session will use process detection', error)
+                    return false
+                }
+                await new Promise(resolve => setTimeout(resolve, INGRESS_RETRY_DELAYS_MS[attempt]))
+            }
+        }
     }
 
     /**

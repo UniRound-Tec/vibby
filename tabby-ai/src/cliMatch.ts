@@ -72,18 +72,24 @@ export function matchCli (processes: MatchableProcess[], registry: AiCliRegistry
                 continue
             }
             const tokens = commandTokens(commandLine)
-            // ② a package marker in the command line — the usual shape for a
-            //    CLI installed as an npm/pipx entry point. Only tokens in an
-            //    executed position count: argv[0] itself, or a non-flag
-            //    argument of a script runtime. Anywhere else the marker is
-            //    merely being talked about (`rg @openai/codex docs`).
+            // ② a package marker in an executed position — the usual shape
+            //    for a CLI installed as an npm/pipx entry point. Executed
+            //    means argv[0] itself, or, under a script runtime, the
+            //    script/module argument: the first token that is not a flag.
+            //    Later arguments are data — `python train.py --dataset
+            //    aider_chat` must not become an aider session — and anywhere
+            //    else the marker is merely being talked about
+            //    (`rg @openai/codex docs`).
             const markers = entry.runtimeMarkers?.map(marker => marker.toLowerCase()) ?? []
-            if (markers.length > 0) {
-                const runtime = tokens.length > 0 && isRuntimeLauncher(tokens[0])
-                if (tokens.some((token, i) =>
-                    (i === 0 || runtime && !token.startsWith('-')) &&
-                    markers.some(marker => token.includes(marker)),
-                )) {
+            if (markers.length > 0 && tokens.length > 0) {
+                const candidates = [tokens[0]]
+                if (isRuntimeLauncher(tokens[0])) {
+                    const script = tokens.slice(1).find(token => !token.startsWith('-'))
+                    if (script) {
+                        candidates.push(script)
+                    }
+                }
+                if (candidates.some(token => markers.some(marker => token.includes(marker)))) {
                     return entry.id
                 }
             }
