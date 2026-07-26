@@ -34,9 +34,9 @@ export interface AiCliLaunchCard {
 
 /** Rows shown in the activity timeline — the bus keeps more than anyone wants to read */
 const TIMELINE_LENGTH = 20
-const SESSION_PAGE_SIZE = 4
+const SESSION_PAGE_SIZE = 6
 const ACTIVITY_PAGE_SIZE = 6
-const LAUNCH_PAGE_SIZE = 6
+const LAUNCH_PAGE_SIZE = 8
 
 /** @hidden */
 @Component({

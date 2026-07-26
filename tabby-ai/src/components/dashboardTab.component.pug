@@ -1,64 +1,22 @@
-.ai-dashboard
-    .dashboard-shell
-        header.dashboard-header
-            .brand-lockup
+.dashboard-viewport
+    .ai-dashboard
+        .dashboard-shell
+            header.dashboard-header
                 img.dashboard-brand([src]='wordmark', alt='Vibby')
-                .header-copy
-                    .kicker AI CLI
+                .prompt-line
+                    span.prompt-glyph(aria-hidden='true') ❯
                     h1(translate) Home
-                    .headline-stats
-                        span.headline-stat
-                            strong {{detectedCliCount}} / {{cliCards.length}}
-                            span(translate) Detected
-                        span.headline-stat
-                            strong {{rows.length}}
-                            span(translate) Sessions
-                        .headline-counters(*ngIf='rows.length')
-                            span.headline-counter([ngClass]='c.state', *ngFor='let c of counters')
-                                span.dot
-                                span {{c.count}} {{stateLabel(c.state)}}
+                    span.prompt-cursor(aria-hidden='true')
 
-            button.scan-action(type='button', (click)='rescan()', [disabled]='scanning')
-                span.scan-icon ↻
-                span(*ngIf='!scanning', translate) Rescan
-                span(*ngIf='scanning', translate) Scanning…
+                button.scan-action(type='button', (click)='rescan()', [disabled]='scanning')
+                    span.scan-icon ↻
+                    span(*ngIf='!scanning', translate) Rescan
+                    span(*ngIf='scanning', translate) Scanning…
 
-        .dashboard-grid
-            main.primary-column
-                section.panel.launch-panel
-                    .panel-head
-                        h2.title(translate) Launch
-
-                    .strip
-                        button.chip.terminal-chip(
-                            *ngIf='launchPage === 0',
-                            type='button',
-                            (click)='launchTerminal()',
-                        )
-                            .glyph([innerHTML]='terminalIcon')
-                            .chip-text
-                                .nm(translate) Terminal
-                                .sub
-                                    span(translate) Profiles & connections
-                            span.chip-arrow ›
-
-                        button.chip.cli-chip(
-                            *ngFor='let card of pagedCliCards',
-                            type='button',
-                            [disabled]='!card.detected',
-                            (click)='launchCard(card)',
-                        )
-                            .glyph([innerHTML]='iconForKind(card.entry.id)')
-                            .chip-text
-                                .nm {{card.entry.name}}
-                                .sub
-                                    span.ver(*ngIf='card.detected?.version') {{card.detected.version}}
-                                    span.tier(*ngIf='card.detected', [class.full]='card.entry.tier === "full"')
-                                        span(*ngIf='card.entry.tier === "full"', translate) Full monitoring
-                                        span(*ngIf='card.entry.tier !== "full"', translate) Launch only
-                                    span.not-detected(*ngIf='!card.detected', translate) Not detected
-                            span.chip-arrow(*ngIf='card.detected') ›
-
+            section.zone.launch-zone
+                .zone-head
+                    h2.zone-title(translate) Launch
+                    .zone-rule
                     .pagination([class.pagination-hidden]='launchPageCount <= 1')
                         button.page-button(
                             type='button',
@@ -76,16 +34,60 @@
                             [title]='"Next page" | translate',
                         ) ›
 
-                section.panel.sessions-panel
-                    .panel-head
-                        h2.title(translate) Sessions
-                        .counters(*ngIf='rows.length')
-                            .counter([ngClass]='c.state', *ngFor='let c of counters')
-                                span.n {{c.count}}
-                                span.l {{stateLabel(c.state)}}
+                .strip
+                    button.chip.terminal-chip(
+                        *ngIf='launchPage === 0',
+                        type='button',
+                        (click)='launchTerminal()',
+                    )
+                        .glyph([innerHTML]='terminalIcon')
+                        .chip-text
+                            .nm(translate) Terminal
+                            .sub
+                                span(translate) Profiles & connections
+                        span.chip-arrow ›
 
-                    .board(*ngIf='rows.length')
-                        .scard(
+                    button.chip.cli-chip(
+                        *ngFor='let card of pagedCliCards',
+                        type='button',
+                        [disabled]='!card.detected',
+                        (click)='launchCard(card)',
+                    )
+                        .glyph([innerHTML]='iconForKind(card.entry.id)')
+                        .chip-text
+                            .nm {{card.entry.name}}
+                            .sub
+                                span.ver(*ngIf='card.detected?.version') {{card.detected.version}}
+                                span.tier(*ngIf='card.detected', [class.full]='card.entry.tier === "full"')
+                                    span(*ngIf='card.entry.tier === "full"', translate) Full monitoring
+                                    span(*ngIf='card.entry.tier !== "full"', translate) Launch only
+                                span.not-detected(*ngIf='!card.detected', translate) Not detected
+                        span.chip-arrow(*ngIf='card.detected') ›
+
+            .dashboard-grid
+                section.zone.sessions-zone
+                    .zone-head
+                        h2.zone-title(translate) Sessions
+                        .zone-rule
+                        .pagination([class.pagination-hidden]='sessionPageCount <= 1')
+                            button.page-button(
+                                type='button',
+                                [disabled]='sessionPage === 0',
+                                (click)='changeSessionPage(-1)',
+                                [attr.aria-label]='"Previous page" | translate',
+                                [title]='"Previous page" | translate',
+                            ) ‹
+                            span.page-status {{sessionPage + 1}} / {{sessionPageCount}}
+                            button.page-button(
+                                type='button',
+                                [disabled]='sessionPage + 1 >= sessionPageCount',
+                                (click)='changeSessionPage(1)',
+                                [attr.aria-label]='"Next page" | translate',
+                                [title]='"Next page" | translate',
+                            ) ›
+
+                    .proc-list(*ngIf='rows.length')
+                        .prow(
                             *ngFor='let row of pagedRows',
                             [ngClass]='row.state',
                             (click)='focusRow(row)',
@@ -93,64 +95,47 @@
                             (keyup.enter)='focusRow(row)',
                         )
                             .session-icon(*ngIf='iconForKind(row.kind)', [innerHTML]='iconForKind(row.kind)', [title]='row.kind')
-                            .session-main
-                                .card-name
+                            .stword
+                                span.state-dot
+                                span {{stateLabel(row.state)}}
+                            .prow-main
+                                .prow-name
                                     .name {{nameFor(row)}}
                                     button.rename(
                                         (click)='rename(row, $event)',
                                         [attr.aria-label]='"Rename" | translate',
                                         [title]='"Rename" | translate',
                                     ) ✎
-                                .card-body
+                                .prow-caption
                                     .act {{captionFor(row)}}
                                     .live(*ngIf='liveFor(row)') {{liveFor(row)}}
-                            .session-status
-                                .stword
-                                    span.state-dot
-                                    span {{stateLabel(row.state)}}
-                                .dur {{durationFor(row)}}
+                            .dur {{durationFor(row)}}
 
                     .empty.session-empty(*ngIf='!rows.length')
                         span(translate) No running AI sessions — pick a CLI above to start one.
 
-                    .pagination([class.pagination-hidden]='sessionPageCount <= 1')
-                        button.page-button(
-                            type='button',
-                            [disabled]='sessionPage === 0',
-                            (click)='changeSessionPage(-1)',
-                            [attr.aria-label]='"Previous page" | translate',
-                            [title]='"Previous page" | translate',
-                        ) ‹
-                        span.page-status {{sessionPage + 1}} / {{sessionPageCount}}
-                        button.page-button(
-                            type='button',
-                            [disabled]='sessionPage + 1 >= sessionPageCount',
-                            (click)='changeSessionPage(1)',
-                            [attr.aria-label]='"Next page" | translate',
-                            [title]='"Next page" | translate',
-                        ) ›
+                section.zone.activity-zone
+                    .zone-head
+                        h2.zone-title(translate) Recent activity
+                        .zone-rule
+                        .pagination([class.pagination-hidden]='activityPageCount <= 1')
+                            button.page-button(
+                                type='button',
+                                [disabled]='activityPage === 0',
+                                (click)='changeActivityPage(-1)',
+                                [attr.aria-label]='"Previous page" | translate',
+                                [title]='"Previous page" | translate',
+                            ) ‹
+                            span.page-status {{activityPage + 1}} / {{activityPageCount}}
+                            button.page-button(
+                                type='button',
+                                [disabled]='activityPage + 1 >= activityPageCount',
+                                (click)='changeActivityPage(1)',
+                                [attr.aria-label]='"Next page" | translate',
+                                [title]='"Next page" | translate',
+                            ) ›
 
-            aside.secondary-column
-                section.panel.status-panel
-                    .panel-head
-                        h2.title AI CLI
-
-                    .status-grid
-                        .status-item
-                            .status-value {{detectedCliCount}} / {{cliCards.length}}
-                            .status-label(translate) Detected
-                        .status-item
-                            .status-value {{rows.length}}
-                            .status-label(translate) Sessions
-                        .status-item
-                            .status-value {{monitoredSessionCount}}
-                            .status-label(translate) Full monitoring
-
-                section.panel.activity-panel
-                    .panel-head
-                        h2.title(translate) Recent activity
-
-                    .timeline(*ngIf='recent.length')
+                    .logbox(*ngIf='recent.length')
                         .tl-row(*ngFor='let event of pagedRecent')
                             span.t {{feedTime(event)}}
                             span.dot([ngClass]='dotFor(event)')
@@ -163,36 +148,30 @@
                     .empty.activity-empty(*ngIf='!recent.length')
                         span(translate) Nothing has happened yet.
 
-                    .pagination([class.pagination-hidden]='activityPageCount <= 1')
-                        button.page-button(
-                            type='button',
-                            [disabled]='activityPage === 0',
-                            (click)='changeActivityPage(-1)',
-                            [attr.aria-label]='"Previous page" | translate',
-                            [title]='"Previous page" | translate',
-                        ) ‹
-                        span.page-status {{activityPage + 1}} / {{activityPageCount}}
-                        button.page-button(
-                            type='button',
-                            [disabled]='activityPage + 1 >= activityPageCount',
-                            (click)='changeActivityPage(1)',
-                            [attr.aria-label]='"Next page" | translate',
-                            [title]='"Next page" | translate',
-                        ) ›
-
-                section.panel.settings-panel
-                    .panel-head
-                        h2.title(translate) Quick settings
-
-                    .settings-card
-                        .setting-row
-                            .label(translate) Tabs location
-                            .segmented
-                                button(
-                                    *ngFor='let option of tabsLocations',
-                                    [class.active]='tabsLocation === option.value',
-                                    (click)='setTabsLocation(option.value)',
-                                    [title]='option.label | translate',
-                                )
-                                    span.diagram([ngClass]='option.value')
-                                    span.option-label {{option.label | translate}}
+footer.statusline
+    .status-left
+        span.seg.brand vibby
+        span.seg
+            strong {{detectedCliCount}}/{{cliCards.length}}
+            span(translate) Detected
+        span.seg
+            strong {{rows.length}}
+            span(translate) Sessions
+        span.seg(*ngIf='monitoredSessionCount')
+            strong {{monitoredSessionCount}}
+            span(translate) Full monitoring
+        span.seg.state([ngClass]='c.state', *ngFor='let c of counters')
+            span.dot(aria-hidden='true')
+            span {{c.count}} {{stateLabel(c.state)}}
+    .status-right
+        span.status-label(translate) Tabs location
+        .mini-segmented
+            button(
+                type='button',
+                *ngFor='let option of tabsLocations',
+                [class.active]='tabsLocation === option.value',
+                (click)='setTabsLocation(option.value)',
+                [title]='option.label | translate',
+                [attr.aria-label]='option.label | translate',
+            )
+                span.diagram([ngClass]='option.value')
