@@ -1,19 +1,22 @@
-//- 手调四枚（无第三方版权）：同一光学盒（24 栅格内 ~13×13，描边 2 圆角），
-//- 保证最小化/最大化/还原/关闭视觉等大。候选对比见 docs/mockups/caption-icons.html
-button.minimize((click)='hostWindow.minimize()')
+//- Hand-drawn, no third-party copyright: all four share one optical box
+//- (~13x13 inside a 24 grid, 2px stroke, rounded), so minimize / maximize /
+//- restore / close read as the same size. On Windows these ARE the caption
+//- buttons — the native overlay is gone — so they carry their own labels;
+//- nothing else names them. Candidates: docs/mockups/caption-icons.html
+button.minimize((click)='hostWindow.minimize()', type='button', [attr.aria-label]='"Minimize"|translate', [title]='"Minimize"|translate')
     svg(xmlns='http://www.w3.org/2000/svg', viewBox='0 0 24 24', fill='none', stroke='currentColor', stroke-width='2', stroke-linecap='round', stroke-linejoin='round')
         path(d='M5.5 12h13')
 
-button.maximize((click)='hostWindow.toggleMaximize()', *ngIf='!hostWindow.isMaximized()')
+button.maximize((click)='hostWindow.toggleMaximize()', *ngIf='!hostWindow.isMaximized()', type='button', [attr.aria-label]='"Maximize"|translate', [title]='"Maximize"|translate')
     svg(xmlns='http://www.w3.org/2000/svg', viewBox='0 0 24 24', fill='none', stroke='currentColor', stroke-width='2', stroke-linecap='round', stroke-linejoin='round')
         rect(x='5.5', y='5.5', width='13', height='13', rx='2')
 
-button.restore((click)='hostWindow.toggleMaximize()', *ngIf='hostWindow.isMaximized()')
+button.restore((click)='hostWindow.toggleMaximize()', *ngIf='hostWindow.isMaximized()', type='button', [attr.aria-label]='"Restore"|translate', [title]='"Restore"|translate')
     svg(xmlns='http://www.w3.org/2000/svg', viewBox='0 0 24 24', fill='none', stroke='currentColor', stroke-width='2', stroke-linecap='round', stroke-linejoin='round')
         rect(x='4.5', y='9', width='10.5', height='10.5', rx='2')
         path(d='M8.5 8.5V6.5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-2')
 
-button.close((click)='closeWindow()')
+button.close((click)='closeWindow()', type='button', [attr.aria-label]='"Close window"|translate', [title]='"Close window"|translate')
     svg(xmlns='http://www.w3.org/2000/svg', viewBox='0 0 24 24', fill='none', stroke='currentColor', stroke-width='2', stroke-linecap='round', stroke-linejoin='round')
         path(d='M6.5 6.5l11 11')
         path(d='M17.5 6.5l-11 11')

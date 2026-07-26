@@ -31,10 +31,13 @@ export class AiEventBusService {
 
     private events = new Subject<AiEvent>()
     private attention = new Subject<AiAttentionPulse>()
+    private sessionDropped = new Subject<string>()
     private snapshotsSubject = new BehaviorSubject<ReadonlyMap<string, AiSessionSnapshot>>(this.snapshots)
 
     get events$ (): Observable<AiEvent> { return this.events }
     get attention$ (): Observable<AiAttentionPulse> { return this.attention }
+    /** A session is gone for good — anything keyed by session id can forget it */
+    get sessionDropped$ (): Observable<string> { return this.sessionDropped }
     get snapshots$ (): Observable<ReadonlyMap<string, AiSessionSnapshot>> { return this.snapshotsSubject }
 
     publish (event: AiEvent): void {
@@ -96,5 +99,6 @@ export class AiEventBusService {
             this.snapshotsSubject.next(this.snapshots)
         }
         this.feeds.delete(sessionId)
+        this.sessionDropped.next(sessionId)
     }
 }

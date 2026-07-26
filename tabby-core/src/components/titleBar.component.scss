@@ -21,8 +21,10 @@ $titlebar-height: 30px;
         display: block;
         flex: none;
         background: var(--vibby-logo-color, currentColor);
-        -webkit-mask: url('../../../app/assets/vibby-logo-black.png') center / contain no-repeat;
-        mask: url('../../../app/assets/vibby-logo-black.png') center / contain no-repeat;
+        // in-package copy, not ../../../app/assets: tabby-core is published to
+        // npm and cannot depend on a path outside itself
+        -webkit-mask: url('../assets/vibby-logo-black.png') center / contain no-repeat;
+        mask: url('../assets/vibby-logo-black.png') center / contain no-repeat;
     }
 
     window-controls {

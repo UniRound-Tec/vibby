@@ -28,6 +28,8 @@ export class AiAttentionService {
 
     activate (): void {
         this.bus.attention$.subscribe(pulse => this.onPulse(pulse))
+        // otherwise this keeps one entry per session the app has ever seen
+        this.bus.sessionDropped$.subscribe(sessionId => this.lastNotified.delete(sessionId))
     }
 
     private onPulse (pulse: AiAttentionPulse): void {

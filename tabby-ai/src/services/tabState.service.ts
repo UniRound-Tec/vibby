@@ -2,19 +2,14 @@ import { Injectable } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent, TranslateService } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
-import { AiSessionSnapshot, AiSessionState } from '../events'
+import { AiSessionSnapshot } from '../events'
+import {
+    AiDisplayState, SessionFacts, captionFor, displayStateFor, loudest, stateLabelKey,
+} from '../presentation'
 import { AI_CLI_REGISTRY } from '../registry'
 import { AiEventBusService } from './eventBus.service'
 import { ClaudeAdapterService } from './claudeAdapter.service'
 import { RuntimeCliChange, RuntimeCliDetectorService } from './runtimeCliDetector.service'
-
-/** Worst-first, same order the dashboard sorts by: a split shows its loudest pane */
-const SEVERITY: Record<AiSessionState, number> = {
-    'needs-you': 0,
-    working: 1,
-    idle: 2,
-    error: 3,
-}
 
 /**
  * Publishes what the side rail needs onto each tab object: which group it
@@ -98,40 +93,38 @@ export class AiTabStateService {
                 this.nameFromCwd(tab, aiPane)
             }
 
-            const snapshot = this.loudestSnapshot(tab)
             if (!aiPane) {
                 tab['aiState'] = null
                 tab['aiStateLabel'] = null
                 tab['aiSummary'] = null
                 continue
             }
-            const monitoringSessionId = this.adapter.sessionIdForPane(aiPane, kind)
             // an AI tab is a card even before its first event — a session that
             // never reports is exactly what the rail has to make visible
-            tab['aiState'] = snapshot?.state ?? (monitoringSessionId ? 'listening' : 'untracked')
-            tab['aiStateLabel'] = snapshot
-                ? this.stateLabel(snapshot.state)
-                : monitoringSessionId
-                    ? this.translate.instant('Listening')
-                    : this.translate.instant('Untracked')
-            // the scraped status line is fresher than the last hook event
-            tab['aiSummary'] = snapshot
-                ? snapshot.liveStatus ?? snapshot.lastEvent?.summary ?? null
-                : this.runtimeDetector.isRuntimeDetected(aiPane) && !monitoringSessionId
-                    ? this.translate.instant('Detected in terminal · event monitoring unavailable')
-                    : monitoringSessionId
-                        ? this.translate.instant('Event monitoring enabled · waiting for CLI activity')
-                        : this.translate.instant('Launch only · no event monitoring yet')
+            const facts = this.factsFor(aiPane, kind, this.loudestSnapshot(tab))
+            tab['aiState'] = displayStateFor(facts)
+            tab['aiStateLabel'] = this.translate.instant(stateLabelKey(displayStateFor(facts)))
+            tab['aiSummary'] = this.caption(facts)
         }
     }
 
-    private stateLabel (state: AiSessionState): string {
-        switch (state) {
-            case 'needs-you': return this.translate.instant('Needs you')
-            case 'working': return this.translate.instant('Working')
-            case 'idle': return this.translate.instant('Idle')
-            case 'error': return this.translate.instant('Error')
+    /** What presentation.ts needs to know about a pane */
+    private factsFor (
+        pane: TerminalTabComponent,
+        kind: string|null,
+        snapshot: AiSessionSnapshot|null = null,
+    ): SessionFacts {
+        const sessionId = this.adapter.sessionIdForPane(pane, kind)
+        return {
+            snapshot: snapshot ?? (sessionId ? this.bus.snapshotFor(sessionId) : null),
+            sessionId,
+            runtimeDetected: this.runtimeDetector.isRuntimeDetected(pane),
         }
+    }
+
+    private caption (facts: SessionFacts): string|null {
+        const caption = captionFor(facts)
+        return 'key' in caption ? this.translate.instant(caption.key) : caption.text || null
     }
 
     /** Every AI pane in the tab — split panes remain individually observable. */
@@ -153,8 +146,7 @@ export class AiTabStateService {
 
     private paneCard (pane: TerminalTabComponent, index: number): Record<string, unknown> {
         const kind = this.runtimeDetector.kindForPane(pane)
-        const sessionId = this.adapter.sessionIdForPane(pane, kind)
-        const snapshot = sessionId ? this.bus.snapshotFor(sessionId) : null
+        const facts = this.factsFor(pane, kind)
         const launchName = pane.profile?.options?.['aiCli']?.sessionName?.trim()
         const name = pane.customTitle ||
             launchName ||
@@ -168,19 +160,9 @@ export class AiTabStateService {
             name,
             icon: AI_CLI_REGISTRY.find(x => x.id === kind)?.icon ?? null,
             kind,
-            state: snapshot?.state ?? (sessionId ? 'listening' : 'untracked'),
-            stateLabel: snapshot
-                ? this.stateLabel(snapshot.state)
-                : sessionId
-                    ? this.translate.instant('Listening')
-                    : this.translate.instant('Untracked'),
-            summary: snapshot
-                ? snapshot.liveStatus ?? snapshot.lastEvent?.summary ?? null
-                : this.runtimeDetector.isRuntimeDetected(pane) && !sessionId
-                    ? this.translate.instant('Detected in terminal · event monitoring unavailable')
-                    : sessionId
-                        ? this.translate.instant('Event monitoring enabled · waiting for CLI activity')
-                        : this.translate.instant('Launch only · no event monitoring yet'),
+            state: displayStateFor(facts),
+            stateLabel: this.translate.instant(stateLabelKey(displayStateFor(facts))),
+            summary: this.caption(facts),
         }
     }
 
@@ -246,20 +228,21 @@ export class AiTabStateService {
         this.refresh()
     }
 
+    /** A split tab's single card shows whichever of its panes is loudest */
     private loudestSnapshot (tab: BaseTabComponent): AiSessionSnapshot | null {
         const panes = tab instanceof SplitTabComponent ? tab.getAllTabs() : [tab]
-        let loudest: AiSessionSnapshot | null = null
+        const snapshots: AiSessionSnapshot[] = []
         for (const pane of panes) {
             const sessionId = this.adapter.sessionIdForPane(
                 pane,
                 pane instanceof TerminalTabComponent ? this.runtimeDetector.kindForPane(pane) : null,
             )
             const snapshot = sessionId ? this.bus.snapshotFor(sessionId) : null
-            if (snapshot && (!loudest || SEVERITY[snapshot.state] < SEVERITY[loudest.state])) {
-                loudest = snapshot
+            if (snapshot) {
+                snapshots.push(snapshot)
             }
         }
-        return loudest
+        return loudest<AiSessionSnapshot>(snapshots, s => s.state as AiDisplayState)
     }
 
     /**

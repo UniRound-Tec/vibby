@@ -7,6 +7,9 @@ import { TerminalTabComponent } from 'tabby-local'
 import { AiCliRegistryEntry, DetectedCli } from '../api'
 import { VIBBY_WORDMARK } from '../branding'
 import { AiEvent, AiEventKind, AiSessionSnapshot, stateAfter } from '../events'
+import {
+    AiDisplayState, DISPLAY_STATE_RANK, SessionFacts, displayStateFor, lastEventCaptionFor, stateLabelKey,
+} from '../presentation'
 import { AiCliProfile } from '../profiles'
 import { AI_CLI_REGISTRY } from '../registry'
 import { CliScannerService } from '../services/cliScanner.service'
@@ -14,15 +17,13 @@ import { AiEventBusService } from '../services/eventBus.service'
 import { ClaudeAdapterService } from '../services/claudeAdapter.service'
 import { RuntimeCliDetectorService } from '../services/runtimeCliDetector.service'
 
-export type AiRowState = 'needs-you' | 'working' | 'idle' | 'listening' | 'error' | 'untracked'
-
 export interface AiSessionRow {
     topTab: BaseTabComponent
     pane: TerminalTabComponent
     kind: string|null
     sessionId: string|null
     snapshot: AiSessionSnapshot|null
-    state: AiRowState
+    state: AiDisplayState
     runtimeDetected: boolean
 }
 
@@ -37,15 +38,6 @@ const SESSION_PAGE_SIZE = 4
 const ACTIVITY_PAGE_SIZE = 6
 const LAUNCH_PAGE_SIZE = 6
 
-const STATE_RANK: Record<AiRowState, number> = {
-    'needs-you': 0,
-    working: 1,
-    idle: 2,
-    listening: 3,
-    error: 4,
-    untracked: 5,
-}
-
 /** @hidden */
 @Component({
     selector: 'ai-dashboard-tab',
@@ -57,7 +49,7 @@ export class DashboardTabComponent extends BaseTabComponent {
     miniHeader = true
 
     rows: AiSessionRow[] = []
-    counters: { state: AiRowState, count: number }[] = []
+    counters: { state: AiDisplayState, count: number }[] = []
     recent: AiEvent[] = []
     sessionPage = 0
     activityPage = 0
@@ -78,10 +70,13 @@ export class DashboardTabComponent extends BaseTabComponent {
     readonly terminalIcon: SafeHtml
 
     private snapshots: ReadonlyMap<string, AiSessionSnapshot> = new Map()
-    private watchedSplits = new Set<SplitTabComponent>()
+    // weak: these are keyed by components that outlive nothing, and the
+    // dashboard is a long-lived tab — a strong reference here would pin every
+    // split and terminal the user has ever closed
+    private watchedSplits = new WeakSet<SplitTabComponent>()
     private iconCache = new Map<string, SafeHtml>()
     /** Only for panes whose profile carries no cwd — asked once per pane, never per render */
-    private liveCwdNames = new Map<TerminalTabComponent, string>()
+    private liveCwdNames = new WeakMap<TerminalTabComponent, string>()
     private cwdAsked = new WeakSet<TerminalTabComponent>()
     /** Outlives the rows: the timeline still names sessions whose tab is long gone */
     private sessionNames = new Map<string, string>()
@@ -143,13 +138,13 @@ export class DashboardTabComponent extends BaseTabComponent {
                         kind,
                         sessionId,
                         snapshot,
-                        state: snapshot?.state ?? (sessionId ? 'listening' : 'untracked'),
+                        state: displayStateFor({ snapshot, sessionId, runtimeDetected: false }),
                         runtimeDetected: this.runtimeDetector.isRuntimeDetected(pane) && !sessionId,
                     })
                 }
             }
         }
-        rows.sort((a, b) => STATE_RANK[a.state] - STATE_RANK[b.state])
+        rows.sort((a, b) => DISPLAY_STATE_RANK[a.state] - DISPLAY_STATE_RANK[b.state])
         this.rows = rows
         this.sessionPage = this.clampPage(this.sessionPage, this.sessionPageCount)
         for (const row of rows) {
@@ -158,12 +153,12 @@ export class DashboardTabComponent extends BaseTabComponent {
             }
         }
 
-        const counts = new Map<AiRowState, number>()
+        const counts = new Map<AiDisplayState, number>()
         for (const row of rows) {
             counts.set(row.state, (counts.get(row.state) ?? 0) + 1)
         }
         this.counters = [...counts.entries()]
-            .sort((a, b) => STATE_RANK[a[0]] - STATE_RANK[b[0]])
+            .sort((a, b) => DISPLAY_STATE_RANK[a[0]] - DISPLAY_STATE_RANK[b[0]])
             .map(([state, count]) => ({ state, count }))
     }
 
@@ -215,15 +210,8 @@ export class DashboardTabComponent extends BaseTabComponent {
         this.launchPage = this.clampPage(this.launchPage + delta, this.launchPageCount)
     }
 
-    stateLabel (state: AiRowState): string {
-        switch (state) {
-            case 'needs-you': return this.translate.instant('Needs you')
-            case 'working': return this.translate.instant('Working')
-            case 'idle': return this.translate.instant('Idle')
-            case 'listening': return this.translate.instant('Listening')
-            case 'error': return this.translate.instant('Error')
-            case 'untracked': return this.translate.instant('Untracked')
-        }
+    stateLabel (state: AiDisplayState): string {
+        return this.translate.instant(stateLabelKey(state))
     }
 
     /**
@@ -247,16 +235,8 @@ export class DashboardTabComponent extends BaseTabComponent {
 
     /** What the session last did — the hook event, high confidence */
     captionFor (row: AiSessionRow): string {
-        if (!row.snapshot) {
-            if (row.runtimeDetected) {
-                return this.translate.instant('Detected in terminal · event monitoring unavailable')
-            }
-            if (row.sessionId) {
-                return this.translate.instant('Event monitoring enabled · waiting for CLI activity')
-            }
-            return this.translate.instant('Launch only · no event monitoring yet')
-        }
-        return row.snapshot.lastEvent?.summary ?? ''
+        const caption = lastEventCaptionFor(row as SessionFacts)
+        return 'key' in caption ? this.translate.instant(caption.key) : caption.text
     }
 
     /** That it is still alive — the CLI's own status line, scraped, low confidence */

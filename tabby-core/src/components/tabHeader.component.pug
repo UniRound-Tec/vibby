@@ -49,8 +49,8 @@ profile-icon(
         button.ai-pane-close(
             *ngIf='!pane.pane.effectivelyPinned',
             type='button',
-            title='Close',
-            aria-label='Close',
+            [title]='"Close"|translate',
+            [attr.aria-label]='"Close"|translate',
             (click)='closeAiPane(pane.pane, $event)',
         ) &times;
 
