@@ -2,7 +2,10 @@ import { createParserConfig } from './cli'
 import { parse as parseShellCommand } from 'shell-quote'
 
 export function isTabbyURL (arg: string): boolean {
-    return arg.toLowerCase().startsWith('tabby://')
+    // vibby:// is the registered scheme; tabby:// links keep working when
+    // passed via the CLI or a second instance — parsing is scheme-agnostic
+    const lower = arg.toLowerCase()
+    return lower.startsWith('vibby://') || lower.startsWith('tabby://')
 }
 
 export function parseTabbyURL (url: string, cwd: string = process.cwd()): any {

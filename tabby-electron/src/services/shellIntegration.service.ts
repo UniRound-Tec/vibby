@@ -13,25 +13,35 @@ try {
 
 @Injectable({ providedIn: 'root' })
 export class ShellIntegrationService {
-    private automatorWorkflows = ['Open Tabby here.workflow', 'Paste path into Tabby.workflow']
+    private automatorWorkflows = ['Open Vibby here.workflow', 'Paste path into Vibby.workflow']
+    private legacyAutomatorWorkflows = ['Open Tabby here.workflow', 'Paste path into Tabby.workflow']
     private automatorWorkflowsLocation: string
     private automatorWorkflowsDestination: string
     private registryKeys = [
         {
-            path: 'Software\\Classes\\Directory\\Background\\shell\\Tabby',
-            value: 'Open Tabby here',
+            path: 'Software\\Classes\\Directory\\Background\\shell\\Vibby',
+            value: 'Open Vibby here',
             command: 'open "%V"',
         },
         {
-            path: 'SOFTWARE\\Classes\\Directory\\shell\\Tabby',
-            value: 'Open Tabby here',
+            path: 'SOFTWARE\\Classes\\Directory\\shell\\Vibby',
+            value: 'Open Vibby here',
             command: 'open "%V"',
         },
         {
-            path: 'Software\\Classes\\*\\shell\\Tabby',
-            value: 'Paste path into Tabby',
+            path: 'Software\\Classes\\*\\shell\\Vibby',
+            value: 'Paste path into Vibby',
             command: 'paste "%V"',
         },
+    ]
+
+    /** Keys written by earlier Tabby-branded builds, removed on install */
+    private legacyRegistryKeys = [
+        'Software\\Classes\\Directory\\Background\\shell\\Tabby',
+        'SOFTWARE\\Classes\\Directory\\shell\\Tabby',
+        'Software\\Classes\\*\\shell\\Tabby',
+        'Software\\Classes\\Directory\\Background\\shell\\Open Tabby here',
+        'Software\\Classes\\*\\shell\\Paste path into Tabby',
     ]
 
     private constructor (
@@ -74,18 +84,17 @@ export class ShellIntegrationService {
                 wnr.setRegistryValue(wnr.HK.CU, registryKey.path + '\\command', '', wnr.REG.SZ, exe + ' ' + registryKey.command)
             }
 
-            if (wnr.getRegistryKey(wnr.HK.CU, 'Software\\Classes\\Directory\\Background\\shell\\Open Tabby here')) {
-                wnr.deleteRegistryKey(wnr.HK.CU, 'Software\\Classes\\Directory\\Background\\shell\\Open Tabby here')
-            }
-            if (wnr.getRegistryKey(wnr.HK.CU, 'Software\\Classes\\*\\shell\\Paste path into Tabby')) {
-                wnr.deleteRegistryKey(wnr.HK.CU, 'Software\\Classes\\*\\shell\\Paste path into Tabby')
+            for (const legacyKey of this.legacyRegistryKeys) {
+                if (wnr.getRegistryKey(wnr.HK.CU, legacyKey)) {
+                    wnr.deleteRegistryKey(wnr.HK.CU, legacyKey)
+                }
             }
         }
     }
 
     async remove (): Promise<void> {
         if (this.hostApp.platform === Platform.macOS) {
-            for (const wf of this.automatorWorkflows) {
+            for (const wf of [...this.automatorWorkflows, ...this.legacyAutomatorWorkflows]) {
                 await execFile('rm', ['-rf', path.join(this.automatorWorkflowsDestination, wf)])
             }
         } else if (this.hostApp.platform === Platform.Windows) {
@@ -96,9 +105,12 @@ export class ShellIntegrationService {
     }
 
     private async updatePaths (): Promise<void> {
-        // Update paths in case of an update
+        // Update paths in case of an update. A leftover Tabby-branded key
+        // also counts as installed — installing over it migrates the user
+        // to the Vibby keys and cleans the old ones up.
         if (this.hostApp.platform === Platform.Windows) {
-            if (await this.isInstalled()) {
+            const hasLegacyKey = this.legacyRegistryKeys.some(key => !!wnr.getRegistryKey(wnr.HK.CU, key))
+            if (await this.isInstalled() || hasLegacyKey) {
                 await this.install()
             }
         }

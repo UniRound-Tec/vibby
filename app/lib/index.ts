@@ -34,13 +34,13 @@ process.mainModule = module
 
 const application = new Application(configStore)
 
-// Register tabby:// URL scheme
+// Register vibby:// URL scheme
 if (process.defaultApp) {
     if (process.argv.length >= 2) {
-        app.setAsDefaultProtocolClient('tabby', process.execPath, [process.argv[1]])
+        app.setAsDefaultProtocolClient('vibby', process.execPath, [process.argv[1]])
     }
 } else {
-    app.setAsDefaultProtocolClient('tabby')
+    app.setAsDefaultProtocolClient('vibby')
 }
 
 ipcMain.on('app:new-window', () => {

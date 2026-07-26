@@ -5,15 +5,29 @@ import { writeFile } from 'atomically'
 
 
 export const configPath = path.join(process.env.TABBY_CONFIG_DIRECTORY!, 'config.yaml')
-const legacyConfigPath = path.join(process.env.TABBY_CONFIG_DIRECTORY!, '../terminus', 'config.yaml')
 
+/**
+ * Earlier identities of this app, newest first. Copy-once only: a config
+ * that exists here is never overwritten, so a Vibby config that has since
+ * diverged from the old Tabby one cannot be clobbered by a leftover
+ * installation (the old mtime-wins rule did exactly that).
+ */
+const legacyConfigPaths = [
+    path.join(process.env.TABBY_CONFIG_DIRECTORY!, '../tabby', 'config.yaml'),
+    path.join(process.env.TABBY_CONFIG_DIRECTORY!, '../terminus', 'config.yaml'),
+]
 
 export function migrateConfig (): void {
-    if (fs.existsSync(legacyConfigPath) && (
-        !fs.existsSync(configPath) ||
-        fs.statSync(configPath).mtime < fs.statSync(legacyConfigPath).mtime
-    )) {
-        fs.writeFileSync(configPath, fs.readFileSync(legacyConfigPath))
+    if (fs.existsSync(configPath)) {
+        return
+    }
+    for (const legacyPath of legacyConfigPaths) {
+        if (fs.existsSync(legacyPath)) {
+            // first launch under the new identity — the directory may not exist yet
+            fs.mkdirSync(path.dirname(configPath), { recursive: true })
+            fs.writeFileSync(configPath, fs.readFileSync(legacyPath))
+            return
+        }
     }
 }
 

@@ -1,11 +1,11 @@
 {
-  "name": "tabby",
+  "name": "vibby",
   "description": "A terminal for a modern age",
   "private": true,
-  "repository": "https://github.com/Eugeny/tabby",
+  "repository": "https://github.com/UniRound-Tec/vibby",
   "author": {
-    "name": "Tabby Developers",
-    "email": "e@ajenti.org"
+    "name": "UniRound-Tec",
+    "email": "UniRound-Tec@users.noreply.github.com"
   },
   "main": "dist/main.js",
   "version": "1.0.0-alpha.1",

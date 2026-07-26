@@ -1,12 +1,12 @@
 ---
-appId: org.tabby
-productName: Tabby
+appId: org.vibby
+productName: Vibby
 compression: normal
 npmRebuild: false
 protocols:
-  - name: Tabby URL
+  - name: Vibby URL
     schemes:
-      - tabby
+      - vibby
 files:
 - '**/*'
 - dist
@@ -43,19 +43,19 @@ asarUnpack:
 - node_modules/**/*.node
 win:
   icon: "./build/windows/icon.ico"
-  artifactName: tabby-${version}-portable-${env.ARCH}.${ext}
+  artifactName: vibby-${version}-portable-${env.ARCH}.${ext}
   signtoolOptions:
     rfc3161TimeStampServer: http://timestamp.sectigo.com
 nsis:
   oneClick: false
-  artifactName: tabby-${version}-setup-${env.ARCH}.${ext}
+  artifactName: vibby-${version}-setup-${env.ARCH}.${ext}
   installerIcon: "./build/windows/icon.ico"
   allowToChangeInstallationDirectory: true
-  shortcutName: Tabby Terminal
+  shortcutName: Vibby
 mac:
   category: public.app-category.utilities
   icon: "./build/mac/icon.icns"
-  artifactName: tabby-${version}-macos-${env.ARCH}.${ext}
+  artifactName: vibby-${version}-macos-${env.ARCH}.${ext}
   hardenedRuntime: true
   entitlements: "./build/mac/entitlements.plist"
   entitlementsInherit: "./build/mac/entitlements.plist"
@@ -75,13 +75,13 @@ mac:
 linux:
   category: "Utility;TerminalEmulator;System"
   icon: "./build/icons"
-  artifactName: tabby-${version}-linux-${env.ARCH}.${ext}
+  artifactName: vibby-${version}-linux-${env.ARCH}.${ext}
   executableArgs:
   - "--no-sandbox"
   desktop:
     entry:
-      StartupWMClass: tabby
-      MimeType: x-scheme-handler/tabby
+      StartupWMClass: vibby
+      MimeType: x-scheme-handler/vibby
 snap:
   plugs:
   - default
@@ -95,9 +95,6 @@ deb:
   - libxtst6
   - libnss3
   afterInstall: build/linux/after-install.tpl
-  fpm:
-  - '--replaces'
-  - 'terminus-terminal'
 pacman:
   depends:
   - gnome-keyring
@@ -108,8 +105,6 @@ rpm:
   fpm:
   - '--rpm-rpmbuild-define'
   - '_build_id_links none'
-  - '--replaces'
-  - 'terminus-terminal'
 electronFuses:
   runAsNode: false
   enableNodeOptionsEnvironmentVariable: false
