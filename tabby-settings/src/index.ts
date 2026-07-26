@@ -58,7 +58,7 @@ import { HotkeySettingsTabProvider, WindowSettingsTabProvider, VaultSettingsTabP
         ShowSecretModalComponent,
     ],
 })
-export default class SettingsModule {
+export default class SettingsModule { // eslint-disable-line @typescript-eslint/no-extraneous-class
     constructor (
         app: AppService,
         hotkeys: HotkeysService,
