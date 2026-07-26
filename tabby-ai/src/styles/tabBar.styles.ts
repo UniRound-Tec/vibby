@@ -172,8 +172,11 @@ export function tabBarStyles ({ accent, collapsedClass, coverClass }: TabBarStyl
                    secondary foreground. That reads fine on a 38px strip of
                    chrome; in a rail this wide the tab list *is* the content,
                    so it opts back into the body colour and lets the individual
-                   rules below decide what gets dimmed. */
-                color: var(--bs-body-color);
+                   rules below decide what gets dimmed. !important because the
+                   theme's stylesheet is appended whenever a theme (re)applies —
+                   with equal specificity, whichever sheet lands later would
+                   win, and that order is a race this rule must not enter. */
+                color: var(--bs-body-color) !important;
             }
             /* ...except the theme dims the number to .4 from a selector deep
                enough that only !important reaches it */
@@ -201,13 +204,33 @@ export function tabBarStyles ({ accent, collapsedClass, coverClass }: TabBarStyl
                 left: 3px;
                 /* clear of the card below it, not sitting on its edge */
                 top: -19px;
+                z-index: 1;
+                /* the gap between label and rule; the opaque background is what
+                   clips the rule behind the text */
+                padding-right: 9px;
+                font-family: monospace;
                 font-size: 10px;
-                font-weight: 600;
+                font-weight: 700;
                 letter-spacing: .16em;
                 /* never inherit: the heading is not about the tab it hangs on,
-                   so it must not pick up that tab's active/dimmed colour */
-                color: var(--bs-body-color, currentColor);
-                opacity: .58;
+                   so it must not pick up that tab's active/dimmed colour.
+                   Dim via color-mix, not opacity — opacity would make the
+                   background translucent and let the rule show through. */
+                color: color-mix(in srgb, var(--bs-body-color, currentColor) 60%, transparent);
+                background: var(--theme-bg-more-2);
+                pointer-events: none;
+            }
+            /* the rule the label sits on — same device as the dashboard's
+               zone heads, so the rail and Home read as one system */
+            .content.tabs-on-left > .tab-bar tab-header[data-ai-group]::after,
+            .content.tabs-on-right > .tab-bar tab-header[data-ai-group]::after {
+                content: '';
+                position: absolute;
+                left: 3px;
+                right: 3px;
+                top: -14px;
+                height: 1px;
+                background: rgba(128, 128, 128, .2);
                 pointer-events: none;
             }
 
@@ -227,8 +250,18 @@ export function tabBarStyles ({ accent, collapsedClass, coverClass }: TabBarStyl
                 height: auto !important;
                 padding: 8px 10px !important;
                 margin-bottom: 8px;
-                background: rgba(128, 128, 128, .08);
-                border: 1px solid rgba(128, 128, 128, .18);
+                background: rgba(128, 128, 128, .06);
+                border: 1px solid rgba(128, 128, 128, .2);
+            }
+            /* the states a human has to act on get the dashboard's edge cue */
+            .content.tabs-on-left > .tab-bar tab-header:has(> .ai-state.needs-you),
+            .content.tabs-on-right > .tab-bar tab-header:has(> .ai-state.needs-you) {
+                box-shadow: inset 3px 0 0 var(--bs-yellow, #f0c674);
+                background: color-mix(in srgb, var(--bs-yellow, #f0c674) 5%, rgba(128, 128, 128, .06));
+            }
+            .content.tabs-on-left > .tab-bar tab-header:has(> .ai-state.error),
+            .content.tabs-on-right > .tab-bar tab-header:has(> .ai-state.error) {
+                box-shadow: inset 3px 0 0 var(--bs-red, #e06c75);
             }
             /* the card's own border carries the selection here — the leading
                bar would collide with it */
@@ -277,6 +310,8 @@ export function tabBarStyles ({ accent, collapsedClass, coverClass }: TabBarStyl
             }
             .ai-icon svg { width: 14px; height: 14px; display: block; }
 
+            /* a coloured state word with a dot, not a pill — the same voice
+               as the dashboard's process list */
             .content.tabs-on-left > .tab-bar .ai-state,
             .content.tabs-on-right > .tab-bar .ai-state {
                 grid-area: state;
@@ -284,10 +319,8 @@ export function tabBarStyles ({ accent, collapsedClass, coverClass }: TabBarStyl
                 align-items: center;
                 gap: 5px;
                 font-size: 10px;
+                font-weight: 600;
                 line-height: 1.7;
-                padding: 0 6px;
-                border-radius: 5px;
-                background: rgba(128, 128, 128, .18);
             }
             /* core's options/close overlay lands on the same corner as the chip;
                it wins on hover, the chip steps aside */
@@ -311,14 +344,14 @@ export function tabBarStyles ({ accent, collapsedClass, coverClass }: TabBarStyl
                 background: currentColor;
                 flex: none;
             }
-            .ai-state.working { color: var(--bs-blue, #61afef); background: color-mix(in srgb, var(--bs-blue, #61afef) 16%, transparent); }
-            .ai-state.idle { color: var(--bs-green, #98c379); background: color-mix(in srgb, var(--bs-green, #98c379) 16%, transparent); }
-            .ai-state.listening { color: var(--bs-blue, #61afef); background: color-mix(in srgb, var(--bs-blue, #61afef) 12%, transparent); }
-            .ai-state.error { color: var(--bs-red, #e06c75); background: color-mix(in srgb, var(--bs-red, #e06c75) 18%, transparent); }
+            .ai-state.working { color: var(--bs-blue, #61afef); }
+            .ai-state.idle { color: var(--bs-green, #98c379); }
+            .ai-state.listening { color: var(--bs-blue, #61afef); }
+            .ai-state.error { color: var(--bs-red, #e06c75); }
             .ai-state.untracked { color: var(--bs-body-color, currentColor); opacity: .78; }
-            .ai-state.needs-you {
-                color: var(--bs-yellow, #f0c674);
-                background: color-mix(in srgb, var(--bs-yellow, #f0c674) 20%, transparent);
+            .ai-state.needs-you { color: var(--bs-yellow, #f0c674); }
+            /* the dot breathes, the word holds still — blinking text is noise */
+            .ai-state.needs-you::before {
                 animation: vibby-dot-breathe 2.2s ease-in-out infinite;
             }
             .content.tabs-on-left > .tab-bar .ai-summary,
@@ -693,14 +726,19 @@ export function tabBarStyles ({ accent, collapsedClass, coverClass }: TabBarStyl
             ${collapsed} tab-header:hover .ai-state { opacity: 1; }
             ${collapsed} tab-header:hover .ai-state.untracked { opacity: .78; }
 
-            /* group headings have no room for a label — a rule says the same */
+            /* group headings have no room for a label — a rule says the same.
+               padding 0: the expanded label's right padding would push this
+               line past the right edge. The expanded ::after rule goes too —
+               ::before already is the rule here. */
             ${collapsed} tab-header[data-ai-group] { margin-top: 15px; }
+            ${collapsed} tab-header[data-ai-group]::after { display: none; }
             ${collapsed} tab-header[data-ai-group]::before {
                 content: '';
                 left: 5px;
                 right: 5px;
                 top: -8px;
                 height: 1px;
+                padding: 0;
                 background: rgba(128, 128, 128, .3);
                 opacity: 1;
             }
