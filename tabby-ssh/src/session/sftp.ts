@@ -112,7 +112,7 @@ export class SFTPSession {
 
     async upload (path: string, transfer: FileUpload): Promise<void> {
         this.logger.info('Uploading into', path)
-        const tempPath = path + '.tabby-upload'
+        const tempPath = path + '.vibby-upload'
         try {
             const handle = await this.open(tempPath, russh.OPEN_WRITE | russh.OPEN_CREATE)
             while (true) {
