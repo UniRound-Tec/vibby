@@ -30,6 +30,19 @@ export function isHookDirName (name: string): boolean {
 }
 
 /**
+ * The fixed name used before mkdtemp. Builds that used it left their settings
+ * files — each holding an ingress token, and world-readable on POSIX — behind
+ * with nothing to collect them, so the sweep takes this one too.
+ *
+ * Safe only in combination with holdsOnlyGeneratedFiles(): on POSIX this is
+ * exactly the name another local user could have created, which is what moving
+ * to mkdtemp was about. The contents decide, not the name.
+ */
+export function isLegacyHookDirName (name: string): boolean {
+    return name === HOOK_DIR_PREFIX
+}
+
+/**
  * Whether a directory's contents are all things we wrote. The name check alone
  * cannot rule out a collision, and the sweep is a recursive delete, so the
  * contents get a say before anything is removed.

@@ -272,20 +272,26 @@ export class ProfilesService {
                 // Recents are not a page of their own: they duplicate entries
                 // that live on the other pages, so they ride along on all of
                 // them and sort to the top via a negative weight.
-                let options: SelectorOption<void>[] = recentProfiles.map((p, i) => ({
-                    ...this.selectorOptionForProfile(p),
-                    group: this.translate.instant('Recent'),
-                    icon: 'fas fa-history',
-                    color: p.color ?? undefined,
-                    allPages: true,
-                    weight: i - (recentProfiles.length + 1),
-                    callback: async () => {
-                        if (p.id) {
-                            p = (await this.getProfiles()).find(x => x.id === p.id) ?? p
-                        }
-                        resolve(p)
-                    },
-                }))
+                let options: SelectorOption<void>[] = recentProfiles.map((p, i): SelectorOption<void> => {
+                    const option = this.selectorOptionForProfile<Profile, never>(p)
+                    return {
+                        ...option,
+                        group: this.translate.instant('Recent'),
+                        icon: 'fas fa-history',
+                        color: p.color ?? undefined,
+                        allPages: true,
+                        // same rule as the pages below: an executable path is
+                        // implementation detail, an address is an identifier
+                        description: this.profileSelectorDescription(p, option.description),
+                        weight: i - (recentProfiles.length + 1),
+                        callback: async () => {
+                            if (p.id) {
+                                p = (await this.getProfiles()).find(x => x.id === p.id) ?? p
+                            }
+                            resolve(p)
+                        },
+                    }
+                })
                 if (recentProfiles.length) {
                     options.push({
                         name: this.translate.instant('Clear recent profiles'),
@@ -328,11 +334,7 @@ export class ProfilesService {
                         group: undefined,
                         page: page.name,
                         pageOrder: page.order,
-                        // Executable paths are implementation detail. Connection
-                        // addresses and serial ports remain useful identifiers.
-                        description: p.type === 'ssh' || p.type === 'serial'
-                            ? option.description
-                            : undefined,
+                        description: this.profileSelectorDescription(p, option.description),
                         weight: p.isBuiltin ? 2 : 1,
                         callback: () => resolve(p),
                     }
@@ -383,6 +385,17 @@ export class ProfilesService {
                 reject(err)
             }
         })
+    }
+
+    /**
+     * Executable paths are implementation detail. Connection addresses and
+     * serial ports remain useful identifiers, so they stay.
+     */
+    private profileSelectorDescription (
+        profile: Pick<PartialProfile<Profile>, 'type'>,
+        description: string|undefined,
+    ): string|undefined {
+        return profile.type === 'ssh' || profile.type === 'serial' ? description : undefined
     }
 
     private profileSelectorPage (profile: Pick<PartialProfile<Profile>, 'type'|'name'>): { name: string, order: number } {

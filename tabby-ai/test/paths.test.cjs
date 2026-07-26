@@ -6,6 +6,7 @@ const {
     HOOK_DIR_PREFIX,
     SHIM_DIR_PREFIX,
     isHookDirName,
+    isLegacyHookDirName,
     isGeneratedPath,
     holdsOnlyGeneratedFiles,
     quoteCmd,
@@ -20,9 +21,15 @@ assert.equal(isHookDirName('vibby-hooks-000000'), true)
 assert.equal(isHookDirName('vibby-hooks-notes'), false, 'user directory sharing the prefix')
 assert.equal(isHookDirName('vibby-hooks-Ab3xY9/nested'), false)
 assert.equal(isHookDirName('vibby-hooks-'), false)
-assert.equal(isHookDirName('vibby-hooks'), false, 'the pre-mkdtemp fixed name is not ours to delete')
+assert.equal(isHookDirName('vibby-hooks'), false, 'the pre-mkdtemp fixed name is matched separately')
 assert.equal(isHookDirName('vibby-hooksomething'), false)
 assert.equal(isHookDirName('tmp'), false)
+
+// --- the pre-mkdtemp directory still gets collected, exactly and only it ---
+assert.equal(isLegacyHookDirName('vibby-hooks'), true)
+assert.equal(isLegacyHookDirName('vibby-hooks-Ab3xY9'), false, 'a current directory is not legacy')
+assert.equal(isLegacyHookDirName('vibby-hooks-notes'), false)
+assert.equal(isLegacyHookDirName('vibby-hooks2'), false)
 
 // --- contents check: the name alone never authorizes the recursive delete ---
 assert.equal(holdsOnlyGeneratedFiles([]), true, 'empty directory is ours to drop')

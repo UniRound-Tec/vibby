@@ -6,7 +6,9 @@ import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
-import { HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName } from '../paths'
+import {
+    HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName, isLegacyHookDirName,
+} from '../paths'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
@@ -355,7 +357,7 @@ export class ClaudeAdapterService {
     private cleanupStaleFiles (): void {
         const cutoff = Date.now() - 24 * 3600 * 1000
         for (const name of readDirOrEmpty(os.tmpdir())) {
-            if (!isHookDirName(name)) {
+            if (!isHookDirName(name) && !isLegacyHookDirName(name)) {
                 continue
             }
             const dir = path.join(os.tmpdir(), name)
