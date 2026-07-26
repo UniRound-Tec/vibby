@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core'
+import { auditTime } from 'rxjs'
 import { AppService, BaseTabComponent, SplitTabComponent, TranslateService } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
@@ -20,6 +21,7 @@ import { RuntimeCliChange, RuntimeCliDetectorService } from './runtimeCliDetecto
 @Injectable({ providedIn: 'root' })
 export class AiTabStateService {
     private watchedSplits = new WeakSet<SplitTabComponent>()
+    private labelCache = new Map<string, string>()
 
     constructor (
         private app: AppService,
@@ -30,9 +32,15 @@ export class AiTabStateService {
     ) { }
 
     activate (): void {
-        this.bus.snapshots$.subscribe(() => this.refresh())
+        // live-status scrapes tick sub-second while a session is working;
+        // the rail only needs to keep up at reading speed
+        this.bus.snapshots$.pipe(auditTime(250)).subscribe(() => this.refresh())
         this.app.tabsChanged$.subscribe(() => this.refresh())
         this.runtimeDetector.changed$.subscribe(change => this.onRuntimeChange(change))
+        this.translate.onLangChange.subscribe(() => {
+            this.labelCache.clear()
+            this.refresh()
+        })
         // the split wrapper's child is attached right after the tab is added,
         // so the AI check has to wait for the current frame to finish
         this.app.tabOpened$.subscribe(tab => setTimeout(() => this.groupTab(tab)))
@@ -73,8 +81,8 @@ export class AiTabStateService {
             const aiPanes = this.aiPanesOf(tab)
             const aiPane = aiPanes[0] ?? null
             const group = aiPane
-                ? this.translate.instant('AI sessions')
-                : this.translate.instant('Terminals')
+                ? this.label('AI sessions')
+                : this.label('Terminals')
             // label only where the group changes, so an interleaved tab order
             // still reads correctly instead of lying about what follows
             tab['aiGroup'] = group === previousGroup ? null : group
@@ -102,8 +110,9 @@ export class AiTabStateService {
             // an AI tab is a card even before its first event — a session that
             // never reports is exactly what the rail has to make visible
             const facts = this.factsFor(aiPane, kind, this.loudestSnapshot(tab))
-            tab['aiState'] = displayStateFor(facts)
-            tab['aiStateLabel'] = this.translate.instant(stateLabelKey(displayStateFor(facts)))
+            const state = displayStateFor(facts)
+            tab['aiState'] = state
+            tab['aiStateLabel'] = this.label(stateLabelKey(state))
             tab['aiSummary'] = this.caption(facts)
         }
     }
@@ -124,7 +133,21 @@ export class AiTabStateService {
 
     private caption (facts: SessionFacts): string|null {
         const caption = captionFor(facts)
-        return 'key' in caption ? this.translate.instant(caption.key) : caption.text || null
+        return 'key' in caption ? this.label(caption.key) : caption.text || null
+    }
+
+    /**
+     * refresh() runs per snapshot tick and its labels come from a small fixed
+     * set of keys — memoize instead of re-running ngx-translate interpolation
+     * for every tab on every tick.
+     */
+    private label (key: string): string {
+        let value = this.labelCache.get(key)
+        if (value === undefined) {
+            value = this.translate.instant(key)
+            this.labelCache.set(key, value!)
+        }
+        return value!
     }
 
     /** Every AI pane in the tab — split panes remain individually observable. */
@@ -154,14 +177,15 @@ export class AiTabStateService {
             pane.profile?.name ||
             pane.title
 
+        const state = displayStateFor(facts)
         return {
             pane,
             index: index + 1,
             name,
             icon: AI_CLI_REGISTRY.find(x => x.id === kind)?.icon ?? null,
             kind,
-            state: displayStateFor(facts),
-            stateLabel: this.translate.instant(stateLabelKey(displayStateFor(facts))),
+            state,
+            stateLabel: this.label(stateLabelKey(state)),
             summary: this.caption(facts),
         }
     }

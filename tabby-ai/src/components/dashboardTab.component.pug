@@ -48,12 +48,12 @@
                         span.chip-arrow ›
 
                     button.chip.cli-chip(
-                        *ngFor='let card of pagedCliCards',
+                        *ngFor='let card of pagedCliCards; trackBy: trackCard',
                         type='button',
                         [disabled]='!card.detected',
                         (click)='launchCard(card)',
                     )
-                        .glyph([innerHTML]='iconForKind(card.entry.id)')
+                        .glyph([innerHTML]='card.icon')
                         .chip-text
                             .nm {{card.entry.name}}
                             .sub
@@ -88,28 +88,28 @@
 
                     .proc-list(*ngIf='rows.length')
                         .prow(
-                            *ngFor='let row of pagedRows',
+                            *ngFor='let row of pagedRows; trackBy: trackRow',
                             [ngClass]='row.state',
                             (click)='focusRow(row)',
                             tabindex='0',
                             (keyup.enter)='focusRow(row)',
                         )
-                            .session-icon(*ngIf='iconForKind(row.kind)', [innerHTML]='iconForKind(row.kind)', [title]='row.kind')
+                            .session-icon(*ngIf='row.icon', [innerHTML]='row.icon', [title]='row.kind')
                             .stword
                                 span.state-dot
-                                span {{stateLabel(row.state)}}
+                                span {{row.stateLabel}}
                             .prow-main
                                 .prow-name
-                                    .name {{nameFor(row)}}
+                                    .name {{row.name}}
                                     button.rename(
                                         (click)='rename(row, $event)',
                                         [attr.aria-label]='"Rename" | translate',
                                         [title]='"Rename" | translate',
                                     ) ✎
                                 .prow-caption
-                                    .act {{captionFor(row)}}
-                                    .live(*ngIf='liveFor(row)') {{liveFor(row)}}
-                            .dur {{durationFor(row)}}
+                                    .act {{row.caption}}
+                                    .live(*ngIf='row.live') {{row.live}}
+                            .dur {{row.duration}}
 
                     .empty.session-empty(*ngIf='!rows.length')
                         span(translate) No running AI sessions — pick a CLI above to start one.
@@ -136,14 +136,14 @@
                             ) ›
 
                     .logbox(*ngIf='recent.length')
-                        .tl-row(*ngFor='let event of pagedRecent')
-                            span.t {{feedTime(event)}}
-                            span.dot([ngClass]='dotFor(event)')
+                        .tl-row(*ngFor='let row of pagedRecent; trackBy: trackEventRow')
+                            span.t {{row.time}}
+                            span.dot([ngClass]='row.dot')
                             .tl-content
                                 .tl-meta
-                                    span.who {{sessionNameFor(event.sessionId)}}
-                                    span.kind {{kindLabel(event.kind)}}
-                                .sum {{event.summary}}
+                                    span.who {{row.who}}
+                                    span.kind {{row.kindLabel}}
+                                .sum {{row.event.summary}}
 
                     .empty.activity-empty(*ngIf='!recent.length')
                         span(translate) Nothing has happened yet.
@@ -160,9 +160,9 @@ footer.statusline
         span.seg(*ngIf='monitoredSessionCount')
             strong {{monitoredSessionCount}}
             span(translate) Full monitoring
-        span.seg.state([ngClass]='c.state', *ngFor='let c of counters')
+        span.seg.state([ngClass]='c.state', *ngFor='let c of counters; trackBy: trackCounter')
             span.dot(aria-hidden='true')
-            span {{c.count}} {{stateLabel(c.state)}}
+            span {{c.count}} {{c.label}}
     .status-right
         span.status-label(translate) Tabs location
         .mini-segmented
