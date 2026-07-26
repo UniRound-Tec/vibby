@@ -223,6 +223,7 @@ export class ClaudeAdapterService {
             this.shimInstallations.get(tab)?.remove()
             this.panes.delete(sessionId)
             this.lastStatus.delete(sessionId)
+            this.stopScraperIfIdle()
             this.zone.run(() => this.bus.dropSession(sessionId))
         })
     }
@@ -248,7 +249,20 @@ export class ClaudeAdapterService {
         })
     }
 
+    /** The last monitored pane is gone — nothing left to read */
+    private stopScraperIfIdle (): void {
+        if (this.scraper && this.panes.size === 0) {
+            clearInterval(this.scraper)
+            this.scraper = null
+        }
+    }
+
     private scrapeOnce (): void {
+        // the caption is cosmetic and the screen is not being painted; state
+        // still arrives over the hook channel, so notifications keep working
+        if (document.hidden) {
+            return
+        }
         for (const [sessionId, pane] of this.panes) {
             if (this.bus.snapshotFor(sessionId)?.state !== 'working') {
                 continue

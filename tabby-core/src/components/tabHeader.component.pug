@@ -32,7 +32,7 @@ profile-icon(
 .ai-summary(*ngIf='tab["aiSummary"]') {{tab["aiSummary"]}}
 .ai-pane-list(*ngIf='tab["aiPanes"]?.length > 1')
     .ai-pane(
-        *ngFor='let pane of tab["aiPanes"]',
+        *ngFor='let pane of tab["aiPanes"]; trackBy: aiPaneTrackBy',
         role='button',
         tabindex='0',
         [class.active]='isAiPaneFocused(pane.pane)',

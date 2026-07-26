@@ -64,6 +64,14 @@ export class AppService {
 
     private completionObservers = new Map<BaseTabComponent, CompletionObserver>()
 
+    /**
+     * 1-based position among tabs that carry a number, rebuilt whenever the tab
+     * list changes. Every tab header reads its own number during change
+     * detection, so this cannot be a scan — it used to be a filter plus an
+     * indexOf per header per cycle.
+     */
+    private displayIndices = new Map<BaseTabComponent, number>()
+
     get activeTabChange$ (): Observable<BaseTabComponent|null> { return this.activeTabChange }
     get tabOpened$ (): Observable<BaseTabComponent> { return this.tabOpened }
     get tabsChanged$ (): Observable<void> { return this.tabsChanged }
@@ -85,7 +93,10 @@ export class AppService {
         private ngbModal: NgbModal,
         @Inject(BOOTSTRAP_DATA) private bootstrapData: BootstrapData,
     ) {
+        // registered before any component subscribes, so headers rendering in
+        // response to the same emission already see fresh numbers
         this.tabsChanged$.subscribe(() => {
+            this.rebuildDisplayIndices()
             this.recoveryStateChangedHint.next()
         })
 
@@ -412,6 +423,29 @@ export class AppService {
     /** @hidden */
     emitTabsChanged (): void {
         this.tabsChanged.next()
+    }
+
+    /**
+     * Tabs that take part in numbering. Mini headers (vibby's pinned Home tab)
+     * are excluded so they do not consume a number the user could type.
+     */
+    get numberedTabs (): BaseTabComponent[] {
+        return this.tabs.filter(tab => !tab['miniHeader'])
+    }
+
+    /** 1-based tab number, or 0 for a tab that does not carry one */
+    getDisplayIndex (tab: BaseTabComponent): number {
+        return this.displayIndices.get(tab) ?? 0
+    }
+
+    private rebuildDisplayIndices (): void {
+        this.displayIndices.clear()
+        let index = 0
+        for (const tab of this.tabs) {
+            if (!tab['miniHeader']) {
+                this.displayIndices.set(tab, ++index)
+            }
+        }
     }
 
     async closeTab (tab: BaseTabComponent, checkCanClose?: boolean, ignorePinned = false): Promise<void> {

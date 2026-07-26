@@ -9,6 +9,17 @@ import { AI_CLI_REGISTRY } from '../registry'
 const POLL_INTERVAL_MS = 1200
 const EXECUTABLE_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1|sh|js|mjs|cjs|py)$/i
 
+/**
+ * Reading a pane's process tree is not free — on Windows it walks every
+ * process and reads its command line out of the PEB. A pane whose answer keeps
+ * coming back the same is asked less often: every tick, then every 2nd, up to
+ * every 4th (~4.8s). Any change, and it goes back to the fast lane.
+ */
+const MAX_BACKOFF = 4
+
+/** Consecutive unchanged scans before the interval widens one step */
+const STABLE_SCANS_PER_STEP = 4
+
 export interface RuntimeCliChange {
     pane: TerminalTabComponent
     kind: string|null
@@ -27,6 +38,9 @@ export class RuntimeCliDetectorService {
     private detectedPanes = new Set<TerminalTabComponent>()
     private timer: any = null
     private scanPending = false
+    private tick = 0
+    /** Consecutive scans in which this pane reported the same thing */
+    private stableScans = new WeakMap<TerminalTabComponent, number>()
 
     constructor (
         private app: AppService,
@@ -55,14 +69,21 @@ export class RuntimeCliDetectorService {
     }
 
     private async scan (): Promise<void> {
-        if (this.scanPending) {
+        if (this.scanPending || document.hidden) {
             return
         }
         this.scanPending = true
+        this.tick++
         try {
             const panes = this.localPanes().filter(pane => pane.profile?.type !== 'ai-cli' && !!pane.session)
             const current = new Set(panes)
-            await Promise.all(panes.map(pane => this.scanPane(pane)))
+            // the pane the user is looking at never backs off — starting a CLI
+            // in it should light the rail up now, not up to five seconds later
+            const foreground = new Set(this.app.activeTab ? this.panesOf(this.app.activeTab) : [])
+            await Promise.all(
+                panes.filter(pane => foreground.has(pane) || this.isDue(pane))
+                    .map(pane => this.scanPane(pane)),
+            )
             for (const pane of [...this.detectedPanes]) {
                 if (!current.has(pane)) {
                     this.update(pane, null)
@@ -71,6 +92,13 @@ export class RuntimeCliDetectorService {
         } finally {
             this.scanPending = false
         }
+    }
+
+    /** Backoff gate: a pane that keeps answering the same is skipped on most ticks */
+    private isDue (pane: TerminalTabComponent): boolean {
+        const stable = this.stableScans.get(pane) ?? 0
+        const stride = Math.min(MAX_BACKOFF, 1 + Math.floor(stable / STABLE_SCANS_PER_STEP))
+        return this.tick % stride === 0
     }
 
     private async scanPane (pane: TerminalTabComponent): Promise<void> {
@@ -113,8 +141,10 @@ export class RuntimeCliDetectorService {
     private update (pane: TerminalTabComponent, kind: string|null): void {
         const previous = this.runtimeKinds.get(pane) ?? null
         if (previous === kind) {
+            this.stableScans.set(pane, (this.stableScans.get(pane) ?? 0) + 1)
             return
         }
+        this.stableScans.set(pane, 0)
         if (kind) {
             this.runtimeKinds.set(pane, kind)
             this.detectedPanes.add(pane)

@@ -32,7 +32,7 @@ export class TabHeaderComponent extends BaseComponent {
 
     /** Position among non-mini tabs — mini (dashboard) tabs don't consume numbers */
     get displayIndex (): number {
-        return this.app.tabs.filter(t => !t['miniHeader']).indexOf(this.tab) + 1
+        return this.app.getDisplayIndex(this.tab)
     }
 
     constructor (
@@ -97,6 +97,17 @@ export class TabHeaderComponent extends BaseComponent {
             this.app.emitTabDragEnded()
             this.app.emitTabsChanged()
         })
+    }
+
+    /**
+     * AiTabStateService rebuilds these cards from scratch on every refresh, and
+     * a working session refreshes about once a second (its status line counts
+     * elapsed time). Without an identity to track, Angular tears down and
+     * recreates every row each time, which drops hover and flickers the close
+     * button. The pane component is the one thing that stays put.
+     */
+    aiPaneTrackBy (_index: number, card: { pane: BaseTabComponent }): BaseTabComponent {
+        return card.pane
     }
 
     focusAiPane (pane: BaseTabComponent, event: Event): void {
