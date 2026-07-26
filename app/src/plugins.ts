@@ -228,35 +228,29 @@ export async function findPlugins (): Promise<PluginInfo[]> {
 
 export async function loadPlugins (foundPlugins: PluginInfo[], progress: ProgressCallback): Promise<any[]> {
     const plugins: any[] = []
-    const pluginsPromises: Promise<any>[] = []
 
     let index = 0
-    const setProgress = function () {
-        index++
-        progress(index, foundPlugins.length)
-    }
-
     progress(0, 1)
     for (const foundPlugin of foundPlugins) {
-        pluginsPromises.push(new Promise(x => {
-            console.info(`Loading ${foundPlugin.name}: ${nodeRequire.resolve(foundPlugin.path)}`)
-            try {
-                const packageModule = nodeRequire(foundPlugin.path)
-                if (foundPlugin.packageName.startsWith('tabby-')) {
-                    cachedBuiltinModules[foundPlugin.packageName.replace('tabby-', 'terminus-')] = packageModule
-                }
-                const pluginModule = packageModule.default.forRoot ? packageModule.default.forRoot() : packageModule.default
-                pluginModule.pluginName = foundPlugin.name
-                pluginModule.bootstrap = packageModule.bootstrap
-                plugins.push(pluginModule)
-            } catch (error) {
-                console.error(`Could not load ${foundPlugin.name}:`, error)
+        console.info(`Loading ${foundPlugin.name}: ${nodeRequire.resolve(foundPlugin.path)}`)
+        try {
+            const packageModule = nodeRequire(foundPlugin.path)
+            if (foundPlugin.packageName.startsWith('tabby-')) {
+                cachedBuiltinModules[foundPlugin.packageName.replace('tabby-', 'terminus-')] = packageModule
             }
-            setProgress()
-            setTimeout(x, 50)
-        }))
+            const pluginModule = packageModule.default.forRoot ? packageModule.default.forRoot() : packageModule.default
+            pluginModule.pluginName = foundPlugin.name
+            pluginModule.bootstrap = packageModule.bootstrap
+            plugins.push(pluginModule)
+        } catch (error) {
+            console.error(`Could not load ${foundPlugin.name}:`, error)
+        }
+        index++
+        progress(index, foundPlugins.length)
+        // one macrotask between requires, so the splash progress bar can
+        // actually paint — no fixed delay
+        await new Promise(x => setTimeout(x))
     }
-    await Promise.all(pluginsPromises)
 
     progress(1, 1)
     return plugins
