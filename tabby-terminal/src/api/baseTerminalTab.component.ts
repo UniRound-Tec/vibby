@@ -161,6 +161,8 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
     }, 1000)
 
     private frontendWriteLock = Promise.resolve()
+    /** Mirror of the last progress pushed from output detection, to skip redundant per-chunk updates */
+    private lastDetectedProgress: number|null = null
 
     get input$ (): Observable<Buffer> {
         if (!this.frontend) {
@@ -211,6 +213,12 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
 
         this.logger = this.log.create('baseTerminalTab')
         this.setTitle(this.translate.instant('Terminal'))
+
+        // keep the dedupe mirror honest when someone else changes the
+        // progress (e.g. the base tab's 5s auto-clear)
+        this.subscribeUntilDestroyed(this.progress$, progress => {
+            this.lastDetectedProgress = progress
+        })
 
         this.subscribeUntilDestroyed(this.hotkeys.unfilteredHotkey$, async hotkey => {
             if (!this.hasFocus) {
@@ -423,7 +431,11 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
 
         setTimeout(() => {
             this.binaryOutput$.subscribe(() => {
-                this.displayActivity()
+                // emissions arrive outside the Angular zone; only the first
+                // one after clearActivity needs to reach the tab header
+                if (!this.hasActivity) {
+                    this.zone.run(() => this.displayActivity())
+                }
             })
         }, 1000)
 
@@ -506,18 +518,31 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
         }
 
         if (this.config.store.terminal.detectProgress) {
-            const percentageMatch = /(^|[^\d])(\d+(\.\d+)?)%([^\d]|$)/.exec(data)
-            if (!this.alternateScreenActive && percentageMatch) {
+            // cheap containment check first — most chunks have no percentage,
+            // and this runs for every chunk of output
+            const percentageMatch = !this.alternateScreenActive && data.includes('%')
+                ? /(^|[^\d])(\d+(\.\d+)?)%([^\d]|$)/.exec(data)
+                : null
+            if (percentageMatch) {
                 const percentage = percentageMatch[3] ? parseFloat(percentageMatch[2]) : parseInt(percentageMatch[2])
                 if (percentage > 0 && percentage <= 100) {
-                    this.setProgress(percentage)
+                    this.updateDetectedProgress(percentage)
                 }
             } else {
-                this.setProgress(null)
+                this.updateDetectedProgress(null)
             }
         }
 
         await this.frontend.write(data)
+    }
+
+    private updateDetectedProgress (progress: number|null): void {
+        if (progress !== this.lastDetectedProgress) {
+            this.lastDetectedProgress = progress
+            // writeRaw runs outside the Angular zone; the tab header needs
+            // change detection to show the new value
+            this.zone.run(() => this.setProgress(progress))
+        }
     }
 
     async paste (): Promise<void> {
@@ -802,14 +827,21 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
         // this.session.output$.bufferTime(10).subscribe((datas) => {
         this.attachSessionHandler(this.session.output$, data => {
             if (this.enablePassthrough) {
-                this.output.next(data)
-                this.write(data)
+                // the frontend write chain must not run as Angular zone
+                // tasks — during bulk output every chunk would otherwise
+                // schedule a full change detection pass
+                this.zone.runOutsideAngular(() => {
+                    this.output.next(data)
+                    this.write(data)
+                })
             }
         })
 
         this.attachSessionHandler(this.session.binaryOutput$, data => {
             if (this.enablePassthrough) {
-                this.binaryOutput.next(data)
+                this.zone.runOutsideAngular(() => {
+                    this.binaryOutput.next(data)
+                })
             }
         })
 

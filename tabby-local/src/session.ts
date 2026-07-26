@@ -27,6 +27,7 @@ function mergeEnv (...envs) {
 export class Session extends BaseSession {
     private pty: PTYProxy|null = null
     private ptyClosed = false
+    private lastCWDGuess = 0
     private pauseAfterExit = false
     private guessedCWD: string|null = null
     private initialCWD: string|null = null
@@ -129,7 +130,15 @@ export class Session extends BaseSession {
             this.pty!.ackData(array.length)
             const data = Buffer.from(array)
             this.emitOutput(data)
-            if (this.hostApp.platform === Platform.Windows) {
+            // decoding + regexing every chunk is pure overhead during bulk
+            // output; the guess is only a fallback for when the shell never
+            // reports its CWD via OSC, and sampling twice a second is plenty
+            if (
+                this.hostApp.platform === Platform.Windows &&
+                !this.reportedCWD &&
+                Date.now() - this.lastCWDGuess > 500
+            ) {
+                this.lastCWDGuess = Date.now()
                 this.guessWindowsCWD(data.toString())
             }
         })
