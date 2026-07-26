@@ -47,3 +47,19 @@ export function isGeneratedPath (value: string): boolean {
     return isHookDirName(path.basename(path.dirname(value))) ||
         path.basename(value).startsWith(SHIM_DIR_PREFIX)
 }
+
+/**
+ * Quote a value for a generated .cmd wrapper.
+ *
+ * `%%` as well as the doubled quotes: cmd expands `%VAR%` when it runs the
+ * batch file, so an unescaped percent sign in a path or argument arrives
+ * mangled — or, for an undefined name, silently empty.
+ */
+export function quoteCmd (value: string): string {
+    return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`
+}
+
+/** Quote a value for a generated /bin/sh wrapper */
+export function quoteSh (value: string): string {
+    return `'${value.replace(/'/g, `'\\''`)}'`
+}

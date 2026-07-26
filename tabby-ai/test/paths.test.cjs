@@ -8,6 +8,8 @@ const {
     isHookDirName,
     isGeneratedPath,
     holdsOnlyGeneratedFiles,
+    quoteCmd,
+    quoteSh,
 } = require('../.test-build/paths.js')
 
 // --- hook directory names: exactly the shape mkdtemp produces ---
@@ -48,5 +50,28 @@ assert.equal(SHIM_DIR_PREFIX, 'vibby-cli-')
 // arm() strips stale `--settings` args by substring-matching this prefix, so a
 // real mkdtemp path has to contain it
 assert.ok(path.join('/tmp', 'vibby-hooks-Ab3xY9', '1-uuid.json').includes(HOOK_DIR_PREFIX))
+
+// --- shim quoting: these strings end up in a generated .cmd / .sh wrapper ---
+assert.equal(quoteCmd('C:\\Program Files\\nodejs\\claude.cmd'), '"C:\\Program Files\\nodejs\\claude.cmd"')
+// cmd expands %VAR% while running the batch file, so percent signs must double
+assert.equal(quoteCmd('C:\\100%\\claude.cmd'), '"C:\\100%%\\claude.cmd"')
+assert.equal(quoteCmd('%USERPROFILE%'), '"%%USERPROFILE%%"', 'must not resolve at run time')
+assert.equal(quoteCmd('say "hi"'), '"say ""hi"""')
+// a hook settings path is the realistic argument, and it holds no metacharacters
+assert.equal(
+    quoteCmd('C:\\Temp\\vibby-hooks-Ab3xY9\\1234-uuid.json'),
+    '"C:\\Temp\\vibby-hooks-Ab3xY9\\1234-uuid.json"',
+)
+
+assert.equal(quoteSh('/usr/local/bin/claude'), "'/usr/local/bin/claude'")
+assert.equal(quoteSh("it's"), "'it'\\''s'", 'single quotes close and reopen')
+// the sh wrapper is not a batch file, so percent is an ordinary character
+assert.equal(quoteSh('/tmp/100%/claude'), "'/tmp/100%/claude'")
+// nothing a shell would act on survives the quoting
+for (const hostile of ['$(whoami)', '`id`', 'a; rm -rf /', 'a && b', '$HOME']) {
+    const quoted = quoteSh(hostile)
+    assert.ok(quoted.startsWith("'") && quoted.endsWith("'"), hostile)
+    assert.ok(!quoted.slice(1, -1).includes("'"), `${hostile} must not break out of the quotes`)
+}
 
 console.log('paths.test.cjs: all assertions passed')

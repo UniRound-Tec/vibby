@@ -4,7 +4,7 @@ import { Injectable } from '@angular/core'
 import { TerminalTabComponent } from 'tabby-local'
 
 import { DetectedCli } from '../api'
-import { isGeneratedPath } from '../paths'
+import { isGeneratedPath, quoteCmd, quoteSh } from '../paths'
 
 const WINDOWS = process.platform === 'win32'
 
@@ -57,8 +57,8 @@ export class TerminalCliShimService {
     }
 
     private windowsWrapper (detected: DetectedCli, args: string[]): string {
-        const command = this.quoteCmd(detected.command)
-        const forwarded = args.map(arg => this.quoteCmd(arg)).join(' ')
+        const command = quoteCmd(detected.command)
+        const forwarded = args.map(arg => quoteCmd(arg)).join(' ')
         const invocation = detected.launcher === 'cmd'
             ? `call ${command} ${forwarded} %*`
             : detected.launcher === 'ps1'
@@ -69,23 +69,10 @@ export class TerminalCliShimService {
 
     private posixWrapper (detected: DetectedCli, args: string[]): string {
         const invocation = [
-            this.quoteSh(detected.command),
-            ...args.map(arg => this.quoteSh(arg)),
+            quoteSh(detected.command),
+            ...args.map(arg => quoteSh(arg)),
             '"$@"',
         ].join(' ')
         return `#!/bin/sh\nexec ${invocation}\n`
-    }
-
-    /**
-     * `%%` as well as the quotes: cmd expands `%VAR%` when it runs the batch
-     * file, so a path or argument containing a percent sign would arrive
-     * mangled — or empty — without doubling it.
-     */
-    private quoteCmd (value: string): string {
-        return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`
-    }
-
-    private quoteSh (value: string): string {
-        return `'${value.replace(/'/g, `'\\''`)}'`
     }
 }
