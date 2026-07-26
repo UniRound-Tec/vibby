@@ -84,7 +84,7 @@ export class HookIngressService {
             res.statusCode = 200
             res.end()
 
-            let payload: unknown
+            let payload: unknown = null
             try {
                 payload = JSON.parse(Buffer.concat(chunks).toString('utf8'))
             } catch {

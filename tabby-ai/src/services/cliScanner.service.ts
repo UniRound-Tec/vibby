@@ -12,6 +12,57 @@ const WINDOWS = process.platform === 'win32'
 const PROBE_TIMEOUT = 2000
 const SCAN_TIMEOUT = 5000
 
+export function launcherFor (file: string): AiCliLauncher {
+    const ext = path.extname(file).toLowerCase()
+    if (ext === '.cmd' || ext === '.bat') {
+        return 'cmd'
+    }
+    if (ext === '.ps1') {
+        return 'ps1'
+    }
+    if (ext === '.exe') {
+        return 'exe'
+    }
+    return WINDOWS ? 'exe' : 'sh'
+}
+
+/** Platform launch wrapping — npm shims on Windows cannot be spawned directly (spec §5) */
+export function wrapCommand (command: string, args: string[], launcher: AiCliLauncher): { command: string, args: string[] } {
+    if (launcher === 'cmd') {
+        return { command: 'cmd.exe', args: ['/c', command, ...args] }
+    }
+    if (launcher === 'ps1') {
+        return { command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', command, ...args] }
+    }
+    return { command, args }
+}
+
+function killTree (pid: number|undefined): void {
+    if (!pid) {
+        return
+    }
+    if (WINDOWS) {
+        spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true })
+    } else {
+        try {
+            process.kill(-pid, 'SIGKILL')
+        } catch {
+            try {
+                process.kill(pid, 'SIGKILL')
+            } catch { }
+        }
+    }
+}
+
+async function exists (p: string): Promise<boolean> {
+    try {
+        await fs.access(p)
+        return true
+    } catch {
+        return false
+    }
+}
+
 @Injectable({ providedIn: 'root' })
 export class CliScannerService {
     get scanResults$ (): Observable<DetectedCli[]> { return this.results }
@@ -59,7 +110,7 @@ export class CliScannerService {
                 SCAN_TIMEOUT,
                 [] as (DetectedCli|null)[],
             )
-            const found = (detections ?? []).filter((x): x is DetectedCli => !!x)
+            const found = detections.filter((x): x is DetectedCli => !!x)
             this.logger.info(`Scan complete: ${found.map(x => `${x.entry.id}@${x.version ?? '?'}`).join(', ') || 'none found'}`)
             this.results.next(found)
             return found
@@ -147,20 +198,23 @@ export class CliScannerService {
     private runCaptured (cmd: { command: string, args: string[] }, timeout: number): Promise<string|null> {
         return new Promise(resolve => {
             let output = ''
-            let done = false
             const child = spawn(cmd.command, cmd.args, {
                 windowsHide: true,
                 detached: !WINDOWS,
                 stdio: ['ignore', 'pipe', 'pipe'],
             })
+            // holder rather than two bare locals: `finish` has to clear the
+            // timer that is only armed after `finish` itself is defined
+            const pending: { done: boolean, timer?: ReturnType<typeof setTimeout> } = { done: false }
             const finish = (result: string|null) => {
-                if (!done) {
-                    done = true
-                    clearTimeout(timer)
-                    resolve(result)
+                if (pending.done) {
+                    return
                 }
+                pending.done = true
+                clearTimeout(pending.timer)
+                resolve(result)
             }
-            const timer = setTimeout(() => {
+            pending.timer = setTimeout(() => {
                 killTree(child.pid)
                 finish(null)
             }, timeout)
@@ -179,53 +233,3 @@ export class CliScannerService {
     }
 }
 
-export function launcherFor (file: string): AiCliLauncher {
-    const ext = path.extname(file).toLowerCase()
-    if (ext === '.cmd' || ext === '.bat') {
-        return 'cmd'
-    }
-    if (ext === '.ps1') {
-        return 'ps1'
-    }
-    if (ext === '.exe') {
-        return 'exe'
-    }
-    return WINDOWS ? 'exe' : 'sh'
-}
-
-/** Platform launch wrapping — npm shims on Windows cannot be spawned directly (spec §5) */
-export function wrapCommand (command: string, args: string[], launcher: AiCliLauncher): { command: string, args: string[] } {
-    if (launcher === 'cmd') {
-        return { command: 'cmd.exe', args: ['/c', command, ...args] }
-    }
-    if (launcher === 'ps1') {
-        return { command: 'powershell.exe', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', command, ...args] }
-    }
-    return { command, args }
-}
-
-function killTree (pid: number|undefined): void {
-    if (!pid) {
-        return
-    }
-    if (WINDOWS) {
-        spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true })
-    } else {
-        try {
-            process.kill(-pid, 'SIGKILL')
-        } catch {
-            try {
-                process.kill(pid, 'SIGKILL')
-            } catch { }
-        }
-    }
-}
-
-async function exists (p: string): Promise<boolean> {
-    try {
-        await fs.access(p)
-        return true
-    } catch {
-        return false
-    }
-}
