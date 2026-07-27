@@ -7,6 +7,7 @@ import { BehaviorSubject, Observable } from 'rxjs'
 import { ConfigService, LogService, Logger } from 'tabby-core'
 import { AI_CLI_REGISTRY } from '../registry'
 import { AiCliLauncher, AiCliRegistryEntry, DetectedCli } from '../api'
+import { selectLookupResult } from '../binaryResolution'
 
 const WINDOWS = process.platform === 'win32'
 const PROBE_TIMEOUT = 2000
@@ -207,7 +208,7 @@ export class CliScannerService {
                 (err, stdout) => resolve(err ? null : stdout),
             )
         })
-        return output?.split(/\r?\n/).map(x => x.trim()).find(x => x) ?? null
+        return selectLookupResult(output, WINDOWS)
     }
 
     /**
