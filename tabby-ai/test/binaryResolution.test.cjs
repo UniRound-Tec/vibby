@@ -24,6 +24,14 @@ assert.equal(
     'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\codex.cmd',
     'a later standalone CLI remains selectable',
 )
+assert.equal(
+    selectLookupResult([
+        'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\gemini',
+        'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\gemini.cmd',
+    ].join('\r\n'), true),
+    'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\gemini.cmd',
+    'Windows npm command shims take precedence over extensionless shell scripts',
+)
 
 const registryOutput = [
     '',

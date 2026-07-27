@@ -8,6 +8,7 @@ import { ConfigService, LogService, Logger } from 'tabby-core'
 import { AI_CLI_REGISTRY } from '../registry'
 import { AiCliLauncher, AiCliRegistryEntry, DetectedCli } from '../api'
 import { mergeWindowsPath, parseWindowsRegistryPath, selectLookupResult } from '../binaryResolution'
+import { scanResultForProfiles } from '../scanLifecycle'
 
 const WINDOWS = process.platform === 'win32'
 const PROBE_TIMEOUT = 2000
@@ -86,9 +87,9 @@ export class CliScannerService {
         this.logger = log.create('aiCliScanner')
     }
 
-    /** Resolves once the first scan has completed; starts one if needed */
+    /** Returns the active/latest scan, starting the first one when needed. */
     ensureScanned (): Promise<DetectedCli[]> {
-        return this.firstScan ?? this.scan()
+        return scanResultForProfiles(this.currentScan, this.firstScan, this.results.value, () => this.scan())
     }
 
     /**

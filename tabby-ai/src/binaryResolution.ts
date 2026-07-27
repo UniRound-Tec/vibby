@@ -12,7 +12,12 @@ function isPackagedAppInternalResource (candidate: string): boolean {
  */
 export function selectLookupResult (output: string|null, windows = false): string|null {
     const candidates = output?.split(/\r?\n/).map(x => x.trim()).filter(x => x) ?? []
-    return candidates.find(candidate => !windows || !isPackagedAppInternalResource(candidate)) ?? null
+    const usable = candidates.filter(candidate => !windows || !isPackagedAppInternalResource(candidate))
+    if (windows) {
+        const preferred = usable.find(candidate => /\.(?:exe|cmd|bat|ps1)$/i.test(candidate))
+        return preferred ?? (usable.length ? usable[0] : null)
+    }
+    return usable.length ? usable[0] : null
 }
 
 /** Extracts the current-user PATH from `reg.exe query HKCU\Environment /v Path`. */
