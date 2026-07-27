@@ -132,3 +132,34 @@ export function reduceSnapshot (prev: AiSessionSnapshot | null, event: AiEvent):
 export function isAttentionTransition (prev: AiSessionState | null, next: AiSessionState): boolean {
     return prev === 'working' && next !== 'working'
 }
+
+/** Consecutive spinner-less polls before a working session is called finished. */
+export const SPINNER_MISSES_TO_END_TURN = 4
+
+/** ...and how long the hook channel must also have been silent. */
+export const SPINNER_QUIET_MS_TO_END_TURN = 5000
+
+/**
+ * Has a scraped session stopped working without saying so?
+ *
+ * Nothing leaves `working` except an incoming event, and hook delivery is
+ * best-effort: each one is a `curl` the CLI fires and forgets, so a timeout or a
+ * failed spawn loses it silently. Losing the terminating event strands the
+ * session on `working` until the next prompt, frozen spinner caption and all.
+ * A vanished spinner is the only other evidence that the turn is over.
+ *
+ * This is a net for lost events, not for interrupts: Claude Code does fire Stop
+ * when the user presses ESC (verified on 2.1.220), and that path needs no help.
+ *
+ * Both guards earn their place. The poll count rides out a repaint that lands
+ * between two reads. The quiet window covers the gap between submitting a prompt
+ * and the first spinner frame, which would otherwise read as a finished turn —
+ * and it restarts on every event, so a tool call keeps the session alive.
+ */
+export function spinnerAbsenceEndsTurn (
+    consecutiveMisses: number,
+    msSinceLastEvent: number,
+): boolean {
+    return consecutiveMisses >= SPINNER_MISSES_TO_END_TURN &&
+        msSinceLastEvent >= SPINNER_QUIET_MS_TO_END_TURN
+}

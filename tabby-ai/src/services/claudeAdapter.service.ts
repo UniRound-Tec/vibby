@@ -6,6 +6,7 @@ import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
+import { spinnerAbsenceEndsTurn } from '../events'
 import {
     HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName, isLegacyHookDirName, ownerPids,
     quoteSh,
@@ -97,7 +98,8 @@ export class ClaudeAdapterService {
     /** Created on first use by ensureInjectDir(), never at construction */
     private injectDir: string | null = null
     private scraper: any = null
-    private lastStatus = new Map<string, string>()
+    /** Consecutive spinner-less polls per session — see scrapeOnce() */
+    private spinnerMisses = new Map<string, number>()
     private shimInstallations = new WeakMap<TerminalTabComponent, TerminalCliShimInstallation>()
 
     constructor (
@@ -278,7 +280,7 @@ export class ClaudeAdapterService {
             this.shimInstallations.get(tab)?.remove()
             this.panes.delete(sessionId)
             this.directory.unbind(sessionId)
-            this.lastStatus.delete(sessionId)
+            this.spinnerMisses.delete(sessionId)
             this.stopScraperIfIdle()
             this.zone.run(() => this.bus.dropSession(sessionId))
         })
@@ -336,14 +338,43 @@ export class ClaudeAdapterService {
             return
         }
         for (const [sessionId, pane] of this.panes) {
-            if (this.bus.snapshotFor(sessionId)?.state !== 'working') {
+            const snapshot = this.bus.snapshotFor(sessionId)
+            if (snapshot?.state !== 'working') {
+                this.spinnerMisses.delete(sessionId)
                 continue
             }
+
             const status = this.readStatusLine(pane)
-            if (status && status !== this.lastStatus.get(sessionId)) {
-                this.lastStatus.set(sessionId, status)
-                this.zone.run(() => this.bus.setLiveStatus(sessionId, status))
+            if (status) {
+                this.spinnerMisses.delete(sessionId)
+                // compared against the bus, not a private cache: reduceSnapshot
+                // clears liveStatus at the end of a turn, so a cache would
+                // suppress an identical caption for the whole next turn
+                if (status !== snapshot.liveStatus) {
+                    this.zone.run(() => this.bus.setLiveStatus(sessionId, status))
+                }
+                continue
             }
+
+            // No spinner while we still believe it is working. A terminating
+            // hook that never made it leaves exactly this, and the absence is
+            // the only thing that will ever say otherwise.
+            const misses = (this.spinnerMisses.get(sessionId) ?? 0) + 1
+            this.spinnerMisses.set(sessionId, misses)
+            const quietFor = Date.now() - (snapshot.lastEvent?.ts ?? snapshot.since)
+            if (!spinnerAbsenceEndsTurn(misses, quietFor)) {
+                continue
+            }
+            this.spinnerMisses.delete(sessionId)
+            console.debug(`[tabby-ai] adapter [${sessionId.slice(0, 8)}] spinner gone for ${misses} polls, quiet ${quietFor}ms → turn over`)
+            this.zone.run(() => this.bus.publish({
+                sessionId,
+                ts: Date.now(),
+                kind: 'turn-completed',
+                // inferred from the screen, not reported by claude
+                confidence: 'low',
+                summary: 'idle',
+            }))
         }
     }
 

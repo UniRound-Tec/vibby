@@ -4,11 +4,14 @@
 const assert = require('node:assert/strict')
 const {
     SUMMARY_MAX_LENGTH,
+    SPINNER_MISSES_TO_END_TURN,
+    SPINNER_QUIET_MS_TO_END_TURN,
     clampSummary,
     sanitizeEvent,
     stateAfter,
     reduceSnapshot,
     isAttentionTransition,
+    spinnerAbsenceEndsTurn,
 } = require('../.test-build/events.js')
 
 assert.deepEqual(sanitizeEvent({
@@ -104,6 +107,29 @@ assert.equal(turn.liveStatus, null, 'caption clears when the turn ends')
 turn = reduceSnapshot(turn, ev('prompt-submitted', { ts: 3 }))
 assert.equal(turn.state, 'working', 'a later prompt works again')
 assert.equal(turn.liveStatus, null, 'the new turn must not inherit the old caption')
+
+// --- a turn whose terminating event never arrived. Hook delivery is a
+// fire-and-forget curl, so it can be lost; the spinner going away is then the
+// only remaining signal. Both guards have to hold. ---
+const misses = SPINNER_MISSES_TO_END_TURN
+const quiet = SPINNER_QUIET_MS_TO_END_TURN
+
+assert.equal(spinnerAbsenceEndsTurn(misses, quiet), true, 'both thresholds met')
+assert.equal(spinnerAbsenceEndsTurn(misses + 10, quiet + 10_000), true)
+
+// One flaky read must not end a turn — claude repaints differentially and a poll
+// can land mid-repaint.
+assert.equal(spinnerAbsenceEndsTurn(1, quiet), false)
+assert.equal(spinnerAbsenceEndsTurn(misses - 1, quiet), false, 'one poll short')
+
+// The dangerous false positive: a prompt was just submitted and the first
+// spinner frame has not been painted yet. Reading that as a finished turn would
+// drop the session to idle the moment it started working.
+assert.equal(spinnerAbsenceEndsTurn(misses, 0), false, 'prompt just submitted')
+assert.equal(spinnerAbsenceEndsTurn(misses, quiet - 1), false, 'one ms short')
+// ...which is the same guard that keeps a tool call alive, since every hook
+// event restarts the quiet window.
+assert.equal(spinnerAbsenceEndsTurn(100, 500), false, 'tool call reported 500ms ago')
 
 // --- summary clamp ---
 assert.equal(clampSummary('  edit:   auth.ts  '), 'edit: auth.ts')
