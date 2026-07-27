@@ -77,16 +77,19 @@ export function clampSummary (text: string): string {
     return flat.slice(0, SUMMARY_MAX_LENGTH - 1) + '…'
 }
 
-/** Final privacy boundary before an adapter event enters retained UI state. */
+/**
+ * Last stop before an adapter event enters retained UI state: drop the raw hook
+ * payload, which carries whole tool inputs and file contents and whose shape no
+ * UI should depend on, and bound the summary to one line.
+ *
+ * The summary itself is shown as-is, prompt text included — a timeline of
+ * `user` rows says nothing about which session was doing what. Adapters decide
+ * what goes in it; this only limits how much.
+ */
 export function sanitizeEvent (event: AiEvent): AiEvent {
     const safe = { ...event } as AiEvent & { raw?: unknown }
     delete safe.raw
-    return {
-        ...safe,
-        summary: event.kind === 'prompt-submitted'
-            ? 'user'
-            : clampSummary(event.summary),
-    }
+    return { ...safe, summary: clampSummary(event.summary) }
 }
 
 /**

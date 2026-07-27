@@ -3,7 +3,11 @@
  * Pure module — unit-tested alongside events.ts.
  *
  * Summary verbs stay English regardless of UI locale (design §2.5).
- * Prompt text, command arguments and raw hook payloads never enter AiEvent.
+ *
+ * The prompt is carried into the summary so the dashboard timeline says which
+ * session was doing what; sanitizeEvent bounds it to one line. Command
+ * arguments and raw hook payloads still stay out — a tool input can be a whole
+ * file, and only the command's name is ever worth a row.
  */
 import { AiEvent } from './events'
 
@@ -60,7 +64,8 @@ export function translateClaudeHook (sessionId: string, payload: unknown, ts: nu
         case 'SessionStart':
             return { ...base, kind: 'session-started', summary: 'ready' }
         case 'UserPromptSubmit':
-            return { ...base, kind: 'prompt-submitted', summary: 'user' }
+            // clamped to one line by sanitizeEvent, so a long prompt is safe here
+            return { ...base, kind: 'prompt-submitted', summary: `user: ${String(p['prompt'] ?? '')}` }
         case 'PreToolUse':
             return {
                 ...base,

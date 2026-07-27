@@ -22,11 +22,14 @@ assert.equal(e.sessionId, 's1')
 assert.equal(e.ts, 42)
 assert.equal(e.raw, undefined, 'raw hook payloads must not be retained')
 
+// The prompt is what makes a timeline row worth reading — a wall of bare `user`
+// rows cannot tell you which session was doing what.
 e = t({ hook_event_name: 'UserPromptSubmit', prompt: 'fix the bug' })
 assert.equal(e.kind, 'prompt-submitted')
-assert.equal(e.summary, 'user')
-assert.equal(e.raw, undefined, 'prompt payload must never be retained')
-assert.doesNotMatch(JSON.stringify(e), /fix the bug/)
+assert.equal(e.summary, 'user: fix the bug')
+assert.equal(e.raw, undefined, 'raw hook payloads must not be retained')
+// a payload with no prompt must not render the string "undefined"
+assert.equal(t({ hook_event_name: 'UserPromptSubmit' }).summary, 'user: ')
 
 e = t({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } })
 assert.equal(e.kind, 'tool-call')

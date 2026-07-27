@@ -69,6 +69,53 @@ assert.equal(
     'OpenCode replaying an old user message after idle must not restart the session',
 )
 
+// --- the prompt text itself, shaped as captured from opencode 1.18.7 ---
+// message.updated carries only metadata, so the text arrives as a separate part
+// and is matched back to the user's message by messageID.
+const userTextPart = (text, id = 'prt_user') => ({
+    type: 'message.part.updated',
+    properties: {
+        sessionID: 'stream-root',
+        part: { id, type: 'text', text, messageID: 'user-message', sessionID: 'stream-root' },
+    },
+})
+const promptEvent = streamEvent(userTextPart('fix the flaky test'))
+assert.equal(promptEvent.kind, 'prompt-submitted')
+assert.equal(promptEvent.summary, 'user: fix the flaky test')
+
+// The same part re-sent must not add a second row — OpenCode replays parts at
+// tool boundaries, exactly as it replays user messages.
+assert.equal(streamEvent(userTextPart('fix the flaky test')), null, 'replayed part')
+
+// The assistant's own reply is a text part too, and streaming it into the
+// timeline would turn the feed into a transcript.
+assert.equal(
+    streamEvent({
+        type: 'message.part.updated',
+        properties: {
+            sessionID: 'stream-root',
+            part: {
+                id: 'prt_assistant', type: 'text', text: 'Here is the answer',
+                messageID: 'assistant-message', sessionID: 'stream-root',
+            },
+        },
+    }),
+    null,
+    'assistant text must stay out of the event feed',
+)
+// ...and a text part with no messageID cannot be attributed to anyone
+assert.equal(
+    streamEvent({
+        type: 'message.part.updated',
+        properties: {
+            sessionID: 'stream-root',
+            part: { id: 'prt_orphan', type: 'text', text: 'whose is this' },
+        },
+    }),
+    null,
+    'unattributed text part',
+)
+
 let e = event({ type: 'server.connected', properties: {} })
 assert.equal(e.kind, 'session-started')
 assert.equal(e.projectedState, 'idle')

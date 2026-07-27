@@ -98,7 +98,11 @@ export function codexHookProfile (): string {
     return `[hooks]\n${CODEX_HOOK_EVENTS.map(event => `${event} = ${handler}`).join('\n')}\n`
 }
 
-/** Converts Codex's documented hook payloads without retaining sensitive raw data. */
+/**
+ * Converts Codex's documented hook payloads. The prompt reaches the summary
+ * (bounded by sanitizeEvent); tool inputs and raw payloads do not, since one of
+ * those can be an entire file.
+ */
 export function translateCodexHook (
     sessionId: string,
     payload: unknown,
@@ -114,7 +118,8 @@ export function translateCodexHook (
         case 'SessionStart':
             return { ...base, kind: 'session-started', summary: 'ready' }
         case 'UserPromptSubmit':
-            return { ...base, kind: 'prompt-submitted', summary: 'user' }
+            // clamped to one line by sanitizeEvent, so a long prompt is safe here
+            return { ...base, kind: 'prompt-submitted', summary: `user: ${text(value['prompt'])}` }
         case 'PreToolUse':
             return { ...base, kind: 'tool-call', summary: toolSummary(toolName, toolInput) }
         case 'PermissionRequest':

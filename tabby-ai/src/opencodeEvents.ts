@@ -379,11 +379,27 @@ export class OpenCodeEventProjector {
         }
         const partId = text(part['id'])
         const partType = text(part['type'])
+        // captured before the set below, so a re-sent part can be told apart
+        // from a new one
+        const alreadyKnown = partId ? this.parts.has(partId) : false
         if (partId && partType) {
             this.parts.set(partId, {
                 type: partType,
                 text: typeof part['text'] === 'string' ? part['text'] : '',
             })
+        }
+        if (partType === 'text') {
+            // The prompt arrives here rather than on message.updated, whose info
+            // block is metadata only (verified against 1.18.7). Its messageID is
+            // already in seenUserMessages because the user's message.updated
+            // lands first — which is also what tells it apart from the
+            // assistant's reply, whose text must not stream into the timeline.
+            const messageId = text(part['messageID'])
+            if (alreadyKnown || !messageId || !this.seenUserMessages.has(messageId)) {
+                return null
+            }
+            session.status = 'busy'
+            return { kind: 'prompt-submitted', summary: `user: ${text(part['text'])}` }
         }
         if (partType === 'tool') {
             const state = object(part['state'])

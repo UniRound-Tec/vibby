@@ -14,20 +14,41 @@ const {
     spinnerAbsenceEndsTurn,
 } = require('../.test-build/events.js')
 
+// The raw hook payload is dropped — it carries whole tool inputs and file
+// contents — while the summary the adapter composed is kept as-is.
 assert.deepEqual(sanitizeEvent({
     sessionId: 's',
     ts: 1,
     kind: 'prompt-submitted',
     confidence: 'high',
-    summary: 'user: private prompt',
-    raw: { prompt: 'private prompt' },
+    summary: 'user: fix the flaky test',
+    raw: { prompt: 'fix the flaky test', cwd: '/home/me/secret-project' },
 }), {
     sessionId: 's',
     ts: 1,
     kind: 'prompt-submitted',
     confidence: 'high',
-    summary: 'user',
+    summary: 'user: fix the flaky test',
 })
+
+// ...and it is still bounded to one line, so a pasted wall of text cannot
+// stretch a dashboard row or a floating-window caption.
+const pasted = sanitizeEvent({
+    sessionId: 's',
+    ts: 1,
+    kind: 'prompt-submitted',
+    confidence: 'high',
+    summary: 'user: ' + 'x'.repeat(500),
+})
+assert.equal(pasted.summary.length, SUMMARY_MAX_LENGTH)
+assert.equal(
+    sanitizeEvent({
+        sessionId: 's', ts: 1, kind: 'prompt-submitted', confidence: 'high',
+        summary: 'user: first line\nsecond line',
+    }).summary,
+    'user: first line second line',
+    'newlines collapse rather than breaking the row',
+)
 
 const ev = (kind, overrides = {}) => ({
     sessionId: 's1',

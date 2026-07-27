@@ -51,8 +51,11 @@ assert.deepEqual(translated({ hook_event_name: 'SessionStart' }), {
 })
 assert.equal(translated({
     hook_event_name: 'UserPromptSubmit',
-    prompt: 'secret prompt',
-}).summary, 'user')
+    prompt: 'fix the flaky test',
+}).summary, 'user: fix the flaky test')
+// a non-string prompt must not render as "undefined" or "[object Object]"
+assert.equal(translated({ hook_event_name: 'UserPromptSubmit' }).summary, 'user: ')
+assert.equal(translated({ hook_event_name: 'UserPromptSubmit', prompt: { a: 1 } }).summary, 'user: ')
 assert.equal(translated({
     hook_event_name: 'PreToolUse',
     tool_name: 'Bash',
