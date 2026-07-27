@@ -15,11 +15,13 @@ import { ipcRenderer } from 'electron'
 
 import { getRootModule } from './app.module'
 import { installFloatingSessionSourceBridge } from './floatingSessionsMainWindowBridge'
+import { installAiNotificationBridge } from './aiNotificationBridge'
 import { BootstrapData, BOOTSTRAP_DATA, PluginInfo } from '../../tabby-core/src/api/mainProcess'
 
 // Always land on the start view
 location.hash = ''
 installFloatingSessionSourceBridge()
+installAiNotificationBridge()
 
 ;(process as any).enablePromiseAPI = true
 

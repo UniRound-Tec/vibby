@@ -21,7 +21,8 @@ export class AiConfigProvider extends ConfigProvider {
             },
             events: {
                 notifications: true,
-                notifyOnIdle: false,
+                /** A finished turn is the moment you are wanted back */
+                notifyOnIdle: true,
             },
             rail: {
                 /** Side tab bar narrowed to icons only. Ignored on horizontal bars. */

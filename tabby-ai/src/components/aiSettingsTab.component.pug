@@ -59,7 +59,7 @@ h3.mt-4.mb-3(translate) Notifications
 .form-line
     .header
         .title(translate) Attention notifications
-        .description(translate) Desktop notification when a session needs you or fails
+        .description(translate) Desktop notification when a session needs you or fails. Turning this off silences all session notifications.
     toggle(
         [(ngModel)]='config.store.aiCli.events.notifications',
         (ngModelChange)='config.save()',

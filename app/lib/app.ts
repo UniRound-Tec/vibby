@@ -11,6 +11,7 @@ import { saveConfig } from './config'
 import { Window, WindowOptions } from './window'
 import { PTYManager } from './pty'
 import { FloatingSessionHub } from './floatingSessions'
+import { AiNotificationHub } from './notifications'
 
 /* eslint-disable block-scoped-var */
 
@@ -23,6 +24,7 @@ export class Application {
     private ptyManager = new PTYManager()
     private windows: Window[] = []
     private floatingSessions = new FloatingSessionHub(windowId => this.findWindow(windowId))
+    private aiNotifications = new AiNotificationHub(sender => this.findWindowBySender(sender))
     private cachedPlasmaVersion?: [number, number] | null
     private globalHotkey$ = new Subject<void>()
     private quitRequested = false
@@ -93,6 +95,7 @@ export class Application {
         app.on('before-quit', () => {
             this.quitRequested = true
             this.floatingSessions.destroy()
+            this.aiNotifications.destroy()
         })
 
         app.on('window-all-closed', () => {
@@ -123,6 +126,8 @@ export class Application {
         })
         window.closed$.subscribe(() => {
             this.floatingSessions.removeSource(window.id)
+            // a toast outliving its window would click through to nothing
+            this.aiNotifications.forgetWindow(window.id)
             this.windows = this.windows.filter(x => x !== window)
             if (!this.windows.some(x => x.isMainWindow)) {
                 this.windows[0]?.makeMain()
@@ -222,6 +227,10 @@ export class Application {
 
     findWindow (windowId: number): Window|null {
         return this.windows.find(window => window.id === windowId) ?? null
+    }
+
+    findWindowBySender (sender: WebContents): Window|null {
+        return this.windows.find(window => window.webContents === sender) ?? null
     }
 
     private shouldRegisterGlobalHotkeys (): boolean {
