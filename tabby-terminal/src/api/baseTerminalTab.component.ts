@@ -1,4 +1,4 @@
-import { Observable, Subject, first, auditTime, debounce, interval } from 'rxjs'
+import { Observable, Subject, first, debounce, interval } from 'rxjs'
 import { Spinner } from 'cli-spinner'
 import colors from 'ansi-colors'
 import { NgZone, OnInit, OnDestroy, Injector, ViewChild, HostBinding, Input, ElementRef, InjectFlags, Component } from '@angular/core'
@@ -768,7 +768,7 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
             this.sendInput(data)
         })
 
-        this.termContainerSubscriptions.subscribe(this.frontend.resize$.pipe(auditTime(100)), ({ columns, rows }) => {
+        this.termContainerSubscriptions.subscribe(this.frontend.resize$, ({ columns, rows }) => {
             this.logger.debug(`Resizing to ${columns}x${rows}`)
             this.size = { columns, rows }
             this.zone.run(() => {
