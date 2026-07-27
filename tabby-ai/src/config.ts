@@ -27,6 +27,9 @@ export class AiConfigProvider extends ConfigProvider {
                 /** Side tab bar narrowed to icons only. Ignored on horizontal bars. */
                 collapsed: false,
             },
+            floatingWindow: {
+                enabled: false,
+            },
         },
         hotkeys: {
             'toggle-dashboard': ['Ctrl-Shift-H'],

@@ -10,6 +10,7 @@ import { Subject, throttleTime } from 'rxjs'
 import { saveConfig } from './config'
 import { Window, WindowOptions } from './window'
 import { PTYManager } from './pty'
+import { FloatingSessionHub } from './floatingSessions'
 
 /* eslint-disable block-scoped-var */
 
@@ -21,6 +22,7 @@ export class Application {
     private tray?: Tray
     private ptyManager = new PTYManager()
     private windows: Window[] = []
+    private floatingSessions = new FloatingSessionHub(windowId => this.findWindow(windowId))
     private cachedPlasmaVersion?: [number, number] | null
     private globalHotkey$ = new Subject<void>()
     private quitRequested = false
@@ -90,6 +92,7 @@ export class Application {
 
         app.on('before-quit', () => {
             this.quitRequested = true
+            this.floatingSessions.destroy()
         })
 
         app.on('window-all-closed', () => {
@@ -119,6 +122,7 @@ export class Application {
             }
         })
         window.closed$.subscribe(() => {
+            this.floatingSessions.removeSource(window.id)
             this.windows = this.windows.filter(x => x !== window)
             if (!this.windows.some(x => x.isMainWindow)) {
                 this.windows[0]?.makeMain()
@@ -214,6 +218,10 @@ export class Application {
 
     hasWindows (): boolean {
         return !!this.windows.length
+    }
+
+    findWindow (windowId: number): Window|null {
+        return this.windows.find(window => window.id === windowId) ?? null
     }
 
     private shouldRegisterGlobalHotkeys (): boolean {

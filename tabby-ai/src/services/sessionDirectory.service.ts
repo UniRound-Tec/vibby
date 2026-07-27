@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core'
+import { Subject } from 'rxjs'
 import { TerminalTabComponent } from 'tabby-local'
 
 import { AiSessionBinding, AiSessionDirectory } from '../monitoring'
@@ -13,6 +14,8 @@ import { AiSessionBinding, AiSessionDirectory } from '../monitoring'
  */
 @Injectable({ providedIn: 'root' })
 export class AiSessionDirectoryService implements AiSessionDirectory {
+    readonly changed$ = new Subject<void>()
+
     private byPane = new WeakMap<TerminalTabComponent, Map<string, AiSessionBinding>>()
     private bySession = new Map<string, AiSessionBinding>()
 
@@ -32,6 +35,7 @@ export class AiSessionDirectoryService implements AiSessionDirectory {
         }
         bindings.set(binding.kind, binding)
         this.bySession.set(binding.sessionId, binding)
+        this.changed$.next()
     }
 
     unbind (sessionId: string): void {
@@ -45,6 +49,7 @@ export class AiSessionDirectoryService implements AiSessionDirectory {
         if (bindings?.size === 0) {
             this.byPane.delete(binding.pane)
         }
+        this.changed$.next()
     }
 
     forPane (pane: TerminalTabComponent, kind?: string|null): AiSessionBinding|null {

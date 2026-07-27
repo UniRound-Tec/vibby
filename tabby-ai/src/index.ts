@@ -23,6 +23,7 @@ import { RuntimeCliDetectorService } from './services/runtimeCliDetector.service
 import { AiCliSplitTabHandler } from './services/aiCliSplitTabHandler.service'
 import { COLLAPSED_CLASS, RailService } from './services/rail.service'
 import { STARTUP_COVER_CLASS, StartupCoverService } from './services/startupCover.service'
+import { FloatingSessionPublisherService } from './services/floatingSessionPublisher.service'
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
 import { CliLaunchModalComponent } from './components/cliLaunchModal.component'
@@ -70,6 +71,7 @@ export default class AiModule {
         runtimeDetector: RuntimeCliDetectorService,
         rail: RailService,
         startupCover: StartupCoverService,
+        floatingSessions: FloatingSessionPublisherService,
     ) {
         startupCover.activate()
         scanner.ensureScanned()
@@ -84,6 +86,7 @@ export default class AiModule {
         attention.activate()
         tabState.activate()
         rail.activate()
+        floatingSessions.activate()
         this.injectTabBarStyles()
 
         hotkeys.hotkey$.subscribe(hotkey => {

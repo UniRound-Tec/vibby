@@ -1,0 +1,934 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · vibby AI Session 悬浮窗</title>
+<style>
+/* PROTOTYPE — throwaway UI for choosing the floating-session-window direction.
+   Three variants, switchable via ?variant=A|B|C. */
+:root {
+    color-scheme: dark;
+    --ink: #f6f3f1;
+    --muted: #a29ca8;
+    --faint: #716b77;
+    --panel: rgba(25, 23, 29, .94);
+    --panel-strong: #1d1b21;
+    --surface: rgba(255, 255, 255, .055);
+    --surface-hover: rgba(255, 255, 255, .09);
+    --line: rgba(255, 255, 255, .09);
+    --accent: #ff4d00;
+    --working: #7c8cff;
+    --needs: #ffad33;
+    --done: #38c987;
+    --error: #ff6262;
+    --radius: 18px;
+    font-family: "Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { width: 100%; min-height: 100%; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    overflow: hidden;
+    color: var(--ink);
+    background:
+        radial-gradient(circle at 18% 4%, rgba(75, 65, 110, .34), transparent 35%),
+        radial-gradient(circle at 88% 80%, rgba(255, 77, 0, .12), transparent 30%),
+        #0e0d11;
+}
+
+button { font: inherit; }
+
+.prototype-note {
+    position: fixed;
+    top: 18px;
+    left: 22px;
+    z-index: 10;
+    color: rgba(255, 255, 255, .5);
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+/* Fake app context: the widget should be judged against a busy terminal surface. */
+.app-shell {
+    position: absolute;
+    inset: 54px 70px 62px 54px;
+    display: grid;
+    grid-template-columns: 68px minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 18px;
+    background: #131217;
+    box-shadow: 0 32px 80px rgba(0, 0, 0, .42);
+}
+
+.fake-rail {
+    padding: 16px 12px;
+    border-right: 1px solid rgba(255, 255, 255, .06);
+    background: #17161b;
+}
+
+.fake-brand,
+.fake-tab {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    margin: 0 auto 10px;
+    border-radius: 12px;
+}
+
+.fake-brand {
+    color: white;
+    background: var(--accent);
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.fake-tab {
+    color: rgba(255, 255, 255, .35);
+    background: rgba(255, 255, 255, .035);
+    font: 12px/1 "Cascadia Mono", Consolas, monospace;
+}
+
+.fake-tab.active {
+    color: white;
+    outline: 1px solid rgba(255, 77, 0, .45);
+    background: rgba(255, 77, 0, .12);
+}
+
+.fake-terminal {
+    position: relative;
+    padding: 23px 28px;
+    color: rgba(227, 220, 231, .42);
+    font: 13px/1.7 "Cascadia Mono", Consolas, monospace;
+}
+
+.fake-titlebar {
+    display: flex;
+    gap: 8px;
+    padding-bottom: 19px;
+    border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+
+.fake-titlebar span {
+    display: block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .13);
+}
+
+.prompt { color: rgba(255, 77, 0, .6); }
+.cmd { color: rgba(255, 255, 255, .62); }
+.code-line { white-space: pre; }
+.dim-layer {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 5, 7, .16);
+    backdrop-filter: blur(.4px);
+}
+
+.stage {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding-bottom: 44px;
+    pointer-events: none;
+}
+
+.widget {
+    position: relative;
+    z-index: 4;
+    pointer-events: auto;
+    border: 1px solid rgba(255, 255, 255, .12);
+    background: var(--panel);
+    box-shadow:
+        0 28px 65px rgba(0, 0, 0, .52),
+        0 2px 10px rgba(0, 0, 0, .28),
+        inset 0 1px rgba(255, 255, 255, .035);
+    backdrop-filter: blur(26px) saturate(1.18);
+    animation: widget-in .22s ease-out;
+}
+
+@keyframes widget-in {
+    from { opacity: 0; transform: translateY(8px) scale(.985); }
+}
+
+.session-button {
+    width: 100%;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.session-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(255, 255, 255, .09);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .075);
+}
+
+.session-icon img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+}
+
+.session-icon .fallback {
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--state);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--state) 14%, transparent);
+}
+
+.working { --state: var(--working); }
+.needs-you { --state: var(--needs); }
+.done { --state: var(--done); }
+.error { --state: var(--error); }
+
+.state-text { color: var(--state); }
+
+.expand-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: fit-content;
+    height: 19px;
+    margin: 0 auto;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+    font-size: 9.5px;
+}
+
+.expand-button:hover {
+    color: var(--ink);
+    background: var(--surface);
+}
+.expand-button svg {
+    width: 10px;
+    height: 10px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+}
+
+.expand-button[data-expanded="true"] svg { transform: rotate(180deg); }
+
+/* A — compact cards */
+.variant-a {
+    width: 352px;
+    max-height: min(560px, calc(100vh - 150px));
+    overflow: hidden;
+    border-radius: 18px;
+}
+
+.a-list {
+    max-height: min(474px, calc(100vh - 260px));
+    overflow-y: auto;
+    padding: 9px 9px 6px;
+}
+
+.a-card {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 11px 10px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+}
+
+.a-card + .a-card { margin-top: 2px; }
+.a-card:hover {
+    border-color: var(--line);
+    background: var(--surface);
+}
+
+.a-main { min-width: 0; }
+.a-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.a-name {
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 620;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.a-state {
+    flex: 0 0 auto;
+    font-size: 10.5px;
+}
+
+.a-event {
+    overflow: hidden;
+    margin-top: 3px;
+    color: var(--muted);
+    font: 10.5px/1.35 "Cascadia Mono", Consolas, monospace;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.a-time {
+    align-self: start;
+    padding-top: 2px;
+    color: var(--faint);
+    font-size: 10px;
+}
+
+.a-footer {
+    padding: 4px 8px 5px;
+    border-top: 1px solid var(--line);
+}
+
+/* B — activity timeline */
+.variant-b {
+    width: 385px;
+    max-height: min(570px, calc(100vh - 140px));
+    overflow: hidden;
+    border-radius: 10px 22px 22px 10px;
+}
+
+.b-accent {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: linear-gradient(var(--accent), rgba(255, 77, 0, 0));
+}
+
+.b-list {
+    max-height: min(490px, calc(100vh - 270px));
+    overflow-y: auto;
+    padding: 12px 16px 3px 20px;
+}
+
+.b-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 10px;
+    padding: 0;
+    border: 0;
+    background: none;
+}
+
+.b-item::before {
+    content: "";
+    position: absolute;
+    top: 17px;
+    bottom: -17px;
+    left: 6px;
+    width: 1px;
+    background: var(--line);
+}
+
+.b-item:last-child::before { display: none; }
+.b-node {
+    position: relative;
+    z-index: 1;
+    width: 13px;
+    height: 13px;
+    margin-top: 8px;
+    border: 3px solid var(--panel-strong);
+    border-radius: 50%;
+    background: var(--state);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--state) 45%, transparent);
+}
+
+.b-content {
+    min-width: 0;
+    margin-bottom: 8px;
+    padding: 8px 10px 9px;
+    border-radius: 10px;
+}
+
+.b-item:hover .b-content { background: var(--surface); }
+.b-event {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.b-event-copy {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 610;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.b-time {
+    flex: 0 0 auto;
+    color: var(--faint);
+    font-size: 10px;
+}
+
+.b-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 10.5px;
+}
+
+.b-meta img { width: 13px; height: 13px; }
+.b-state {
+    margin-left: auto;
+    font-size: 10px;
+}
+
+.b-footer {
+    padding: 4px 8px 5px;
+    border-top: 1px solid var(--line);
+}
+
+/* C — status board */
+.variant-c {
+    width: 410px;
+    max-height: min(590px, calc(100vh - 140px));
+    overflow: hidden;
+    border-radius: 24px;
+    background:
+        radial-gradient(circle at 0 0, rgba(255, 77, 0, .1), transparent 38%),
+        var(--panel);
+}
+
+.c-board {
+    max-height: min(510px, calc(100vh - 260px));
+    overflow-y: auto;
+    padding: 11px;
+}
+
+.c-primary {
+    position: relative;
+    display: block;
+    min-height: 116px;
+    padding: 14px 14px 13px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--state) 27%, var(--line));
+    border-radius: 16px;
+    background:
+        linear-gradient(135deg, color-mix(in srgb, var(--state) 13%, transparent), transparent 58%),
+        var(--surface);
+}
+
+.c-primary::after {
+    content: "";
+    position: absolute;
+    top: -26px;
+    right: -18px;
+    width: 90px;
+    height: 90px;
+    border: 1px solid color-mix(in srgb, var(--state) 17%, transparent);
+    border-radius: 50%;
+}
+
+.c-primary-top {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.c-primary-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 680;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.c-chip {
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: var(--state);
+    background: color-mix(in srgb, var(--state) 12%, transparent);
+    font-size: 9.5px;
+    font-weight: 650;
+}
+
+.c-primary-event {
+    position: relative;
+    z-index: 1;
+    max-width: 310px;
+    margin-top: 16px;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 580;
+    letter-spacing: -.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.c-primary-time {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.c-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 7px;
+}
+
+.c-card {
+    min-width: 0;
+    min-height: 91px;
+    padding: 11px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .025);
+}
+
+.c-card:hover { background: var(--surface-hover); }
+.c-card-top {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.c-mini-icon {
+    display: grid;
+    place-items: center;
+    width: 23px;
+    height: 23px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, .07);
+}
+
+.c-mini-icon img { width: 14px; height: 14px; }
+.c-card-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 630;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.c-card-event {
+    display: -webkit-box;
+    margin-top: 10px;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 10.5px;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.c-footer {
+    padding: 4px 8px 5px;
+    border-top: 1px solid var(--line);
+}
+
+/* Prototype controls */
+.prototype-switcher {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 999px;
+    background: rgba(12, 11, 15, .94);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, .45);
+    backdrop-filter: blur(18px);
+    transform: translateX(-50%);
+}
+
+.prototype-switcher button {
+    height: 32px;
+    border: 0;
+    border-radius: 999px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+}
+
+.prototype-switcher button:hover {
+    color: white;
+    background: rgba(255, 255, 255, .08);
+}
+
+.switch-arrow { width: 34px; padding: 0; font-size: 16px; }
+.switch-label {
+    min-width: 204px;
+    padding: 0 15px;
+    color: white !important;
+    font-size: 11px;
+    font-weight: 650;
+}
+
+.simulator {
+    position: fixed;
+    right: 22px;
+    bottom: 22px;
+    z-index: 20;
+    height: 31px;
+    padding: 0 13px;
+    border: 1px solid rgba(255, 255, 255, .11);
+    border-radius: 9px;
+    color: var(--muted);
+    background: rgba(20, 18, 23, .88);
+    cursor: pointer;
+    font-size: 10.5px;
+}
+
+.simulator:hover { color: white; border-color: rgba(255, 77, 0, .5); }
+
+.toast {
+    position: fixed;
+    top: 25px;
+    left: 50%;
+    z-index: 30;
+    padding: 8px 13px;
+    border: 1px solid rgba(255, 255, 255, .13);
+    border-radius: 9px;
+    color: var(--ink);
+    background: rgba(26, 24, 29, .96);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    font-size: 11px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -8px);
+    transition: .18s ease;
+}
+
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 650px) {
+    .app-shell { inset: 30px 18px 78px; }
+    .fake-rail { display: none; }
+    .app-shell { grid-template-columns: 1fr; }
+    .widget { max-width: calc(100vw - 28px); }
+    .simulator { display: none; }
+    .prototype-note { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="prototype-note">Prototype · AI Session Floating Window</div>
+
+<div class="app-shell" aria-hidden="true">
+    <aside class="fake-rail">
+        <div class="fake-brand">V</div>
+        <div class="fake-tab active">1</div>
+        <div class="fake-tab">2</div>
+        <div class="fake-tab">3</div>
+    </aside>
+    <main class="fake-terminal">
+        <div class="fake-titlebar"><span></span><span></span><span></span></div>
+        <p><span class="prompt">jesse@vibby</span> <span class="cmd">codex</span></p>
+        <div class="code-line">• Scanning Electron window lifecycle</div>
+        <div class="code-line">• Reading AI session state...</div>
+        <div class="code-line">✓ Connected to 5 sessions</div>
+        <br>
+        <div class="code-line">  src/services/sessionDirectory.service.ts</div>
+        <div class="code-line">  app/lib/window.ts</div>
+        <div class="code-line">  tabby-electron/src/services/hostWindow.service.ts</div>
+        <div class="dim-layer"></div>
+    </main>
+</div>
+
+<main class="stage" id="stage"></main>
+<div class="toast" id="toast"></div>
+
+<nav class="prototype-switcher" aria-label="样式方案切换">
+    <button class="switch-arrow" id="previous" title="上一个方案（←）">←</button>
+    <button class="switch-label" id="variant-label"></button>
+    <button class="switch-arrow" id="next" title="下一个方案（→）">→</button>
+</nav>
+
+<button class="simulator" id="simulate">模拟新活动并重排</button>
+
+<script>
+const variants = [
+    { key: "A", name: "紧凑会话卡" },
+    { key: "B", name: "活动时间线" },
+    { key: "C", name: "状态看板" },
+]
+
+const iconPaths = {
+    codex: "../../tabby-ai/src/icons/codex.svg",
+    claude: "../../tabby-ai/src/icons/claude-code.svg",
+    opencode: "../../tabby-ai/src/icons/opencode.svg",
+    gemini: "../../tabby-ai/src/icons/gemini-cli.svg",
+    qwen: "../../tabby-ai/src/icons/qwen-code.svg",
+}
+
+const sessions = [
+    {
+        id: "codex-vibby",
+        name: "vibby-floating-window",
+        kind: "codex",
+        state: "working",
+        stateLabel: "运行中",
+        event: "正在分析 Electron 窗口生命周期",
+        lastActivityAt: Date.now() - 18_000,
+    },
+    {
+        id: "claude-api",
+        name: "api-auth-refactor",
+        kind: "claude",
+        state: "needs-you",
+        stateLabel: "等待确认",
+        event: "请求执行数据库迁移",
+        lastActivityAt: Date.now() - 74_000,
+    },
+    {
+        id: "opencode-docs",
+        name: "docs-site",
+        kind: "opencode",
+        state: "done",
+        stateLabel: "已完成",
+        event: "构建完成，0 个错误",
+        lastActivityAt: Date.now() - 5 * 60_000,
+    },
+    {
+        id: "gemini-design",
+        name: "desktop-design",
+        kind: "gemini",
+        state: "error",
+        stateLabel: "出错",
+        event: "图片生成请求超时",
+        lastActivityAt: Date.now() - 13 * 60_000,
+    },
+    {
+        id: "qwen-tests",
+        name: "terminal-tests",
+        kind: "qwen",
+        state: "done",
+        stateLabel: "空闲",
+        event: "测试通过：128 / 128",
+        lastActivityAt: Date.now() - 42 * 60_000,
+    },
+]
+
+let expanded = false
+let simulationIndex = 3
+
+function currentVariant () {
+    const requested = new URLSearchParams(location.search).get("variant")?.toUpperCase()
+    return variants.find(item => item.key === requested) ?? variants[0]
+}
+
+function sortedSessions () {
+    return [...sessions].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+}
+
+function visibleSessions () {
+    const sorted = sortedSessions()
+    return expanded ? sorted : sorted.slice(0, 3)
+}
+
+function relativeTime (timestamp) {
+    const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000))
+    if (seconds < 60) return `${seconds}秒前`
+    const minutes = Math.round(seconds / 60)
+    if (minutes < 60) return `${minutes}分钟前`
+    return `${Math.round(minutes / 60)}小时前`
+}
+
+function icon (session, mini = false) {
+    const className = mini ? "c-mini-icon" : "session-icon"
+    return `<span class="${className}"><img src="${iconPaths[session.kind]}" alt=""></span>`
+}
+
+function expandControl (className) {
+    const hidden = sessions.length - 3
+    const label = expanded ? "收起" : `展开另外 ${hidden} 个会话`
+    return `
+        <footer class="${className}">
+            <button class="expand-button" data-expanded="${expanded}" onclick="toggleExpanded()">
+                <span>${label}</span>
+                <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></svg>
+            </button>
+        </footer>`
+}
+
+function renderA () {
+    const cards = visibleSessions().map(session => `
+        <button class="session-button a-card ${session.state}" onclick="focusSession('${session.id}')">
+            ${icon(session)}
+            <span class="a-main">
+                <span class="a-row">
+                    <span class="status-dot"></span>
+                    <span class="a-name">${session.name}</span>
+                    <span class="a-state state-text">${session.stateLabel}</span>
+                </span>
+                <span class="a-event">${session.event}</span>
+            </span>
+            <span class="a-time">${relativeTime(session.lastActivityAt)}</span>
+        </button>`).join("")
+
+    return `
+        <section class="widget variant-a">
+            <div class="a-list">${cards}</div>
+            ${expandControl("a-footer")}
+        </section>`
+}
+
+function renderB () {
+    const items = visibleSessions().map(session => `
+        <button class="session-button b-item ${session.state}" onclick="focusSession('${session.id}')">
+            <span class="b-node"></span>
+            <span class="b-content">
+                <span class="b-event">
+                    <span class="b-event-copy">${session.event}</span>
+                    <span class="b-time">${relativeTime(session.lastActivityAt)}</span>
+                </span>
+                <span class="b-meta">
+                    <img src="${iconPaths[session.kind]}" alt="">
+                    <span>${session.name}</span>
+                    <span class="b-state state-text">${session.stateLabel}</span>
+                </span>
+            </span>
+        </button>`).join("")
+
+    return `
+        <section class="widget variant-b">
+            <div class="b-accent"></div>
+            <div class="b-list">${items}</div>
+            ${expandControl("b-footer")}
+        </section>`
+}
+
+function renderC () {
+    const visible = visibleSessions()
+    const primary = visible[0]
+    const rest = visible.slice(1)
+    const cards = rest.map(session => `
+        <button class="session-button c-card ${session.state}" onclick="focusSession('${session.id}')">
+            <span class="c-card-top">
+                ${icon(session, true)}
+                <span class="c-card-name">${session.name}</span>
+                <span class="status-dot"></span>
+            </span>
+            <span class="c-card-event">${session.event}</span>
+        </button>`).join("")
+
+    return `
+        <section class="widget variant-c">
+            <div class="c-board">
+                <button class="session-button c-primary ${primary.state}" onclick="focusSession('${primary.id}')">
+                    <span class="c-primary-top">
+                        ${icon(primary)}
+                        <span class="c-primary-name">${primary.name}</span>
+                        <span class="c-chip">${primary.stateLabel}</span>
+                    </span>
+                    <span class="c-primary-event">${primary.event}</span>
+                    <span class="c-primary-time">最新活动 · ${relativeTime(primary.lastActivityAt)}</span>
+                </button>
+                <div class="c-grid">${cards}</div>
+            </div>
+            ${expandControl("c-footer")}
+        </section>`
+}
+
+function render () {
+    const variant = currentVariant()
+    document.getElementById("variant-label").textContent = `${variant.key} — ${variant.name}`
+    document.getElementById("stage").innerHTML =
+        variant.key === "B" ? renderB() :
+        variant.key === "C" ? renderC() :
+        renderA()
+}
+
+function setVariant (offset) {
+    const current = currentVariant()
+    const index = variants.findIndex(item => item.key === current.key)
+    const target = variants[(index + offset + variants.length) % variants.length]
+    const url = new URL(location.href)
+    url.searchParams.set("variant", target.key)
+    history.replaceState(null, "", url)
+    expanded = false
+    render()
+}
+
+function toggleExpanded () {
+    expanded = !expanded
+    render()
+}
+
+function focusSession (id) {
+    const session = sessions.find(item => item.id === id)
+    notify(`点击后将聚焦：${session.name}`)
+}
+
+function notify (message) {
+    const toast = document.getElementById("toast")
+    toast.textContent = message
+    toast.classList.add("show")
+    clearTimeout(notify.timer)
+    notify.timer = setTimeout(() => toast.classList.remove("show"), 1600)
+}
+
+function simulateActivity () {
+    const session = sessions[simulationIndex % sessions.length]
+    simulationIndex++
+    session.lastActivityAt = Date.now()
+    session.state = session.state === "needs-you" ? "working" : "needs-you"
+    session.stateLabel = session.state === "needs-you" ? "等待确认" : "运行中"
+    session.event = session.state === "needs-you"
+        ? "新的权限请求需要确认"
+        : "已确认，继续执行任务"
+    render()
+    notify(`${session.name} 已根据新活动排到最前`)
+}
+
+document.getElementById("previous").addEventListener("click", () => setVariant(-1))
+document.getElementById("next").addEventListener("click", () => setVariant(1))
+document.getElementById("simulate").addEventListener("click", simulateActivity)
+document.getElementById("variant-label").addEventListener("click", () => setVariant(1))
+
+document.addEventListener("keydown", event => {
+    if (["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable) {
+        return
+    }
+    if (event.key === "ArrowLeft") setVariant(-1)
+    if (event.key === "ArrowRight") setVariant(1)
+})
+
+render()
+</script>
+</body>
+</html>
