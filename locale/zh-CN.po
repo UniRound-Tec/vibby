@@ -2593,7 +2593,7 @@ msgid "Untracked"
 msgstr "未监听"
 
 msgid "Listening"
-msgstr "监听中"
+msgstr "已接入"
 
 #: tabby-ai/src/components/dashboardTab.component.pug:22
 msgid "Launch only · no event monitoring yet"
@@ -2826,3 +2826,19 @@ msgstr "SSH 连接"
 
 msgid "Hardware"
 msgstr "硬件"
+
+#: tabby-ai/src/components/cliLaunchModal.component.pug
+msgid "Runtime"
+msgstr "运行环境"
+
+#: tabby-ai/src/profiles.ts
+msgid "Version unknown"
+msgstr "版本未知"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug
+msgid "WSL environments"
+msgstr "WSL 环境"
+
+#: tabby-ai/src/components/aiSettingsTab.component.pug
+msgid "Default"
+msgstr "默认"

@@ -68,22 +68,14 @@ assert.deepEqual(
 const idle = facts({ sessionId: 's', snapshot: snap('idle', { lastEvent: { summary: 'done' } }) })
 assert.deepEqual(captionFor(idle), { text: 'done' })
 
-// --- silence has a reason, and it is translatable ---
-const reason = f => {
-    const c = captionFor(f)
-    assert.ok('key' in c, 'a session with no events must explain itself')
-    return c.key
-}
-const launched = reason(facts())
-const armed = reason(facts({ sessionId: 's' }))
-const spotted = reason(facts({ runtimeDetected: true }))
-assert.notEqual(launched, armed)
-assert.notEqual(armed, spotted)
-assert.notEqual(launched, spotted)
-// an armed session reports as armed even if it was also spotted in a terminal
-assert.equal(reason(facts({ sessionId: 's', runtimeDetected: true })), armed)
-// both callers give the same reason for the same silence
-assert.deepEqual(captionFor(facts({ sessionId: 's' })), lastEventCaptionFor(facts({ sessionId: 's' })))
+// --- silence stays silent: the adjacent state label already explains it ---
+assert.deepEqual(captionFor(facts()), { text: '' })
+assert.deepEqual(captionFor(facts({ sessionId: 's' })), { text: '' })
+assert.deepEqual(captionFor(facts({ runtimeDetected: true })), { text: '' })
+assert.deepEqual(
+    captionFor(facts({ sessionId: 's', runtimeDetected: true })),
+    lastEventCaptionFor(facts({ sessionId: 's', runtimeDetected: true })),
+)
 
 // a snapshot with no event text is blank, not a fallback message
 assert.deepEqual(captionFor(facts({ sessionId: 's', snapshot: snap('idle') })), { text: '' })

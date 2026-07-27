@@ -8,6 +8,14 @@ export interface CliLaunchOptions {
     name: string
     cwd: string
     args: string[]
+    targetId: string
+}
+
+export interface CliLaunchTargetOption {
+    id: string
+    label: string
+    detail: string
+    type: 'native'|'wsl'
 }
 
 /** @hidden */
@@ -21,11 +29,19 @@ export class CliLaunchModalComponent {
     @Input() fallbackName = ''
     @Input() fallbackCwd = ''
     @Input() fallbackArguments = ''
+    @Input() targets: CliLaunchTargetOption[] = []
+    @Input() selectedTargetId = 'native'
 
     name = ''
     cwd = ''
     arguments = ''
     argumentsInvalid = false
+
+    get displayedFallbackCwd (): string {
+        return this.targets.find(target => target.id === this.selectedTargetId)?.type === 'wsl'
+            ? '~'
+            : this.fallbackCwd
+    }
 
     constructor (
         private activeModal: NgbActiveModal,
@@ -50,6 +66,7 @@ export class CliLaunchModalComponent {
                 name: this.name.trim(),
                 cwd: this.cwd.trim(),
                 args: args as string[],
+                targetId: this.selectedTargetId,
             } satisfies CliLaunchOptions)
         } catch {
             this.argumentsInvalid = true

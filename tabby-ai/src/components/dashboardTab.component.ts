@@ -23,6 +23,7 @@ import { CliScannerService } from '../services/cliScanner.service'
 import { AiEventBusService } from '../services/eventBus.service'
 import { AiSessionDirectoryService } from '../services/sessionDirectory.service'
 import { RuntimeCliDetectorService } from '../services/runtimeCliDetector.service'
+import { preferredRuntimeTarget } from '../runtimeTargets'
 
 export interface AiSessionRow {
     topTab: BaseTabComponent
@@ -54,6 +55,8 @@ export interface AiEventRow {
 export interface AiCliLaunchCard {
     entry: AiCliRegistryEntry
     detected: DetectedCli|null
+    detections: DetectedCli[]
+    runtimeSummary: string
     icon: SafeHtml|null
 }
 
@@ -95,7 +98,14 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
         { value: 'bottom', label: 'Bottom' },
     ]
 
-    cliCards: AiCliLaunchCard[] = AI_CLI_REGISTRY.map(entry => ({ entry, detected: null, icon: null }))
+    cliCards: AiCliLaunchCard[] = AI_CLI_REGISTRY.map(entry => ({
+        entry,
+        detected: null,
+        detections: [],
+        runtimeSummary: '',
+        icon: null,
+    }))
+
     scanning = false
     now = Date.now()
     readonly wordmark = VIBBY_WORDMARK
@@ -292,10 +302,6 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
         return this.cliCards.filter(card => !!card.detected).length
     }
 
-    get monitoredSessionCount (): number {
-        return this.rows.filter(row => !!row.sessionId).length
-    }
-
     changeSessionPage (delta: number): void {
         this.sessionPage = this.clampPage(this.sessionPage + delta, this.sessionPageCount)
     }
@@ -478,12 +484,37 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
     }
 
     private updateCliCards (clis: DetectedCli[]): void {
-        const detected = new Map(clis.map(cli => [cli.entry.id, cli]))
         this.cliCards = AI_CLI_REGISTRY
-            .map(entry => ({ entry, detected: detected.get(entry.id) ?? null, icon: this.iconForKind(entry.id) }))
+            .map(entry => {
+                const detections = clis.filter(cli => cli.entry.id === entry.id)
+                const detected = preferredRuntimeTarget(detections)
+                return {
+                    entry,
+                    detected,
+                    detections,
+                    runtimeSummary: this.runtimeSummary(detections),
+                    icon: this.iconForKind(entry.id),
+                }
+            })
             .sort((a, b) => Number(!!b.detected) - Number(!!a.detected))
         this.launchPage = this.clampPage(this.launchPage, this.launchPageCount)
         this.cdr.markForCheck()
+    }
+
+    private runtimeSummary (detections: DetectedCli[]): string {
+        if (!detections.length) {
+            return ''
+        }
+        const labels = detections.map(item => {
+            const runtime = item.target.type === 'wsl'
+                ? `${item.target.label} · WSL ${item.target.wslVersion ?? '?'}`
+                : item.target.label
+            return item.version ? `${runtime} · ${item.version}` : runtime
+        })
+        if (labels.length === 1) {
+            return labels[0]
+        }
+        return `${labels.slice(0, 2).join(' + ')}${labels.length > 2 ? ` +${labels.length - 2}` : ''}`
     }
 
     private updateLaunchPageSize (): void {

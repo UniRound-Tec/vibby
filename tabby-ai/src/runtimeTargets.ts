@@ -1,0 +1,219 @@
+import * as path from 'path'
+import * as fs from 'fs'
+import { execFile } from 'child_process'
+
+import { CliNativePlatform, CliRuntimeTarget, NativeCliRuntimeTarget, WslCliRuntimeTarget } from './api'
+
+const WSL_TARGET_PREFIX = 'wsl:'
+
+export function nativePlatformFor (platform = process.platform): CliNativePlatform|null {
+    if (platform === 'win32') {
+        return 'windows'
+    }
+    if (platform === 'darwin') {
+        return 'macos'
+    }
+    if (platform === 'linux') {
+        return 'linux'
+    }
+    return null
+}
+
+export function nativeRuntimeTarget (platform = process.platform): NativeCliRuntimeTarget|null {
+    const nativePlatform = nativePlatformFor(platform)
+    return nativePlatform ? {
+        id: 'native',
+        type: 'native',
+        platform: nativePlatform,
+        label: nativePlatform === 'windows' ? 'Windows' : nativePlatform === 'macos' ? 'macOS' : 'Linux',
+    } : null
+}
+
+export function wslTargetId (distro: string): string {
+    return `${WSL_TARGET_PREFIX}${encodeURIComponent(distro)}`
+}
+
+export function wslExecutablePath (environment = process.env): string {
+    return path.join(environment.WINDIR ?? environment.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
+}
+
+function cleanWslOutput (value: string): string {
+    return value.replace(/^\uFEFF/, '').replace(/\0/g, '').replace(/\r/g, '')
+}
+
+export function decodeWslOutput (value: string|Buffer): string {
+    if (typeof value === 'string') {
+        return cleanWslOutput(value)
+    }
+    const utf16 = value.length >= 2 && (
+        value[0] === 0xff && value[1] === 0xfe ||
+        value.subarray(1, Math.min(value.length, 64)).filter((_, index) => index % 2 === 0 && value[index + 1] === 0).length >= 4
+    )
+    return cleanWslOutput(value.toString(utf16 ? 'utf16le' : 'utf8'))
+}
+
+export function parseWslNames (value: string): string[] {
+    return cleanWslOutput(value)
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+}
+
+export interface WslVerboseMetadata {
+    distro: string
+    isDefault: boolean
+    version: 1 | 2 | null
+}
+
+/**
+ * Verbose WSL output has no stable machine format. Names come from --quiet;
+ * this parser only enriches them from the default marker and trailing version.
+ */
+export function parseWslVerbose (
+    value: string,
+    names: string[],
+): WslVerboseMetadata[] {
+    const lines = cleanWslOutput(value).split('\n')
+    return names.map(distro => {
+        const matching = lines.find(line => {
+            const withoutMarker = line.replace(/^\s*\*\s*/, '').trimStart()
+            return withoutMarker.startsWith(distro) &&
+                (withoutMarker.length === distro.length || /^\s{2,}/.test(withoutMarker.slice(distro.length)))
+        })
+        const version = matching?.match(/\s([12])\s*$/)?.[1]
+        return {
+            distro,
+            isDefault: !!matching && /^\s*\*/.test(matching),
+            version: version === '1' ? 1 : version === '2' ? 2 : null,
+        }
+    })
+}
+
+export function mergeWslTargets (
+    namesOutput: string,
+    runningOutput: string,
+    verboseOutput: string,
+): WslCliRuntimeTarget[] {
+    const names = parseWslNames(namesOutput)
+    const running = new Set(parseWslNames(runningOutput))
+    const metadata = new Map(parseWslVerbose(verboseOutput, names).map(item => [item.distro, item]))
+    return names.map(distro => {
+        const meta = metadata.get(distro)
+        return {
+            id: wslTargetId(distro),
+            type: 'wsl',
+            platform: 'linux',
+            label: distro,
+            distro,
+            wslVersion: meta?.version ?? null,
+            isDefault: meta?.isDefault ?? false,
+            state: running.has(distro) ? 'running' : 'stopped',
+        }
+    })
+}
+
+export function shouldScanWslTarget (
+    target: WslCliRuntimeTarget,
+    explicit: boolean,
+): boolean {
+    return explicit || target.isDefault || target.state === 'running'
+}
+
+export function preferredRuntimeTarget<T extends { target: CliRuntimeTarget }> (
+    values: T[],
+    preferredId?: string|null,
+): T|null {
+    if (!values.length) {
+        return null
+    }
+    return values.find(item => item.target.id === preferredId) ??
+        values.find(item => item.target.type === 'native') ??
+        values.find(item => item.target.type === 'wsl' && item.target.isDefault) ??
+        [...values].sort((a, b) => a.target.label.localeCompare(b.target.label))[0]
+}
+
+export function wslLaunchCommand (
+    target: WslCliRuntimeTarget,
+    executable: string,
+    args: string[],
+    cwd?: string|null,
+    environment = process.env,
+): { command: string, args: string[] } {
+    const targetCwd = cwd?.trim()
+    return {
+        command: wslExecutablePath(environment),
+        args: [
+            '--distribution',
+            target.distro,
+            '--cd',
+            targetCwd ? targetCwd : '~',
+            '--exec',
+            executable,
+            ...args,
+        ],
+    }
+}
+
+export function isWindowsMountedWslPath (windowsPath: string): boolean {
+    return /^[A-Za-z]:[\\/]/.test(windowsPath.trim())
+}
+
+export function translateWindowsPathForWsl (
+    target: WslCliRuntimeTarget,
+    windowsPath: string,
+    timeout = 3000,
+): Promise<string|null> {
+    return new Promise(resolve => {
+        execFile(
+            wslExecutablePath(),
+            ['--distribution', target.distro, '--exec', 'wslpath', '-a', '-u', windowsPath],
+            {
+                timeout,
+                windowsHide: true,
+                env: { ...process.env, WSL_UTF8: '1' },
+                encoding: 'utf8',
+            },
+            (error, stdout) => resolve(error ? null : stdout.trim() || null),
+        )
+    })
+}
+
+export function wslIpv4Address (
+    target: WslCliRuntimeTarget,
+    timeout = 3000,
+): Promise<string|null> {
+    return new Promise(resolve => {
+        execFile(
+            wslExecutablePath(),
+            ['--distribution', target.distro, '--exec', 'hostname', '-I'],
+            {
+                timeout,
+                windowsHide: true,
+                env: { ...process.env, WSL_UTF8: '1' },
+                encoding: 'utf8',
+            },
+            (error, stdout) => {
+                if (error) {
+                    resolve(null)
+                    return
+                }
+                resolve(stdout.split(/\s+/).find(value => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)) ?? null)
+            },
+        )
+    })
+}
+
+export function usesMirroredWslNetworking (
+    userProfile = process.env.USERPROFILE,
+    read = (file: string): string => fs.readFileSync(file, 'utf8'),
+): boolean {
+    if (!userProfile) {
+        return false
+    }
+    try {
+        const config = read(path.join(userProfile, '.wslconfig'))
+        return /^\s*networkingMode\s*=\s*mirrored\s*(?:[#;].*)?$/im.test(config)
+    } catch {
+        return false
+    }
+}

@@ -80,30 +80,17 @@ export function activityLabelKey (facts: SessionFacts): string {
 }
 
 /**
- * Why a session has nothing to report yet — which is a different statement
- * from "idle", and the one the rail and the dashboard were each spelling out
- * separately.
- */
-function silenceReason (facts: SessionFacts): Caption {
-    if (facts.runtimeDetected && !facts.sessionId) {
-        return { key: _('Detected in terminal · event monitoring unavailable') }
-    }
-    if (facts.sessionId) {
-        return { key: _('Event monitoring enabled · waiting for CLI activity') }
-    }
-    return { key: _('Launch only · no event monitoring yet') }
-}
-
-/**
  * Just what the session last did, for the dashboard — it shows the scraped
  * status line on its own row, so merging the two here would cost it a line.
+ * Before the first event, the adjacent state label already says Listening or
+ * Untracked; repeating that as a sentence only adds visual noise.
  */
 export function lastEventCaptionFor (facts: SessionFacts): Caption {
     const summary = facts.snapshot?.lastEvent?.summary
     if (summary) {
         return { text: summary }
     }
-    return facts.snapshot ? { text: '' } : silenceReason(facts)
+    return { text: '' }
 }
 
 /**

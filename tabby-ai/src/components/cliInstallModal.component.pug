@@ -7,9 +7,8 @@
                     span(translate) Install
                     |  {{cli.name}}
                 .header-note
-                    span(*ngIf='platform === "windows"', translate) Windows installer
-                    span(*ngIf='platform === "macos"', translate) macOS installer
-                    span(*ngIf='platform === "linux"', translate) Linux installer
+                    span(*ngIf='selectedTarget') {{selectedTarget.label}}
+                    span(*ngIf='selectedTarget?.type === "wsl"')  · WSL {{selectedTarget.wslVersion || "?"}}
                     span(*ngIf='!platform', translate) Unsupported system
         button.close-button(
             type='button',
@@ -19,6 +18,17 @@
 
     .modal-body
         ng-container(*ngIf='state === "confirm"')
+            .runtime-options(*ngIf='targets.length > 1')
+                button.runtime-option(
+                    *ngFor='let target of targets',
+                    type='button',
+                    [class.selected]='selectedTargetId === target.id',
+                    (click)='selectTarget(target.id)',
+                )
+                    span.runtime-name {{target.label}}
+                    span.runtime-detail(*ngIf='target.type === "wsl"') WSL {{target.wslVersion || "?"}}
+                    span.runtime-detail(*ngIf='target.type === "native"', translate) Native
+
             .install-summary(*ngIf='automaticInstallAvailable; else manualInstall')
                 p(translate) Vibby will run the official installation command below in an embedded terminal.
                 .recipe-note(*ngIf='recipe.note') {{recipe.note}}

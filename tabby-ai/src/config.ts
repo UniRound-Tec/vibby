@@ -11,6 +11,13 @@ export class AiConfigProvider extends ConfigProvider {
             scanner: {
                 extraPaths: [],
                 hidden: [],
+                wsl: {
+                    enabled: true,
+                    excludedDistributions: [
+                        'docker-desktop',
+                        'docker-desktop-data',
+                    ],
+                },
             },
             events: {
                 notifications: true,

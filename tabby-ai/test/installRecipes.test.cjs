@@ -5,6 +5,7 @@ const {
     installRecipeFor,
     installShellCommand,
     installShellEnvironment,
+    installPlatformForTarget,
 } = require('../.test-build/installRecipes.js')
 
 assert.equal(installPlatformFor('win32'), 'windows')
@@ -103,6 +104,8 @@ for (const cliId of expectedCliIds) {
 }
 assert.equal(installRecipeFor('cursor-agent', 'windows').support, 'requires-wsl')
 assert.equal(installRecipeFor('openhands', 'windows').support, 'requires-wsl')
+assert.equal(installPlatformForTarget({ platform: 'linux' }), 'linux')
+assert.equal(installPlatformForTarget(null), null)
 assert.equal(installRecipeFor('goose', 'windows').support, 'guided')
 assert.equal('aider' in CLI_INSTALL_RECIPES, false)
 

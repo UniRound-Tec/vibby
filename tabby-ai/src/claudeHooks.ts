@@ -55,7 +55,7 @@ export function translateClaudeHook (sessionId: string, payload: unknown, ts: nu
         case 'SessionStart':
             return { ...base, kind: 'session-started', summary: 'ready' }
         case 'UserPromptSubmit':
-            return { ...base, kind: 'prompt-submitted', summary: `prompt: ${String(p['prompt'] ?? '')}` }
+            return { ...base, kind: 'prompt-submitted', summary: `user: ${String(p['prompt'] ?? '')}` }
         case 'PreToolUse':
             return {
                 ...base,

@@ -86,6 +86,45 @@
         margin-bottom: 7px;
     }
 
+    .runtime-options {
+        display: grid;
+        gap: 7px;
+    }
+
+    .runtime-option {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+        margin: 0;
+        padding: 8px 11px;
+        gap: 10px;
+        border: 1px solid rgba(128, 128, 128, .24);
+        border-radius: 9px;
+        cursor: pointer;
+
+        &.selected {
+            border-color: var(--theme-primary);
+            background: color-mix(in srgb, var(--theme-primary) 9%, transparent);
+        }
+    }
+
+    .runtime-copy {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+    }
+
+    .runtime-name {
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .runtime-detail {
+        margin-top: 1px;
+        font-size: 10px;
+        opacity: .6;
+    }
+
     .form-label {
         margin: 0;
         font-size: 12px;

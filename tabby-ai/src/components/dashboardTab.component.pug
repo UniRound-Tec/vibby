@@ -57,11 +57,14 @@
                         .chip-text
                             .nm {{card.entry.name}}
                             .sub
-                                span.ver(*ngIf='card.detected?.version') {{card.detected.version}}
-                                span.tier(*ngIf='card.detected', [class.full]='card.entry.tier === "full"')
-                                    span(*ngIf='card.entry.tier === "full"', translate) Full monitoring
-                                    span(*ngIf='card.entry.tier !== "full"', translate) Launch only
-                                span.not-detected(*ngIf='!card.detected', translate) Click to install
+                                span.ver(*ngIf='card.runtimeSummary') {{card.runtimeSummary}}
+                                span.listening(
+                                    *ngIf='card.detected?.monitoring === "full"',
+                                    [title]='"Listening" | translate',
+                                )
+                                    span.listening-dot(aria-hidden='true')
+                                    span(translate) Listening
+                                span.not-detected(*ngIf='!card.detected', translate) Install
                         span.chip-arrow(*ngIf='card.detected') ›
                         span.chip-arrow.install-arrow(*ngIf='!card.detected') ↓
 
@@ -158,9 +161,6 @@ footer.statusline
         span.seg
             strong {{rows.length}}
             span(translate) Sessions
-        span.seg(*ngIf='monitoredSessionCount')
-            strong {{monitoredSessionCount}}
-            span(translate) Full monitoring
         span.seg.state([ngClass]='c.state', *ngFor='let c of counters; trackBy: trackCounter')
             span.dot(aria-hidden='true')
             span {{c.count}} {{c.label}}

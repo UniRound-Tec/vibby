@@ -242,7 +242,7 @@ export function tabBarStyles ({ accent, collapsedClass, coverClass }: TabBarStyl
             .content.tabs-on-right > .tab-bar tab-header:has(.ai-state) {
                 display: grid !important;
                 grid-template-columns: auto auto minmax(0, 1fr) auto;
-                grid-template-areas: "index icon name state" "sum sum sum sum" "panes panes panes panes";
+                grid-template-areas: "index icon name state" ". . sum sum" "panes panes panes panes";
                 align-items: center;
                 row-gap: 2px;
                 column-gap: 7px;

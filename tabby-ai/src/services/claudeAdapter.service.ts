@@ -8,7 +8,9 @@ import { TerminalTabComponent } from 'tabby-local'
 
 import {
     HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName, isLegacyHookDirName, ownerPids,
+    quoteSh,
 } from '../paths'
+import { translateWindowsPathForWsl } from '../runtimeTargets'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
@@ -172,7 +174,9 @@ export class ClaudeAdapterService {
         }
         const detected = isDirectLaunch
             ? null
-            : this.scanner.scanResults.find(item => item.entry.id === kind) ?? null
+            : this.scanner.scanResults.find(item =>
+                item.entry.id === kind && item.target.type === 'native',
+            ) ?? null
         if (!isDirectLaunch && !detected) {
             return
         }
@@ -198,6 +202,32 @@ export class ClaudeAdapterService {
             return
         }
         const { injectDir, settingsPath } = written
+        let settingsArgument = settingsPath
+
+        const targetId = tab.profile.options?.['aiCli']?.targetId
+        const wslTarget = isDirectLaunch
+            ? this.scanner.runtimeTargets.find(target => target.id === targetId && target.type === 'wsl')
+            : null
+        if (wslTarget?.type === 'wsl') {
+            const curlPath = path.join(process.env.WINDIR ?? 'C:\\Windows', 'System32', 'curl.exe')
+            const [translatedSettings, translatedCurl] = await Promise.all([
+                translateWindowsPathForWsl(wslTarget, settingsPath),
+                translateWindowsPathForWsl(wslTarget, curlPath),
+            ])
+            if (!translatedSettings || !translatedCurl || !fs.existsSync(curlPath)) {
+                try {
+                    fs.unlinkSync(settingsPath)
+                } catch { /* already gone */ }
+                console.warn(`[tabby-ai] WSL hook bridge unavailable in ${wslTarget.distro}; Claude will launch without full monitoring`)
+                return
+            }
+            settingsArgument = translatedSettings
+            fs.writeFileSync(
+                settingsPath,
+                JSON.stringify(this.settingsFor(sessionId, quoteSh(translatedCurl)), null, 2),
+                { mode: 0o600 },
+            )
+        }
 
         if (isDirectLaunch) {
             const args = (tab.profile.options.args ?? []).slice()
@@ -206,7 +236,7 @@ export class ClaudeAdapterService {
                     args.splice(i, 2)
                 }
             }
-            args.push('--settings', settingsPath)
+            args.push('--settings', settingsArgument)
             tab.profile.options.args = args
         } else {
             const shimDirectory = path.join(injectDir, `${SHIM_DIR_PREFIX}${process.pid}-${sessionId}`)
@@ -355,9 +385,9 @@ export class ClaudeAdapterService {
         }, EXIT_GRACE_MS)
     }
 
-    private settingsFor (sessionId: string): unknown {
+    private settingsFor (sessionId: string, curlCommand = 'curl'): unknown {
         // values are baked in as literals — never rely on shell variable expansion (§2)
-        const command = `curl -s -m 3 --data-binary @- "${this.ingress.endpointFor(sessionId)}"`
+        const command = `${curlCommand} -s -m 3 --data-binary @- "${this.ingress.endpointFor(sessionId)}"`
         const hooks: Record<string, unknown> = {}
         for (const event of HOOK_EVENTS) {
             hooks[event] = [{ hooks: [{ type: 'command', command, timeout: 10 }] }]

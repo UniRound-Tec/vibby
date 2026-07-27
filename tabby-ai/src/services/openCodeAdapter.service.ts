@@ -10,6 +10,7 @@ import { TerminalTabComponent } from 'tabby-local'
 import { OpenCodeEventProjector } from '../opencodeEvents'
 import { OpenCodeSseClient } from '../openCodeSse'
 import { SHIM_DIR_PREFIX } from '../paths'
+import { usesMirroredWslNetworking, wslIpv4Address } from '../runtimeTargets'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { RuntimeCliDetectorService } from './runtimeCliDetector.service'
@@ -52,6 +53,7 @@ interface OpenCodeRun {
     tab: TerminalTabComponent
     sessionId: string
     port: number
+    host: string
     direct: boolean
     projector: OpenCodeEventProjector
     client: OpenCodeSseClient|null
@@ -198,7 +200,9 @@ export class OpenCodeAdapterService {
         }
         const detected = direct
             ? null
-            : this.scanner.scanResults.find(item => item.entry.id === KIND) ?? null
+            : this.scanner.scanResults.find(item =>
+                item.entry.id === KIND && item.target.type === 'native',
+            ) ?? null
         if (!direct && !detected) {
             return
         }
@@ -215,6 +219,19 @@ export class OpenCodeAdapterService {
             return
         }
 
+        let host = HOST
+        const targetId = direct ? tab.profile.options?.['aiCli']?.targetId : null
+        const wslTarget = direct
+            ? this.scanner.runtimeTargets.find(target => target.id === targetId && target.type === 'wsl')
+            : null
+        if (wslTarget?.type === 'wsl' && wslTarget.wslVersion !== 1 && !usesMirroredWslNetworking()) {
+            host = await wslIpv4Address(wslTarget) ?? ''
+            if (!host) {
+                console.warn(`[tabby-ai] could not resolve WSL address for ${wslTarget.distro}; full listening skipped`)
+                return
+            }
+        }
+
         let port = 0
         try {
             port = await allocatePort()
@@ -228,7 +245,7 @@ export class OpenCodeAdapterService {
         }
 
         const sessionId = crypto.randomUUID()
-        const monitorArgs = ['--hostname', HOST, '--port', String(port)]
+        const monitorArgs = ['--hostname', host, '--port', String(port)]
         const monitorEnv = {
             [MONITOR_MARKER]: '1',
             [PORT_MARKER]: String(port),
@@ -264,6 +281,7 @@ export class OpenCodeAdapterService {
             tab,
             sessionId,
             port,
+            host,
             direct,
             projector: new OpenCodeEventProjector(sessionId),
             client: null,
@@ -303,8 +321,8 @@ export class OpenCodeAdapterService {
             run.projector = new OpenCodeEventProjector(run.sessionId)
         }
         run.client = new OpenCodeSseClient({
-            endpoint: `http://${HOST}:${run.port}`,
-            directory: run.tab.profile.options.cwd,
+            endpoint: `http://${run.host}:${run.port}`,
+            directory: run.tab.profile.options?.['aiCli']?.targetCwd ?? run.tab.profile.options.cwd,
             onEvent: payload => this.publish(run, run.projector.apply(payload, Date.now())),
             onStatuses: payload => this.publish(run, run.projector.reconcileStatuses(payload, Date.now())),
             onFailure: (error, fatal) => {

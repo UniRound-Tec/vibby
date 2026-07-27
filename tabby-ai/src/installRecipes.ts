@@ -422,6 +422,12 @@ export function installRecipeFor (
     return platform ? CLI_INSTALL_RECIPES[cliId]?.[platform] ?? null : null
 }
 
+export function installPlatformForTarget (
+    target: { platform: 'windows'|'macos'|'linux' }|null|undefined,
+): InstallPlatform|null {
+    return target?.platform ?? null
+}
+
 export function installShellCommand (
     recipe: CliInstallRecipe,
     platform = installPlatformFor(),

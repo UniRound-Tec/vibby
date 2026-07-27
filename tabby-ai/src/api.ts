@@ -1,4 +1,25 @@
 export type AiCliLauncher = 'exe' | 'cmd' | 'ps1' | 'sh'
+export type CliNativePlatform = 'windows' | 'linux' | 'macos'
+
+export interface NativeCliRuntimeTarget {
+    id: 'native'
+    type: 'native'
+    platform: CliNativePlatform
+    label: string
+}
+
+export interface WslCliRuntimeTarget {
+    id: string
+    type: 'wsl'
+    platform: 'linux'
+    label: string
+    distro: string
+    wslVersion: 1 | 2 | null
+    isDefault: boolean
+    state: 'running' | 'stopped' | 'unknown'
+}
+
+export type CliRuntimeTarget = NativeCliRuntimeTarget | WslCliRuntimeTarget
 
 export interface AiCliRegistryEntry {
     /** Stable identifier, becomes profile options.aiCli.kind */
@@ -35,12 +56,21 @@ export interface AiCliMetadata {
 
     /** Optional name supplied for this individual launch */
     sessionName?: string|null
+
+    /** Runtime selected for this launch. Missing on pre-WSL recovery tokens. */
+    targetId?: string|null
+
+    /** Target-native cwd. WSL paths must not be put in SessionOptions.cwd on Windows. */
+    targetCwd?: string|null
 }
 
 export interface DetectedCli {
     entry: AiCliRegistryEntry
 
-    /** Resolved absolute path */
+    /** The environment that owns command and version. */
+    target: CliRuntimeTarget
+
+    /** Resolved absolute path inside target */
     command: string
 
     /** Determines the platform launch wrapping */
@@ -48,4 +78,7 @@ export interface DetectedCli {
 
     /** null when version probing failed — not a blocker */
     version: string | null
+
+    /** Monitoring support for this exact CLI + target combination. */
+    monitoring: 'full' | 'launch'
 }

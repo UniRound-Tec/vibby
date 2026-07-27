@@ -77,6 +77,41 @@
         padding: 20px;
     }
 
+    .runtime-options {
+        display: flex;
+        overflow-x: auto;
+        margin-bottom: 16px;
+        gap: 7px;
+    }
+
+    .runtime-option {
+        display: flex;
+        min-width: 126px;
+        padding: 8px 10px;
+        flex-direction: column;
+        border: 1px solid rgba(128, 128, 128, .24);
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        text-align: left;
+
+        &.selected {
+            border-color: var(--theme-primary);
+            background: color-mix(in srgb, var(--theme-primary) 9%, transparent);
+        }
+    }
+
+    .runtime-name {
+        font-size: 11.5px;
+        font-weight: 600;
+    }
+
+    .runtime-detail {
+        margin-top: 2px;
+        font-size: 9.5px;
+        opacity: .58;
+    }
+
     .install-summary > p {
         margin: 0 0 14px;
         opacity: .82;

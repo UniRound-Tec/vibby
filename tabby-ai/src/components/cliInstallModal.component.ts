@@ -11,12 +11,13 @@ import {
 import { PTYInterface, PTYProxy } from 'tabby-local'
 import { BaseTerminalProfile, Frontend, XTermFrontend } from 'tabby-terminal'
 
-import { AiCliRegistryEntry } from '../api'
+import { AiCliRegistryEntry, CliRuntimeTarget } from '../api'
 import {
-    CliInstallRecipe, InstallPlatform, installPlatformFor, installRecipeFor, installShellCommand,
+    CliInstallRecipe, InstallPlatform, installPlatformForTarget, installRecipeFor, installShellCommand,
     installShellEnvironment,
 } from '../installRecipes'
 import { CliScannerService } from '../services/cliScanner.service'
+import { nativeRuntimeTarget, preferredRuntimeTarget, wslLaunchCommand } from '../runtimeTargets'
 
 type InstallState = 'confirm' | 'running' | 'succeeded' | 'failed'
 
@@ -36,11 +37,17 @@ export class CliInstallModalComponent implements OnInit, OnDestroy {
     state: InstallState = 'confirm'
     platform: InstallPlatform|null = null
     recipe: CliInstallRecipe|null = null
+    targets: CliRuntimeTarget[] = []
+    selectedTargetId = 'native'
     exitCode: number|null = null
     detectedAfterInstall = false
 
     get automaticInstallAvailable (): boolean {
         return this.recipe?.support === 'ready' && !!this.recipe.command
+    }
+
+    get selectedTarget (): CliRuntimeTarget|null {
+        return this.targets.find(target => target.id === this.selectedTargetId) ?? null
     }
 
     private frontend: Frontend|null = null
@@ -61,8 +68,35 @@ export class CliInstallModalComponent implements OnInit, OnDestroy {
     ) { }
 
     ngOnInit (): void {
-        this.platform = installPlatformFor()
-        this.recipe = installRecipeFor(this.cli.id, this.platform)
+        const native = nativeRuntimeTarget()
+        const excluded = new Set(
+            (this.config.store.aiCli.scanner.wsl.excludedDistributions as string[])
+                .map(name => name.toLowerCase()),
+        )
+        this.targets = this.scanner.runtimeTargets.filter(target =>
+            target.type !== 'wsl' || !excluded.has(target.distro.toLowerCase()),
+        )
+        if (native && !this.targets.some(target => target.id === native.id)) {
+            this.targets.unshift(native)
+        }
+        const nativeRecipe = installRecipeFor(this.cli.id, native?.platform ?? null)
+        const preferred = nativeRecipe?.support === 'requires-wsl'
+            ? preferredRuntimeTarget(
+                this.targets
+                    .filter(target => target.type === 'wsl')
+                    .map(target => ({ target })),
+            )?.target
+            : this.targets.find(target => target.type === 'native')
+        this.selectedTargetId = preferred ? preferred.id : this.targets[0]?.id ?? 'native'
+        this.updateRecipe()
+    }
+
+    selectTarget (targetId: string): void {
+        if (this.state !== 'confirm') {
+            return
+        }
+        this.selectedTargetId = targetId
+        this.updateRecipe()
     }
 
     async install (): Promise<void> {
@@ -98,8 +132,14 @@ export class CliInstallModalComponent implements OnInit, OnDestroy {
             }))
 
             await frontend.write(`\x1b[1;36m> ${this.recipe.command!}\x1b[0m\r\n\r\n`)
-            const shell = installShellCommand(this.recipe, this.platform)
-            const path = this.scanner.shellPath ?? process.env.PATH
+            const recipeShell = installShellCommand(this.recipe, this.platform)
+            const shell = this.selectedTarget?.type === 'wsl'
+                ? wslLaunchCommand(this.selectedTarget, recipeShell.command, recipeShell.args, '~')
+                : recipeShell
+            const path = this.selectedTarget?.type === 'native'
+                ? this.scanner.shellPath ?? process.env.PATH
+                : process.env.PATH
+            const environmentPlatform = this.selectedTarget?.type === 'wsl' ? 'windows' : this.platform
             const pty = await this.injector.get(PTYInterface).spawn(shell.command, shell.args, {
                 name: 'xterm-256color',
                 cols: this.lastSize.columns,
@@ -107,7 +147,7 @@ export class CliInstallModalComponent implements OnInit, OnDestroy {
                 encoding: null,
                 cwd: process.env.USERPROFILE ?? process.env.HOME,
                 env: {
-                    ...installShellEnvironment(process.env, this.platform),
+                    ...installShellEnvironment(process.env, environmentPlatform),
                     PATH: path,
                     TERM: 'xterm-256color',
                     COLORTERM: 'truecolor',
@@ -175,7 +215,9 @@ export class CliInstallModalComponent implements OnInit, OnDestroy {
             this.exitCode = code
             if (succeeded) {
                 const detected = await this.scanner.refresh()
-                this.detectedAfterInstall = detected.some(x => x.entry.id === this.cli.id)
+                this.detectedAfterInstall = detected.some(x =>
+                    x.entry.id === this.cli.id && x.target.id === this.selectedTargetId,
+                )
             }
             if (!this.destroyed) {
                 this.state = succeeded ? 'succeeded' : 'failed'
@@ -197,5 +239,11 @@ export class CliInstallModalComponent implements OnInit, OnDestroy {
         }
         this.frontend?.destroy()
         this.frontend = null
+    }
+
+    private updateRecipe (): void {
+        this.platform = installPlatformForTarget(this.selectedTarget)
+        this.recipe = installRecipeFor(this.cli.id, this.platform)
+        this.cdr.markForCheck()
     }
 }

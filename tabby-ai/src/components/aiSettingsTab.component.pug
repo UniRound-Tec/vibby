@@ -3,7 +3,6 @@ h3.mb-3(translate) AI CLI
 .form-line
     .header
         .title(translate) Detected CLIs
-        .description(translate) Scan the machine for installed AI coding CLIs
     button.btn.btn-secondary((click)='rescan()', [disabled]='scanner.scanning$ | async')
         span(*ngIf='!(scanner.scanning$ | async)', translate) Rescan
         span(*ngIf='scanner.scanning$ | async', translate) Scanning…
@@ -11,9 +10,7 @@ h3.mb-3(translate) AI CLI
 .form-line(*ngFor='let entry of registry')
     .header
         .title {{entry.name}}
-        .description(*ngIf='isDetected(entry)')
-            span(translate) Detected
-            span(*ngIf='versionFor(entry)')  · {{versionFor(entry)}}
+        .description(*ngIf='isDetected(entry)') {{environmentsFor(entry)}}
         .description(*ngIf='!isDetected(entry)', translate) Not found
     toggle(
         [ngModel]='isEnabled(entry)',
@@ -29,6 +26,22 @@ h3.mb-3(translate) AI CLI
         [(ngModel)]='extraPathsText',
         (blur)='saveExtraPaths()',
     )
+
+h3.mt-4.mb-3(*ngIf='isWindows', translate) WSL environments
+
+.form-line(*ngFor='let target of scanner.runtimeTargets')
+    ng-container(*ngIf='isWindows && target.type === "wsl"')
+        .header
+            .title {{target.label}}
+            .description
+                span WSL {{target.wslVersion || "?"}}
+                span  ·
+                span(*ngIf='target.isDefault', translate) Default
+                span(*ngIf='!target.isDefault') {{target.state}}
+        toggle(
+            [ngModel]='isWslDistroEnabled(target.distro)',
+            (ngModelChange)='setWslDistroEnabled(target.distro, $event)',
+        )
 
 h3.mt-4.mb-3(translate) Notifications
 

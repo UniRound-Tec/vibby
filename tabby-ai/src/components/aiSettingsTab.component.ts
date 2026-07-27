@@ -12,6 +12,7 @@ import { CliScannerService } from '../services/cliScanner.service'
 export class AiSettingsTabComponent {
     registry = AI_CLI_REGISTRY
     extraPathsText: string
+    isWindows = process.platform === 'win32'
 
     constructor (
         public config: ConfigService,
@@ -22,6 +23,13 @@ export class AiSettingsTabComponent {
 
     versionFor (entry: AiCliRegistryEntry): string|null {
         return this.scanner.scanResults.find(x => x.entry.id === entry.id)?.version ?? null
+    }
+
+    environmentsFor (entry: AiCliRegistryEntry): string {
+        return this.scanner.scanResults
+            .filter(item => item.entry.id === entry.id)
+            .map(item => `${item.target.label}${item.version ? ` · ${item.version}` : ''}`)
+            .join(' / ')
     }
 
     isDetected (entry: AiCliRegistryEntry): boolean {
@@ -47,6 +55,22 @@ export class AiSettingsTabComponent {
             .split('\n')
             .map(x => x.trim())
             .filter(x => x)
+        this.config.save()
+        this.scanner.scan()
+    }
+
+    isWslDistroEnabled (distro: string): boolean {
+        return !(this.config.store.aiCli.scanner.wsl.excludedDistributions as string[])
+            .some(name => name.toLowerCase() === distro.toLowerCase())
+    }
+
+    setWslDistroEnabled (distro: string, enabled: boolean): void {
+        let excluded = [...this.config.store.aiCli.scanner.wsl.excludedDistributions as string[]]
+            .filter(name => name.toLowerCase() !== distro.toLowerCase())
+        if (!enabled) {
+            excluded = [...excluded, distro]
+        }
+        this.config.store.aiCli.scanner.wsl.excludedDistributions = excluded
         this.config.save()
         this.scanner.scan()
     }

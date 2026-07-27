@@ -9,7 +9,10 @@ import { TerminalTabComponent, SessionOptions } from 'tabby-local'
 import { AiCliMetadata, DetectedCli } from './api'
 import { AI_CLI_REGISTRY } from './registry'
 import { CliScannerService, wrapCommand } from './services/cliScanner.service'
-import { CliLaunchModalComponent, CliLaunchOptions } from './components/cliLaunchModal.component'
+import {
+    CliLaunchModalComponent, CliLaunchOptions, CliLaunchTargetOption,
+} from './components/cliLaunchModal.component'
+import { preferredRuntimeTarget, wslLaunchCommand } from './runtimeTargets'
 
 export interface AiCliProfile extends Profile {
     options: SessionOptions & { aiCli: AiCliMetadata }
@@ -38,6 +41,8 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
                 kind: null,
                 version: null,
                 sessionName: null,
+                targetId: null,
+                targetCwd: null,
             },
         },
     }
@@ -54,18 +59,21 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
 
     async getBuiltinProfiles (): Promise<PartialProfile<AiCliProfile>[]> {
         const clis = await this.scanner.ensureScanned()
-        return clis.map(cli => ({
-            id: `ai-cli:${cli.entry.id}`,
-            type: 'ai-cli',
-            name: cli.entry.name,
-            icon: cli.entry.icon,
-            isBuiltin: true,
-            // its own heading in the profile selector and the profiles settings
-            // tab, rather than being mixed in with the built-in shells — these
-            // are the product, not one more way to get a prompt
-            group: 'AI CLI',
-            options: this.optionsFromCli(cli),
-        }))
+        return AI_CLI_REGISTRY.flatMap(entry => {
+            const detected = preferredRuntimeTarget(clis.filter(cli => cli.entry.id === entry.id))
+            return detected ? [{
+                id: `ai-cli:${entry.id}`,
+                type: 'ai-cli',
+                name: entry.name,
+                icon: entry.icon,
+                isBuiltin: true,
+                // its own heading in the profile selector and the profiles settings
+                // tab, rather than being mixed in with the built-in shells — these
+                // are the product, not one more way to get a prompt
+                group: 'AI CLI',
+                options: this.optionsFromCli(detected),
+            }] : []
+        })
     }
 
     async getNewTabParameters (profile: AiCliProfile): Promise<NewTabParameters<TerminalTabComponent>> {
@@ -98,6 +106,11 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
     async configureForLaunch (profile: AiCliProfile): Promise<PartialProfile<AiCliProfile>|null> {
         const kind = profile.options.aiCli.kind
         const entry = AI_CLI_REGISTRY.find(x => x.id === kind)
+        const detections = this.scanner.scanResults.filter(item => item.entry.id === kind)
+        const selected = preferredRuntimeTarget(detections, profile.options.aiCli.targetId)
+        if (!selected) {
+            return null
+        }
         const fallbackCwd = await this.fallbackWorkingDirectory(profile)
         const modal = this.modal.open(CliLaunchModalComponent, {
             centered: true,
@@ -111,6 +124,20 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
         modal.componentInstance.fallbackArguments = entry?.launchArgs?.length
             ? shellQuote.quote(entry.launchArgs)
             : this.translate.instant('No additional arguments')
+        modal.componentInstance.targets = detections.map(cli => ({
+            id: cli.target.id,
+            label: cli.target.type === 'wsl'
+                ? `${cli.target.label} (WSL ${cli.target.wslVersion ?? '?'})`
+                : cli.target.label,
+            detail: [
+                cli.version ?? this.translate.instant('Version unknown'),
+                cli.monitoring === 'full'
+                    ? this.translate.instant('Listening')
+                    : null,
+            ].filter((value): value is string => !!value).join(' · '),
+            type: cli.target.type,
+        } satisfies CliLaunchTargetOption))
+        modal.componentInstance.selectedTargetId = selected.target.id
 
         const launchOptions = await modal.result.catch(() => null) as CliLaunchOptions|null
         if (!launchOptions) {
@@ -118,18 +145,17 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
         }
 
         const customName = launchOptions.name.trim()
+        const selectedCli = detections.find(item => item.target.id === launchOptions.targetId) ?? selected
+        const targetCwd = launchOptions.cwd ||
+            (selectedCli.target.type === 'wsl' ? '~' : fallbackCwd)
+        const launchOptionsForTarget = this.optionsFromCli(selectedCli, launchOptions.args, targetCwd)
         return {
             ...profile,
             name: customName ? customName : profile.name,
             options: {
-                ...profile.options,
-                cwd: launchOptions.cwd ? launchOptions.cwd : profile.options.cwd,
-                args: [
-                    ...profile.options.args,
-                    ...launchOptions.args,
-                ],
+                ...launchOptionsForTarget,
                 aiCli: {
-                    ...profile.options.aiCli,
+                    ...launchOptionsForTarget.aiCli,
                     ...customName ? { sessionName: customName } : {},
                 },
             },
@@ -150,18 +176,30 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
         return [profile.options?.command, ...profile.options?.args ?? []].filter(x => x).join(' ')
     }
 
-    private optionsFromCli (cli: DetectedCli): AiCliProfile['options'] {
-        const wrapped = wrapCommand(cli.command, cli.entry.launchArgs ?? [], cli.launcher)
+    private optionsFromCli (
+        cli: DetectedCli,
+        additionalArgs: string[] = [],
+        targetCwd?: string|null,
+    ): AiCliProfile['options'] {
+        const args = [...cli.entry.launchArgs ?? [], ...additionalArgs]
+        const wrapped = cli.target.type === 'wsl'
+            ? wslLaunchCommand(cli.target, cli.command, args, targetCwd)
+            : wrapCommand(cli.command, args, cli.launcher)
         return {
             ...this.configDefaults.options,
             // a GUI-launched app on macOS/Linux has a minimal PATH; the CLI's
             // `#!/usr/bin/env node` line needs the login shell's one to resolve
-            env: this.scanner.shellPath ? { PATH: this.scanner.shellPath } : {},
+            env: cli.target.type === 'native' && this.scanner.shellPath
+                ? { PATH: this.scanner.shellPath }
+                : {},
+            cwd: cli.target.type === 'native' ? targetCwd ?? null : null,
             command: wrapped.command,
             args: wrapped.args,
             aiCli: {
                 kind: cli.entry.id,
                 version: cli.version,
+                targetId: cli.target.id,
+                targetCwd: targetCwd ?? null,
             },
         }
     }

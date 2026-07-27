@@ -6,13 +6,23 @@ import { Injectable } from '@angular/core'
 import { BehaviorSubject, Observable } from 'rxjs'
 import { ConfigService, LogService, Logger } from 'tabby-core'
 import { AI_CLI_REGISTRY } from '../registry'
-import { AiCliLauncher, AiCliRegistryEntry, DetectedCli } from '../api'
+import {
+    AiCliLauncher, AiCliRegistryEntry, CliRuntimeTarget, DetectedCli, WslCliRuntimeTarget,
+} from '../api'
 import { mergeWindowsPath, parseWindowsRegistryPath, selectLookupResult } from '../binaryResolution'
 import { scanResultForProfiles } from '../scanLifecycle'
+import {
+    decodeWslOutput, isWindowsMountedWslPath, mergeWslTargets, nativeRuntimeTarget, shouldScanWslTarget,
+    wslExecutablePath, wslLaunchCommand,
+} from '../runtimeTargets'
+import { quoteSh } from '../paths'
 
 const WINDOWS = process.platform === 'win32'
 const PROBE_TIMEOUT = 2000
 const SCAN_TIMEOUT = 5000
+const WSL_SCAN_TIMEOUT = 12000
+const WSL_RECORD = '__VIBBY_WSL_CLI__'
+const WSL_SHELL_RECORD = '__VIBBY_WSL_SHELL__'
 
 export function launcherFor (file: string): AiCliLauncher {
     const ext = path.extname(file).toLowerCase()
@@ -70,6 +80,7 @@ export class CliScannerService {
     get scanResults$ (): Observable<DetectedCli[]> { return this.results }
     get scanResults (): DetectedCli[] { return this.results.value }
     get scanning$ (): Observable<boolean> { return this.scanning }
+    get runtimeTargets (): readonly CliRuntimeTarget[] { return this.runtimeTargetsValue }
 
     private results = new BehaviorSubject<DetectedCli[]>([])
     private scanning = new BehaviorSubject<boolean>(false)
@@ -78,6 +89,8 @@ export class CliScannerService {
     private firstScan: Promise<DetectedCli[]>|null = null
     private shellPathProbe: Promise<string|null>|null = null
     private shellPathValue: string|null = null
+    private runtimeTargetsValue: CliRuntimeTarget[] = []
+    private wslShells = new Map<string, string>()
     private logger: Logger
 
     constructor (
@@ -89,7 +102,7 @@ export class CliScannerService {
 
     /** Returns the active/latest scan, starting the first one when needed. */
     ensureScanned (): Promise<DetectedCli[]> {
-        return scanResultForProfiles(this.currentScan, this.firstScan, this.results.value, () => this.scan())
+        return scanResultForProfiles(this.currentScan, this.firstScan, this.results.value, () => this.scan(true))
     }
 
     /**
@@ -102,11 +115,11 @@ export class CliScannerService {
         return this.shellPathValue
     }
 
-    async scan (): Promise<DetectedCli[]> {
+    async scan (includeStoppedWsl = true): Promise<DetectedCli[]> {
         if (this.currentScan) {
             return this.currentScan
         }
-        this.currentScan = this.performScan().finally(() => {
+        this.currentScan = this.performScan(includeStoppedWsl).finally(() => {
             this.currentScan = null
         })
         this.firstScan ??= this.currentScan
@@ -114,17 +127,18 @@ export class CliScannerService {
     }
 
     /** Re-read package-manager locations and login-shell PATH after an install */
-    async refresh (): Promise<DetectedCli[]> {
+    async refresh (includeStoppedWsl = true): Promise<DetectedCli[]> {
         if (this.currentScan) {
             await this.currentScan
         }
         this.npmGlobalBin = undefined
         this.shellPathProbe = null
         this.shellPathValue = null
-        return this.scan()
+        this.wslShells.clear()
+        return this.scan(includeStoppedWsl)
     }
 
-    private async performScan (): Promise<DetectedCli[]> {
+    private async performScan (includeStoppedWsl: boolean): Promise<DetectedCli[]> {
         await this.config.ready$.toPromise()
         this.scanning.next(true)
         try {
@@ -133,13 +147,39 @@ export class CliScannerService {
             await this.ensureShellPath()
             const hidden: string[] = this.config.store.aiCli.scanner.hidden
             const entries = AI_CLI_REGISTRY.filter(x => !hidden.includes(x.id))
-            const detections = await this.withTimeout(
-                Promise.all(entries.map(x => this.detect(x))),
+            const nativeTarget = nativeRuntimeTarget()
+            const nativeDetections = nativeTarget ? await this.withTimeout(
+                Promise.all(entries.map(x => this.detectNative(x, nativeTarget))),
                 SCAN_TIMEOUT,
                 [] as (DetectedCli|null)[],
+            ) : []
+
+            const wslTargets = await this.enumerateWslTargets()
+            this.runtimeTargetsValue = [
+                ...nativeTarget ? [nativeTarget] : [],
+                ...wslTargets,
+            ]
+            const excludedWsl = new Set(
+                (this.config.store.aiCli.scanner.wsl.excludedDistributions as string[])
+                    .map(name => name.toLowerCase()),
             )
-            const found = detections.filter((x): x is DetectedCli => !!x)
-            this.logger.info(`Scan complete: ${found.map(x => `${x.entry.id}@${x.version ?? '?'}`).join(', ') || 'none found'}`)
+            const wslDetections = await Promise.all(
+                wslTargets
+                    .filter(target => !excludedWsl.has(target.distro.toLowerCase()))
+                    .filter(target => shouldScanWslTarget(target, includeStoppedWsl))
+                    .map(target => this.withTimeout(
+                        this.detectInWsl(target, entries),
+                        WSL_SCAN_TIMEOUT,
+                        [] as DetectedCli[],
+                    )),
+            )
+            const found = [
+                ...nativeDetections.filter((x): x is DetectedCli => !!x),
+                ...wslDetections.flat(),
+            ]
+            this.logger.info(`Scan complete: ${found.map(x =>
+                `${x.entry.id}@${x.version ?? '?'}[${x.target.label}]`,
+            ).join(', ') || 'none found'}`)
             this.results.next(found)
             return found
         } finally {
@@ -147,7 +187,10 @@ export class CliScannerService {
         }
     }
 
-    private async detect (entry: AiCliRegistryEntry): Promise<DetectedCli|null> {
+    private async detectNative (
+        entry: AiCliRegistryEntry,
+        target: CliRuntimeTarget,
+    ): Promise<DetectedCli|null> {
         try {
             const command = await this.resolveBinary(entry)
             if (!command) {
@@ -155,11 +198,171 @@ export class CliScannerService {
             }
             const launcher = launcherFor(command)
             const version = await this.probeVersion(entry, command, launcher)
-            return { entry, command, launcher, version }
+            return { entry, target, command, launcher, version, monitoring: entry.tier }
         } catch (e) {
             this.logger.warn(`Failed to detect ${entry.id}:`, e)
             return null
         }
+    }
+
+    private async enumerateWslTargets (): Promise<WslCliRuntimeTarget[]> {
+        if (!WINDOWS || this.config.store.aiCli.scanner.wsl?.enabled === false) {
+            return []
+        }
+        const wsl = wslExecutablePath()
+        const env = { ...process.env, WSL_UTF8: '1' }
+        const [names, running, verbose] = await Promise.all([
+            this.runTextCommand(wsl, ['--list', '--quiet'], PROBE_TIMEOUT, env),
+            this.runTextCommand(wsl, ['--list', '--running', '--quiet'], PROBE_TIMEOUT, env),
+            this.runTextCommand(wsl, ['--list', '--verbose'], PROBE_TIMEOUT, env),
+        ])
+        if (names === null) {
+            this.logger.info('WSL unavailable or not configured')
+            return []
+        }
+        return mergeWslTargets(names, running ?? '', verbose ?? '')
+    }
+
+    private async detectInWsl (
+        target: WslCliRuntimeTarget,
+        entries: AiCliRegistryEntry[],
+    ): Promise<DetectedCli[]> {
+        try {
+            const commands = await this.resolveWslBinaries(target, entries)
+            const detections: (DetectedCli|null)[] = await Promise.all(entries.map(async (
+                entry,
+            ): Promise<DetectedCli|null> => {
+                const command = commands.get(entry.id)
+                if (!command) {
+                    return null
+                }
+                const version = await this.probeWslVersion(target, entry, command)
+                return {
+                    entry,
+                    target,
+                    command,
+                    launcher: 'sh' as const,
+                    version,
+                    monitoring: entry.tier,
+                }
+            }))
+            return detections.filter((item): item is DetectedCli => !!item)
+        } catch (error) {
+            this.logger.warn(`Failed to scan WSL distribution ${target.distro}:`, error)
+            return []
+        }
+    }
+
+    private async getWslShell (target: WslCliRuntimeTarget): Promise<string> {
+        const cached = this.wslShells.get(target.id)
+        if (cached) {
+            return cached
+        }
+        const output = await this.runCaptured(
+            wslLaunchCommand(
+                target,
+                '/bin/sh',
+                ['-lc', `printf '${WSL_SHELL_RECORD}%s\\n' "\${SHELL:-/bin/sh}"`],
+            ),
+            PROBE_TIMEOUT,
+            { ...process.env, WSL_UTF8: '1' },
+        )
+        const shell = output
+            ?.split(/\r?\n/)
+            .find(line => line.startsWith(WSL_SHELL_RECORD))
+            ?.slice(WSL_SHELL_RECORD.length)
+            .trim()
+        const result = shell?.startsWith('/') ? shell : '/bin/sh'
+        this.wslShells.set(target.id, result)
+        return result
+    }
+
+    private async resolveWslBinaries (
+        target: WslCliRuntimeTarget,
+        entries: AiCliRegistryEntry[],
+    ): Promise<Map<string, string>> {
+        const functions = entries.map(entry => [
+            'vibby_find',
+            quoteSh(entry.id),
+            ...entry.binaries.map(quoteSh),
+        ].join(' ')).join('\n')
+        const script = [
+            'vibby_find () {',
+            '  vibby_id=$1',
+            '  shift',
+            '  for vibby_bin in "$@"; do',
+            '    vibby_old_ifs=$IFS',
+            '    IFS=:',
+            '    for vibby_dir in $PATH; do',
+            '      IFS=$vibby_old_ifs',
+            '      [ -n "$vibby_dir" ] || vibby_dir=.',
+            '      vibby_candidate=$vibby_dir/$vibby_bin',
+            '      if [ -f "$vibby_candidate" ] && [ -x "$vibby_candidate" ]; then',
+            '        vibby_real=$(readlink -f "$vibby_candidate" 2>/dev/null || printf "%s" "$vibby_candidate")',
+            '        vibby_windows=$(wslpath -w "$vibby_real" 2>/dev/null || true)',
+            `        printf '${WSL_RECORD}%s\\t%s\\t%s\\n' "$vibby_id" "$vibby_real" "$vibby_windows"`,
+            '      fi',
+            '      IFS=:',
+            '    done',
+            '    IFS=$vibby_old_ifs',
+            '  done',
+            '}',
+            functions,
+        ].join('\n')
+        const shell = await this.getWslShell(target)
+        let output = await this.runCaptured(
+            wslLaunchCommand(target, shell, ['-i', '-l', '-c', script]),
+            WSL_SCAN_TIMEOUT,
+            { ...process.env, WSL_UTF8: '1' },
+        )
+        if (!output?.includes(WSL_RECORD) && shell !== '/bin/sh') {
+            output = await this.runCaptured(
+                wslLaunchCommand(target, '/bin/sh', ['-lc', script]),
+                WSL_SCAN_TIMEOUT,
+                { ...process.env, WSL_UTF8: '1' },
+            )
+        }
+        const commands = new Map<string, string>()
+        for (const line of output?.split(/\r?\n/) ?? []) {
+            const marker = line.indexOf(WSL_RECORD)
+            if (marker === -1) {
+                continue
+            }
+            const [id, resolved, windowsPath] = line.slice(marker + WSL_RECORD.length).split('\t')
+            if (id && resolved && windowsPath && !isWindowsMountedWslPath(windowsPath) && !commands.has(id)) {
+                commands.set(id, resolved)
+            }
+        }
+        return commands
+    }
+
+    private async probeWslVersion (
+        target: WslCliRuntimeTarget,
+        entry: AiCliRegistryEntry,
+        command: string,
+    ): Promise<string|null> {
+        const output = await this.runCaptured(
+            wslLaunchCommand(target, command, entry.versionArgs),
+            PROBE_TIMEOUT,
+            { ...process.env, WSL_UTF8: '1' },
+        )
+        return output === null ? null : entry.versionPattern.exec(output)?.[1] ?? null
+    }
+
+    private runTextCommand (
+        command: string,
+        args: string[],
+        timeout: number,
+        env: Record<string, string|undefined>,
+    ): Promise<string|null> {
+        return new Promise(resolve => {
+            execFile(command, args, {
+                timeout,
+                windowsHide: true,
+                env,
+                maxBuffer: 1024 * 1024,
+            }, (error, stdout) => resolve(error ? null : decodeWslOutput(stdout)))
+        })
     }
 
     private async resolveBinary (entry: AiCliRegistryEntry): Promise<string|null> {
@@ -282,7 +485,11 @@ export class CliScannerService {
     }
 
     /** Runs a process, captures stdout+stderr, kills the whole process tree on timeout */
-    private runCaptured (cmd: { command: string, args: string[] }, timeout: number): Promise<string|null> {
+    private runCaptured (
+        cmd: { command: string, args: string[] },
+        timeout: number,
+        environment = this.execEnv(),
+    ): Promise<string|null> {
         return new Promise(resolve => {
             let output = ''
             const spawned = (() => {
@@ -293,7 +500,7 @@ export class CliScannerService {
                         stdio: ['ignore', 'pipe', 'pipe'],
                         // the CLI is usually an `#!/usr/bin/env node` script — the
                         // interpreter lookup needs the same PATH that found the CLI
-                        env: this.execEnv(),
+                        env: environment,
                     })
                 } catch {
                     return null

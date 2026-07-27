@@ -24,7 +24,7 @@ assert.equal(e.raw.session_id, 'abc', 'claude-side ids must survive in raw')
 
 e = t({ hook_event_name: 'UserPromptSubmit', prompt: 'fix the bug' })
 assert.equal(e.kind, 'prompt-submitted')
-assert.equal(e.summary, 'prompt: fix the bug')
+assert.equal(e.summary, 'user: fix the bug')
 
 e = t({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls' } })
 assert.equal(e.kind, 'tool-call')

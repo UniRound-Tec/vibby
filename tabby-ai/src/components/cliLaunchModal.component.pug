@@ -6,7 +6,6 @@ form.cli-launch-modal((ngSubmit)='start()')
                 h5.modal-title
                     span(translate) Launch
                     |  {{cliName}}
-                .header-note(translate) Settings apply only to this session
         button.close-button(
             type='button',
             (click)='cancel()',
@@ -14,6 +13,24 @@ form.cli-launch-modal((ngSubmit)='start()')
         ) ×
 
     .modal-body
+        .field(*ngIf='targets.length > 1')
+            .label-row
+                label.form-label(translate) Runtime
+            .runtime-options
+                label.runtime-option(
+                    *ngFor='let target of targets',
+                    [class.selected]='selectedTargetId === target.id',
+                )
+                    input(
+                        type='radio',
+                        name='runtimeTarget',
+                        [value]='target.id',
+                        [(ngModel)]='selectedTargetId',
+                    )
+                    .runtime-copy
+                        span.runtime-name {{target.label}}
+                        span.runtime-detail {{target.detail}}
+
         .field
             .label-row
                 label.form-label(for='cli-session-name', translate) Session name
@@ -39,7 +56,7 @@ form.cli-launch-modal((ngSubmit)='start()')
                     type='text',
                     [(ngModel)]='cwd',
                     name='workingDirectory',
-                    [placeholder]='fallbackCwd',
+                    [placeholder]='displayedFallbackCwd',
                     autocomplete='off',
                     spellcheck='false',
                 )
@@ -52,7 +69,7 @@ form.cli-launch-modal((ngSubmit)='start()')
                     i.fas.fa-folder-open
             .fallback
                 span(translate) Leave blank to use:
-                code.path-value([title]='fallbackCwd') {{fallbackCwd}}
+                code.path-value([title]='displayedFallbackCwd') {{displayedFallbackCwd}}
 
         .field
             .label-row

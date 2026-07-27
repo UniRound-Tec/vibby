@@ -45,7 +45,7 @@ export class TerminalConfigProvider extends ConfigProvider {
             },
             lightColorScheme: {
                 __nonStructural: true,
-                ...DefaultColorSchemes.defaultLightColorScheme,
+                ...DefaultColorSchemes.atomOneLightColorScheme,
             },
             customColorSchemes: [],
             warnOnMultilinePaste: true,
