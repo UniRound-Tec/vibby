@@ -310,21 +310,16 @@ export class CodexAdapterService {
         }
     }
 
-    /** Once per run until dismissed for good — never blocks the spawn */
+    /** Shown once ever — the first arm records it and it never comes back */
     private notifyTrustBypass (): void {
         if (this.trustBypassAnnounced || this.config.store.aiCli.codex.trustBypassAcknowledged) {
             return
         }
         this.trustBypassAnnounced = true
+        this.config.store.aiCli.codex.trustBypassAcknowledged = true
+        this.config.save()
         this.zone.run(() => {
             this.ngbModal.open(CodexTrustModalComponent, { backdrop: 'static' }).result
-                .then((silenced: boolean) => {
-                    if (silenced) {
-                        this.config.store.aiCli.codex.trustBypassAcknowledged = true
-                        this.config.save()
-                    }
-                })
-                // dismissed with Escape — ask again next run
                 .catch(() => null)
         })
     }

@@ -32,7 +32,7 @@ export class AiConfigProvider extends ConfigProvider {
                 enabled: false,
             },
             codex: {
-                /** Set once the hook-trust-bypass notice is dismissed for good */
+                /** Set once the hook-trust-bypass notice has been shown */
                 trustBypassAcknowledged: false,
             },
         },
