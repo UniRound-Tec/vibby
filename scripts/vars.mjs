@@ -10,7 +10,19 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
 const electronInfo = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../node_modules/electron/package.json')))
 
-export let version = childProcess.execSync('git describe --tags', { encoding:'utf-8' })
+function describeVersion () {
+    try {
+        return childProcess.execSync('git describe --tags', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
+    } catch {
+        // No tag is reachable from HEAD — a clone without tags pushed, or a
+        // shallow checkout. Shape the fallback like a post-tag describe so the
+        // nightly branch below still fires instead of it naming a release.
+        const appVersion = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../app/package.json'))).version
+        return `v${appVersion}-0-g0000000`
+    }
+}
+
+export let version = describeVersion()
 version = version.substring(1).trim()
 version = version.replace('-', '-c')
 

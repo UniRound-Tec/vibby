@@ -35,11 +35,13 @@ process.mainModule = module
 const application = new Application(configStore)
 
 // Windows attributes a toast to an Application User Model ID and silently drops
-// it when there is none. A packaged build's installer must register this exact
-// string, or Windows treats the installed and the dev build as separate apps.
+// it when there is none. Must equal the electron-builder appId
+// (electron-builder.yml): the NSIS installer registers the shortcut under that
+// string, and a mismatch makes Windows treat the installed and the running app
+// as different apps — toasts from a packaged build would vanish again.
 // Verified to deliver toasts unpackaged too, though that depends on the host's
 // Windows configuration rather than on anything we control.
-app.setAppUserModelId('com.uniround.vibby')
+app.setAppUserModelId('org.vibby')
 
 // Register vibby:// URL scheme
 if (process.defaultApp) {
