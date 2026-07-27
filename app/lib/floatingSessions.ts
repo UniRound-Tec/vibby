@@ -21,9 +21,15 @@ interface ExpandedRequest {
 }
 
 interface MoveRequest {
-    deltaX: number
-    deltaY: number
+    x: number
+    y: number
 }
+
+/**
+ * Generous enough to cover any real multi-monitor virtual screen, including
+ * displays left of or above the primary one, which give negative coordinates.
+ */
+const MAX_SCREEN_COORDINATE = 100_000
 
 function isRecord (value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -64,18 +70,18 @@ function expandedRequest (value: unknown): ExpandedRequest | null {
 function moveRequest (value: unknown): MoveRequest | null {
     if (
         !isRecord(value) ||
-        typeof value.deltaX !== 'number' ||
-        typeof value.deltaY !== 'number' ||
-        !Number.isFinite(value.deltaX) ||
-        !Number.isFinite(value.deltaY) ||
-        Math.abs(value.deltaX) > 100 ||
-        Math.abs(value.deltaY) > 100
+        typeof value.x !== 'number' ||
+        typeof value.y !== 'number' ||
+        !Number.isFinite(value.x) ||
+        !Number.isFinite(value.y) ||
+        Math.abs(value.x) > MAX_SCREEN_COORDINATE ||
+        Math.abs(value.y) > MAX_SCREEN_COORDINATE
     ) {
         return null
     }
     return {
-        deltaX: Math.round(value.deltaX),
-        deltaY: Math.round(value.deltaY),
+        x: Math.round(value.x),
+        y: Math.round(value.y),
     }
 }
 
@@ -130,7 +136,7 @@ export class FloatingSessionHub {
             }
             const request = moveRequest(value)
             if (request) {
-                this.window.moveBy(request.deltaX, request.deltaY)
+                this.window.moveTo(request.x, request.y)
             }
         })
     }

@@ -32,12 +32,23 @@ export class FloatingSessionsWindow {
     private destroying = false
     private positionConfig = new ElectronConfig({ name: 'floating-sessions-window' })
     private savePositionTimeout: ReturnType<typeof setTimeout> | null = null
+    /**
+     * The size we asked for, kept here rather than read back from the window.
+     * Under a fractional display scale Chromium reports bounds through
+     * ScaleToEnclosingRect, so getBounds() rounds the size outwards by up to a
+     * pixel depending on where the window currently sits. Feeding that back
+     * into setBounds()/setPosition() grows the window on every drag event.
+     */
+    private width: number
+    private height: number
 
     constructor (
         private onReady: () => void,
         private onClosed: () => void,
     ) {
         const bounds = this.initialBounds()
+        this.width = bounds.width
+        this.height = bounds.height
         this.window = new BrowserWindow({
             ...bounds,
             title: 'Vibby',
@@ -116,23 +127,32 @@ export class FloatingSessionsWindow {
         if (!this.window || this.window.isDestroyed() || !Number.isFinite(preferredHeight)) {
             return
         }
-        const current = this.window.getBounds()
+        const [x, y] = this.window.getPosition()
         const display = screen.getDisplayNearestPoint({
-            x: current.x + Math.round(current.width / 2),
-            y: current.y + Math.round(current.height / 2),
+            x: x + Math.round(this.width / 2),
+            y: y + Math.round(this.height / 2),
         })
         const maxHeight = Math.floor(display.workArea.height * WORK_AREA_HEIGHT_RATIO)
         const height = Math.max(MIN_HEIGHT, Math.min(Math.round(preferredHeight), maxHeight))
-        const bounds = this.clampToWorkArea({ ...current, height }, display.workArea)
-        this.window.setBounds(bounds)
+        this.applyBounds(this.clampToWorkArea(
+            { x, y, width: this.width, height },
+            display.workArea,
+        ))
     }
 
-    moveBy (deltaX: number, deltaY: number): void {
-        if (!this.window || this.window.isDestroyed() || !deltaX && !deltaY) {
+    /**
+     * Absolute, because a fractional display scale leaves some coordinates
+     * unreachable — at 1.5x every odd one snaps back to the even one below.
+     * Reading the position back to add a delta to it therefore swallows the
+     * remainder on every event, and a slow drag never moves the window at all.
+     */
+    moveTo (x: number, y: number): void {
+        if (!this.window || this.window.isDestroyed()) {
             return
         }
-        const [x, y] = this.window.getPosition()
-        this.window.setPosition(x + deltaX, y + deltaY)
+        // setPosition() would resize to getSize(), which is the outward-rounded
+        // reading — carry our own size across instead.
+        this.applyBounds({ x, y, width: this.width, height: this.height })
     }
 
     destroy (): void {
@@ -146,6 +166,13 @@ export class FloatingSessionsWindow {
         }
         this.savePosition()
         this.window.destroy()
+    }
+
+    /** The one place a size reaches the window, so `width`/`height` stay true. */
+    private applyBounds (bounds: Rectangle): void {
+        this.width = bounds.width
+        this.height = bounds.height
+        this.window?.setBounds(bounds)
     }
 
     private initialBounds (): Rectangle {

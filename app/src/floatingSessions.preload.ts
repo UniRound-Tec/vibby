@@ -18,8 +18,8 @@ const bridge: FloatingSessionsBridge = {
     setExpanded: (expanded, preferredHeight) => {
         ipcRenderer.send(AI_FLOATING_CHANNELS.setExpanded, { expanded, preferredHeight })
     },
-    moveWindow: (deltaX, deltaY) => {
-        ipcRenderer.send(AI_FLOATING_CHANNELS.moveWindow, { deltaX, deltaY })
+    moveWindow: (x, y) => {
+        ipcRenderer.send(AI_FLOATING_CHANNELS.moveWindow, { x, y })
     },
     ready: () => {
         ipcRenderer.send(AI_FLOATING_CHANNELS.ready)

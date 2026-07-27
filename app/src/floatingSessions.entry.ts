@@ -63,8 +63,12 @@ root.appendChild(panel)
 
 const sessionElements = new Map<string, HTMLButtonElement>()
 let dragPointerId: number | null = null
-let dragScreenX = 0
-let dragScreenY = 0
+// Where inside the window the drag started. Every move is then an absolute
+// target rather than an accumulated delta: a fractional display scale makes
+// some window coordinates unreachable, so a delta the window could not fully
+// take would otherwise be lost and the panel would fall behind the cursor.
+let grabOffsetX = 0
+let grabOffsetY = 0
 
 function finishDragging (event: PointerEvent): void {
     if (event.pointerId !== dragPointerId) {
@@ -83,8 +87,10 @@ dragHandle.addEventListener('pointerdown', event => {
     }
     event.preventDefault()
     dragPointerId = event.pointerId
-    dragScreenX = event.screenX
-    dragScreenY = event.screenY
+    // clientX/Y are measured from the content origin, which for this frameless
+    // window is the window origin.
+    grabOffsetX = event.clientX
+    grabOffsetY = event.clientY
     dragHandle.setPointerCapture(event.pointerId)
     dragHandle.classList.add('dragging')
 })
@@ -93,13 +99,12 @@ dragHandle.addEventListener('pointermove', event => {
     if (event.pointerId !== dragPointerId || !(event.buttons & 1)) {
         return
     }
-    const deltaX = event.screenX - dragScreenX
-    const deltaY = event.screenY - dragScreenY
-    dragScreenX = event.screenX
-    dragScreenY = event.screenY
-    if (deltaX || deltaY) {
-        window.floatingSessions.moveWindow(deltaX, deltaY)
-    }
+    // Recomputed from the pointer's screen position every time, so a move the
+    // window rounds away corrects itself on the next event instead of adding up.
+    window.floatingSessions.moveWindow(
+        event.screenX - grabOffsetX,
+        event.screenY - grabOffsetY,
+    )
 })
 
 dragHandle.addEventListener('pointerup', finishDragging)
