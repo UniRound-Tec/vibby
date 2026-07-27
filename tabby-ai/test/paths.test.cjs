@@ -86,6 +86,18 @@ assert.equal(
     quoteCmd('C:\\Temp\\vibby-hooks-Ab3xY9\\1234-uuid.json'),
     '"C:\\Temp\\vibby-hooks-Ab3xY9\\1234-uuid.json"',
 )
+// A backslash immediately before a quote is an escape to CommandLineToArgvW,
+// so it has to be doubled or the argument boundaries shift from there on. This
+// is the shape that broke Codex: TOML writes a nested quote as \".
+assert.equal(quoteCmd('a \\" b'), '"a \\\\"" b"')
+assert.equal(quoteCmd('{"k": "v \\"q\\""}'), '"{""k"": ""v \\\\""q\\\\""""}"')
+// a trailing run sits against the closing quote and counts the same way
+assert.equal(quoteCmd('C:\\dir\\'), '"C:\\dir\\\\"')
+// ...while backslashes with no quote after them stay literal
+assert.equal(quoteCmd('C:\\a\\b'), '"C:\\a\\b"')
+// cmd never leaves its quoted state, so metacharacters in the value stay inert
+assert.ok(!/(^|[^"])"([^"]|$)/.test(quoteCmd('x | y & z "q" \\"r\\"').slice(1, -1)),
+    'every inner quote is doubled, so cmd sees balanced quoting')
 
 assert.equal(quoteSh('/usr/local/bin/claude'), "'/usr/local/bin/claude'")
 assert.equal(quoteSh("it's"), "'it'\\''s'", 'single quotes close and reopen')
