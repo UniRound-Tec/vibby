@@ -69,12 +69,16 @@ assert.equal(translated({
 }).kind, 'permission-request')
 assert.equal(translated({ hook_event_name: 'SubagentStart' }).kind, 'tool-call')
 assert.equal(translated({ hook_event_name: 'SubagentStop' }).kind, 'tool-result')
+assert.equal(translated({ hook_event_name: 'PreCompact' }).kind, 'tool-call')
+assert.equal(translated({ hook_event_name: 'PostCompact' }).kind, 'tool-result')
 assert.equal(translated({ hook_event_name: 'Stop' }).kind, 'turn-completed')
 assert.equal(translated({ hook_event_name: 'SessionEnd', reason: 'other' }).kind, 'session-ended')
 assert.equal(translated({ hook_event_name: 'Unknown' }), null)
 
 for (const hookEvent of CODEX_HOOK_EVENTS) {
     assert.notEqual(translated({ hook_event_name: hookEvent })?.kind, 'thinking')
+    // registering an event we then drop on the floor is a silent blind spot
+    assert.ok(translated({ hook_event_name: hookEvent }), `${hookEvent} must translate`)
 }
 
 const projector = new CodexHookProjector('session-1')

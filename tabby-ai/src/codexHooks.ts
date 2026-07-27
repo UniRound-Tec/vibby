@@ -2,6 +2,7 @@ import { AiEvent } from './events'
 
 export const CODEX_HOOK_ENDPOINT_ENV = 'VIBBY_CODEX_HOOK_ENDPOINT'
 
+/** Every event Codex ships (codex-rs/config/src/hook_config.rs) */
 export const CODEX_HOOK_EVENTS = [
     'SessionStart',
     'UserPromptSubmit',
@@ -10,6 +11,8 @@ export const CODEX_HOOK_EVENTS = [
     'PostToolUse',
     'SubagentStart',
     'SubagentStop',
+    'PreCompact',
+    'PostCompact',
     'Stop',
     'SessionEnd',
 ] as const
@@ -126,6 +129,13 @@ export function translateCodexHook (
             return { ...base, kind: 'tool-call', summary: 'agent' }
         case 'SubagentStop':
             return { ...base, kind: 'tool-result', summary: 'agent done' }
+        // Compaction is a long silent stretch mid-turn with no tool traffic to
+        // keep the pane alive. Reported as work rather than `thinking`, which
+        // stays reserved for the low-confidence scraper.
+        case 'PreCompact':
+            return { ...base, kind: 'tool-call', summary: 'compacting' }
+        case 'PostCompact':
+            return { ...base, kind: 'tool-result', summary: 'compacted' }
         case 'Stop':
             return { ...base, kind: 'turn-completed', summary: 'done' }
         case 'SessionEnd':
