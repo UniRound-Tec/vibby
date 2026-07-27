@@ -93,6 +93,18 @@ assert.equal(live.liveStatus, 'Spelunking… (4s · ↓ 2 tokens)', 'spinner sur
 live = reduceSnapshot(live, ev('turn-completed', { ts: 3000 }))
 assert.equal(live.liveStatus, null, 'spinner must not outlive the working state')
 
+// --- a second turn starts with no caption, so an identical one still shows ---
+// Codex captions repeat verbatim between turns once the elapsed-time suffix is
+// stripped. Adapters dedupe against this field, so it has to be clear again by
+// the time the next turn starts working, or the repeat never publishes.
+let turn = reduceSnapshot(null, ev('prompt-submitted', { ts: 1 }))
+turn = { ...turn, liveStatus: 'Thinking' }
+turn = reduceSnapshot(turn, ev('turn-completed', { ts: 2 }))
+assert.equal(turn.liveStatus, null, 'caption clears when the turn ends')
+turn = reduceSnapshot(turn, ev('prompt-submitted', { ts: 3 }))
+assert.equal(turn.state, 'working', 'a later prompt works again')
+assert.equal(turn.liveStatus, null, 'the new turn must not inherit the old caption')
+
 // --- summary clamp ---
 assert.equal(clampSummary('  edit:   auth.ts  '), 'edit: auth.ts')
 const long = clampSummary('bash: ' + 'x'.repeat(200))

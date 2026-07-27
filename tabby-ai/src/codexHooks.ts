@@ -58,18 +58,41 @@ function tomlString (value: string): string {
 }
 
 /**
- * Session-scoped hook override. The commands stay byte-for-byte stable between
- * launches so Codex's hook trust hash does not churn with ports or session IDs.
+ * Codex layers `$CODEX_HOME/<name>.config.toml` over the user config when
+ * launched with `-p <name>`. The name is fixed so the trust hash Codex records
+ * for these hooks stays put across launches.
  */
-export function codexHookConfig (): string {
+export const CODEX_PROFILE_NAME = 'vibby'
+
+/**
+ * Hook handlers as a standalone profile document.
+ *
+ * Deliberately a file rather than an inline `-c hooks={...}` override. The
+ * handler commands quote their endpoint, so the TOML carries `\"`, and the
+ * generated .cmd shim escapes a literal quote as `""` without touching the
+ * backslash in front of it — which desynchronises the Windows argument parser
+ * and made Codex reject the whole table. Only a bare profile name crosses the
+ * shim boundary now.
+ *
+ * The commands stay byte-for-byte stable between launches (the endpoint
+ * arrives through the environment) so the trust hash does not churn with ports
+ * or session IDs.
+ */
+export function codexHookProfile (): string {
     const posix = `curl -s -m 3 --data-binary @- "$${CODEX_HOOK_ENDPOINT_ENV}"`
+    // Bytes, never text. [Console]::In decodes stdin with the console code page
+    // and re-encodes on the way out, which mangles every non-ASCII payload —
+    // Stop carries last_assistant_message, so any answer that is not plain
+    // English arrived as broken JSON and was dropped, leaving the session stuck
+    // on `working`. The POSIX branch never had this: curl --data-binary is
+    // already a byte pipe.
     const windows = [
-        '$body=[Console]::In.ReadToEnd();',
+        '$i=[Console]::OpenStandardInput(); $m=New-Object IO.MemoryStream; $i.CopyTo($m);',
         `Invoke-WebRequest -UseBasicParsing -Method Post -Uri $env:${CODEX_HOOK_ENDPOINT_ENV}`,
-        '-ContentType \'application/json; charset=utf-8\' -Body $body -TimeoutSec 3 | Out-Null',
+        '-ContentType \'application/json; charset=utf-8\' -Body $m.ToArray() -TimeoutSec 3 | Out-Null',
     ].join(' ')
     const handler = `[{ hooks = [{ type = "command", command = ${tomlString(posix)}, command_windows = ${tomlString(windows)}, timeout = 3 }] }]`
-    return `hooks={ ${CODEX_HOOK_EVENTS.map(event => `${event} = ${handler}`).join(', ')} }`
+    return `[hooks]\n${CODEX_HOOK_EVENTS.map(event => `${event} = ${handler}`).join('\n')}\n`
 }
 
 /** Converts Codex's documented hook payloads without retaining sensitive raw data. */

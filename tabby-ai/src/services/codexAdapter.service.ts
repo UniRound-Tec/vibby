@@ -3,10 +3,14 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { Injectable, NgZone } from '@angular/core'
-import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
+import { AppService, BaseTabComponent, ConfigService, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
-import { CODEX_HOOK_ENDPOINT_ENV, codexHookConfig } from '../codexHooks'
+import { CodexTrustModalComponent } from '../components/codexTrustModal.component'
+
+import { CODEX_HOOK_ENDPOINT_ENV, CODEX_PROFILE_NAME, codexHookProfile } from '../codexHooks'
+import { clampSummary } from '../events'
 import { SHIM_DIR_PREFIX } from '../paths'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
@@ -18,6 +22,14 @@ const KIND = 'codex'
 const SCRAPE_INTERVAL_MS = 600
 const EXIT_GRACE_MS = 500
 const LEGACY_REMOTE_TOKEN_PREFIX = 'VIBBY_CODEX_REMOTE_TOKEN_'
+/**
+ * Hooks Codex has not seen before are skipped silently — no error, no log, the
+ * session just never reports. Rather than make every user answer a trust
+ * prompt, vibby vouches for the profile it wrote itself. The cost is that
+ * Codex's review is skipped for every hook source it loads, so arming says so
+ * once (see notifyTrustBypass).
+ */
+const CODEX_TRUST_BYPASS_FLAG = '--dangerously-bypass-hook-trust'
 const PASSTHROUGH_SUBCOMMANDS = [
     'app',
     'app-server',
@@ -38,6 +50,13 @@ interface CodexRun {
     disposed: boolean
 }
 
+/** A profile the user asked for themselves — Codex honours only one. */
+function selectsOwnProfile (args: string[]): boolean {
+    return args.some(arg =>
+        arg === '-p' || arg === '--profile' || arg.startsWith('--profile='),
+    )
+}
+
 function withoutStaleHookConfig (args: string[]): string[] {
     const legacyBridge = args.some((arg, index) =>
         arg === '--remote-auth-token-env' &&
@@ -54,6 +73,16 @@ function withoutStaleHookConfig (args: string[]): string[] {
         ) {
             i++
         } else if (
+            (args[i] === '-p' || args[i] === '--profile') &&
+            args[i + 1] === CODEX_PROFILE_NAME
+        ) {
+            i++
+        } else if (
+            args[i] === `--profile=${CODEX_PROFILE_NAME}` ||
+            args[i] === CODEX_TRUST_BYPASS_FLAG
+        ) {
+            continue
+        } else if (
             legacyBridge &&
             (args[i] === '--remote' || args[i] === '--remote-auth-token-env')
         ) {
@@ -68,6 +97,12 @@ function withoutStaleHookConfig (args: string[]): string[] {
         }
     }
     return clean
+}
+
+/** Where Codex looks for `<profile>.config.toml` — an empty override is no override */
+function codexHome (): string {
+    const configured = process.env.CODEX_HOME?.trim()
+    return configured ? configured : path.join(os.homedir(), '.codex')
 }
 
 function withoutStaleHookEnv (env: Record<string, string>): Record<string, string> {
@@ -89,8 +124,8 @@ export class CodexAdapterService {
     private watchedSplits = new WeakSet<SplitTabComponent>()
     private runs = new WeakMap<TerminalTabComponent, CodexRun>()
     private panes = new Map<string, TerminalTabComponent>()
-    private lastStatus = new Map<string, string>()
     private scraper: ReturnType<typeof setInterval>|null = null
+    private trustBypassAnnounced = false
 
     constructor (
         private app: AppService,
@@ -99,6 +134,8 @@ export class CodexAdapterService {
         private terminalShim: TerminalCliShimService,
         private directory: AiSessionDirectoryService,
         private bus: AiEventBusService,
+        private config: ConfigService,
+        private ngbModal: NgbModal,
         private zone: NgZone,
     ) {}
 
@@ -156,10 +193,22 @@ export class CodexAdapterService {
         const sessionId = crypto.randomUUID()
         const originalArgs = withoutStaleHookConfig([...tab.profile.options.args ?? []])
         const originalEnv = withoutStaleHookEnv({ ...tab.profile.options.env ?? {} })
+        if (!this.writeHookProfile()) {
+            return
+        }
+        // Codex keeps only one profile, and the user's own choice is the one
+        // that carries their model and provider settings — take launch-only
+        // monitoring over silently dropping it.
+        if (selectsOwnProfile(originalArgs)) {
+            console.warn('[tabby-ai] Codex launched with its own --profile; hook monitoring skipped')
+            return
+        }
+        const injectedArgs = ['-p', CODEX_PROFILE_NAME, CODEX_TRUST_BYPASS_FLAG]
+        this.notifyTrustBypass()
         let shim: TerminalCliShimInstallation|null = null
         let tempRoot: string|null = null
         if (direct) {
-            tab.profile.options.args = ['-c', codexHookConfig(), ...originalArgs]
+            tab.profile.options.args = [...injectedArgs, ...originalArgs]
             tab.profile.options.env = {
                 ...originalEnv,
                 [CODEX_HOOK_ENDPOINT_ENV]: this.ingress.codexEndpointFor(sessionId),
@@ -175,7 +224,7 @@ export class CodexAdapterService {
                     tab,
                     detected!,
                     shimDirectory,
-                    ['-c', codexHookConfig()],
+                    injectedArgs,
                     { [CODEX_HOOK_ENDPOINT_ENV]: this.ingress.codexEndpointFor(sessionId) },
                     PASSTHROUGH_SUBCOMMANDS,
                 )
@@ -201,6 +250,23 @@ export class CodexAdapterService {
         this.panes.set(sessionId, tab)
         this.startScraper()
 
+        // Codex defers its SessionStart hook to the start of the first turn
+        // (core/src/session/turn.rs — run_pending_session_start_hooks runs
+        // inside run_turn), so a pane sitting at the composer never reports and
+        // would stay invisible on the dashboard until the user sends something.
+        // Claude fires its own at startup and needs no help. Only the dedicated
+        // pane can claim this: under the shim any terminal could be armed, and
+        // one is a Codex session only once a hook actually arrives.
+        if (direct) {
+            this.zone.run(() => this.bus.publish({
+                sessionId,
+                ts: Date.now(),
+                kind: 'session-started',
+                confidence: 'low',
+                summary: 'ready',
+            }))
+        }
+
         const attachSession = (session: TerminalTabComponent['session']): void => {
             if (!session) {
                 return
@@ -210,6 +276,46 @@ export class CodexAdapterService {
         tab.sessionChanged$.subscribe(attachSession)
         attachSession(tab.session)
         tab.destroyed$.subscribe(() => this.dispose(run))
+    }
+
+    /**
+     * Rewritten on every arm rather than once: the file lives in the user's
+     * Codex home, where an edit or a stale copy from an older vibby would
+     * otherwise persist. Content is fixed, so the trust hash still holds.
+     */
+    private writeHookProfile (): boolean {
+        try {
+            const home = codexHome()
+            fs.mkdirSync(home, { recursive: true })
+            fs.writeFileSync(
+                path.join(home, `${CODEX_PROFILE_NAME}.config.toml`),
+                codexHookProfile(),
+                { mode: 0o600 },
+            )
+            return true
+        } catch (error) {
+            console.warn('[tabby-ai] could not write the Codex hook profile', error)
+            return false
+        }
+    }
+
+    /** Once per run until dismissed for good — never blocks the spawn */
+    private notifyTrustBypass (): void {
+        if (this.trustBypassAnnounced || this.config.store.aiCli.codex.trustBypassAcknowledged) {
+            return
+        }
+        this.trustBypassAnnounced = true
+        this.zone.run(() => {
+            this.ngbModal.open(CodexTrustModalComponent, { backdrop: 'static' }).result
+                .then((silenced: boolean) => {
+                    if (silenced) {
+                        this.config.store.aiCli.codex.trustBypassAcknowledged = true
+                        this.config.save()
+                    }
+                })
+                // dismissed with Escape — ask again next run
+                .catch(() => null)
+        })
     }
 
     private startScraper (): void {
@@ -226,12 +332,17 @@ export class CodexAdapterService {
             return
         }
         for (const [sessionId, pane] of this.panes) {
-            if (this.bus.snapshotFor(sessionId)?.state !== 'working') {
+            const snapshot = this.bus.snapshotFor(sessionId)
+            if (snapshot?.state !== 'working') {
                 continue
             }
             const status = this.readStatusLine(pane)
-            if (status && status !== this.lastStatus.get(sessionId)) {
-                this.lastStatus.set(sessionId, status)
+            // Compared against what the bus already holds rather than a cache of
+            // our own. The bus drops liveStatus on the way out of `working`, so
+            // a cache that outlives the turn suppresses the next one: Codex
+            // captions repeat verbatim between turns once the elapsed-time
+            // suffix is stripped, and the second turn would never publish.
+            if (status && clampSummary(status) !== snapshot.liveStatus) {
                 this.zone.run(() => this.bus.setLiveStatus(sessionId, status))
             }
         }
@@ -281,7 +392,6 @@ export class CodexAdapterService {
             this.removeTempRoot(run.tempRoot)
         }
         this.panes.delete(run.sessionId)
-        this.lastStatus.delete(run.sessionId)
         this.directory.unbind(run.sessionId)
         this.zone.run(() => this.bus.dropSession(run.sessionId))
         if (this.scraper && this.panes.size === 0) {

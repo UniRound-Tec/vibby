@@ -1,0 +1,125 @@
+:host {
+    display: block;
+}
+
+.codex-trust-modal {
+    .modal-header {
+        align-items: center;
+        padding: 18px 20px;
+    }
+
+    .header-main {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+    }
+
+    .warning-mark {
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        margin-right: 12px;
+        border: 1px solid rgba(220, 160, 30, .35);
+        border-radius: 10px;
+        background: rgba(220, 160, 30, .12);
+        color: #dca01e;
+        font-size: 17px;
+    }
+
+    .heading {
+        min-width: 0;
+    }
+
+    .modal-title {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 650;
+    }
+
+    .modal-subtitle {
+        margin-top: 2px;
+        opacity: .6;
+        font-size: 12px;
+    }
+
+    .close-button {
+        margin-left: auto;
+        padding: 0 4px;
+        border: 0;
+        background: none;
+        color: inherit;
+        opacity: .5;
+        font-size: 22px;
+        line-height: 1;
+
+        &:hover {
+            opacity: .9;
+        }
+    }
+
+    .modal-body {
+        padding: 4px 20px 18px;
+    }
+
+    .lead {
+        margin: 0 0 14px;
+        line-height: 1.55;
+
+        code {
+            padding: 1px 5px;
+            border-radius: 4px;
+            background: rgba(128, 128, 128, .16);
+            font-size: 12px;
+        }
+    }
+
+    .impact {
+        padding: 12px 14px;
+        border: 1px solid rgba(128, 128, 128, .2);
+        border-radius: 10px;
+        background: rgba(128, 128, 128, .07);
+    }
+
+    .impact-row {
+        display: flex;
+        align-items: flex-start;
+        line-height: 1.5;
+
+        + .impact-row {
+            margin-top: 9px;
+        }
+
+        i {
+            flex: none;
+            margin-top: 3px;
+            margin-right: 10px;
+            color: #dca01e;
+            font-size: 12px;
+        }
+    }
+
+    .escape-hatch {
+        margin: 14px 0 0;
+        opacity: .65;
+        font-size: 12px;
+    }
+
+    .modal-footer {
+        justify-content: space-between;
+        padding: 14px 20px;
+    }
+
+    .btn-link.muted {
+        padding-left: 0;
+        color: inherit;
+        opacity: .6;
+        text-decoration: none;
+
+        &:hover {
+            opacity: .95;
+        }
+    }
+}
