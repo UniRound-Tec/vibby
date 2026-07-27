@@ -12,6 +12,7 @@ const COLLAPSED_HEIGHT = 202
 const MIN_HEIGHT = 82
 const WORK_AREA_HEIGHT_RATIO = 0.7
 const SCREEN_MARGIN = 20
+const MAX_RELOAD_ATTEMPTS = 5
 
 interface StoredPosition {
     x: number
@@ -41,6 +42,13 @@ export class FloatingSessionsWindow {
      */
     private width: number
     private height: number
+    private reloadAttempts = 0
+    private reloadTimeout: ReturnType<typeof setTimeout> | null = null
+    /**
+     * Bound once so the app-global screen emitter can be unsubscribed when
+     * this window closes — a plain method reference would never match.
+     */
+    private handleDisplayChange = (): void => this.ensureOnScreen()
 
     constructor (
         private onReady: () => void,
@@ -77,9 +85,25 @@ export class FloatingSessionsWindow {
         this.window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
         this.window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
 
-        this.window.webContents.once('did-finish-load', () => {
+        // `on`, not `once`: after a crash recovery reload, onReady must fire
+        // again so the hub re-sends the snapshot into the fresh renderer.
+        this.window.webContents.on('did-finish-load', () => {
             this.ready = true
+            this.reloadAttempts = 0
             this.onReady()
+        })
+
+        // A dead renderer leaves a transparent frameless window fully blank
+        // while isVisible() still says true — to the user it just vanishes,
+        // and nothing would ever repaint it. Reload instead of waiting.
+        this.window.webContents.on('render-process-gone', (_event, details) => {
+            this.recoverContent(`renderer gone (${details.reason})`)
+        })
+        this.window.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _url, isMainFrame) => {
+            if (!isMainFrame || errorCode === -3) { // -3 is ERR_ABORTED: a newer load superseded this one
+                return
+            }
+            this.recoverContent(`load failed (${errorCode} ${errorDescription})`)
         })
 
         this.window.on('move', () => this.schedulePositionSave())
@@ -90,11 +114,22 @@ export class FloatingSessionsWindow {
             }
         })
         this.window.on('closed', () => {
+            screen.removeListener('display-metrics-changed', this.handleDisplayChange)
+            screen.removeListener('display-removed', this.handleDisplayChange)
+            if (this.reloadTimeout) {
+                clearTimeout(this.reloadTimeout)
+                this.reloadTimeout = null
+            }
             this.window = null
             this.onClosed()
         })
 
-        this.window.loadFile(path.join(app.getAppPath(), 'dist', 'floating-sessions.html'))
+        // Unplugging a monitor or changing its resolution/scale can leave the
+        // window stranded in an area no display covers anymore.
+        screen.on('display-metrics-changed', this.handleDisplayChange)
+        screen.on('display-removed', this.handleDisplayChange)
+
+        this.loadContent()
     }
 
     get webContents (): WebContents | null {
@@ -151,8 +186,15 @@ export class FloatingSessionsWindow {
             return
         }
         // setPosition() would resize to getSize(), which is the outward-rounded
-        // reading — carry our own size across instead.
-        this.applyBounds({ x, y, width: this.width, height: this.height })
+        // reading — carry our own size across instead. Clamped like every other
+        // placement path: the drag handle is the only way to grab the window,
+        // so letting a drag push it past the work area loses it for good.
+        const proposed: Rectangle = { x, y, width: this.width, height: this.height }
+        const display = screen.getDisplayNearestPoint({
+            x: x + Math.round(this.width / 2),
+            y: y + Math.round(this.height / 2),
+        })
+        this.applyBounds(this.clampToWorkArea(proposed, display.workArea))
     }
 
     destroy (): void {
@@ -166,6 +208,44 @@ export class FloatingSessionsWindow {
         }
         this.savePosition()
         this.window.destroy()
+    }
+
+    private loadContent (): void {
+        this.window?.loadFile(path.join(app.getAppPath(), 'dist', 'floating-sessions.html'))
+    }
+
+    private recoverContent (cause: string): void {
+        if (!this.window || this.window.isDestroyed() || this.destroying || this.reloadTimeout) {
+            return
+        }
+        this.ready = false
+        if (this.reloadAttempts >= MAX_RELOAD_ATTEMPTS) {
+            console.error(`Floating sessions window gave up reloading after ${cause}`)
+            return
+        }
+        this.reloadAttempts++
+        console.warn(`Floating sessions window reloading (attempt ${this.reloadAttempts}) after ${cause}`)
+        this.reloadTimeout = setTimeout(() => {
+            this.reloadTimeout = null
+            this.loadContent()
+        }, 1000 * this.reloadAttempts)
+    }
+
+    /** Pull the window back into whichever display is now nearest to it. */
+    private ensureOnScreen (): void {
+        if (!this.window || this.window.isDestroyed()) {
+            return
+        }
+        const [x, y] = this.window.getPosition()
+        const proposed: Rectangle = { x, y, width: this.width, height: this.height }
+        const display = screen.getDisplayNearestPoint({
+            x: x + Math.round(this.width / 2),
+            y: y + Math.round(this.height / 2),
+        })
+        const clamped = this.clampToWorkArea(proposed, display.workArea)
+        if (clamped.x !== x || clamped.y !== y) {
+            this.applyBounds(clamped)
+        }
     }
 
     /** The one place a size reaches the window, so `width`/`height` stay true. */
