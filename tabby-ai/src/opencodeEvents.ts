@@ -61,7 +61,10 @@ function requestIdOf (properties: JsonObject): string {
 
 function baseName (value: unknown): string|null {
     const raw = text(value)
-    return raw ? path.basename(raw) : null
+    // win32 flavour explicitly: it accepts both separators, while on Linux
+    // the platform default reads a Windows path as one long file name — and
+    // a WSL-side OpenCode session reports exactly such paths.
+    return raw ? path.win32.basename(raw) : null
 }
 
 function firstText (...values: unknown[]): string|null {

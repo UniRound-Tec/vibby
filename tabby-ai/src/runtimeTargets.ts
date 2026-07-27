@@ -34,7 +34,9 @@ export function wslTargetId (distro: string): string {
 }
 
 export function wslExecutablePath (environment = process.env): string {
-    return path.join(environment.WINDIR ?? environment.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
+    // win32 join explicitly: this is a Windows path by definition, and the
+    // pure-module tests run on Linux CI where the platform default is posix
+    return path.win32.join(environment.WINDIR ?? environment.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe')
 }
 
 function cleanWslOutput (value: string): string {
