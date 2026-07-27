@@ -400,7 +400,10 @@ export class BaseTerminalTabComponent<P extends BaseTerminalProfile> extends Bas
             })
 
             setTimeout(() => {
-                this.session?.resize(columns, rows)
+                // The first renderer frame is often narrower than the settled
+                // layout (for example 102 -> 107 columns while the rail mounts).
+                // Reapply the current size, never the stale first-frame size.
+                this.session?.resize(this.size.columns, this.size.rows)
             }, 1000)
 
             this.session?.releaseInitialDataBuffer()
