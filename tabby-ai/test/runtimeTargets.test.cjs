@@ -96,4 +96,24 @@ assert.equal(isWindowsMountedWslPath('\\\\wsl.localhost\\Ubuntu\\home\\jesse\\co
 assert.equal(usesMirroredWslNetworking('C:\\Users\\Me', () => '[wsl2]\nnetworkingMode=mirrored\n'), true)
 assert.equal(usesMirroredWslNetworking('C:\\Users\\Me', () => '[wsl2]\nnetworkingMode=nat\n'), false)
 
+// --- synchronous mount-root translation (scan-time metadata) ---
+const { translateWindowsPathWithMountRoot } = require('../.test-build/runtimeTargets.js')
+assert.equal(
+    translateWindowsPathWithMountRoot('/mnt/c/', 'C:\\Users\\J\\AppData\\Local\\Temp\\x.json'),
+    '/mnt/c/Users/J/AppData/Local/Temp/x.json',
+)
+assert.equal(
+    translateWindowsPathWithMountRoot('/mnt/c', 'D:\\data\\repo'),
+    '/mnt/d/data/repo',
+    'other drives share the automount prefix',
+)
+assert.equal(
+    translateWindowsPathWithMountRoot('/c/', 'C:\\Windows\\System32\\curl.exe'),
+    '/c/Windows/System32/curl.exe',
+    'custom automount root',
+)
+assert.equal(translateWindowsPathWithMountRoot('', 'C:\\x'), null)
+assert.equal(translateWindowsPathWithMountRoot('/mnt/c/', 'relative\\path'), null)
+assert.equal(translateWindowsPathWithMountRoot('garbage', 'C:\\x'), null)
+
 console.log('runtimeTargets.test.cjs: all assertions passed')

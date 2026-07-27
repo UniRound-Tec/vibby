@@ -312,6 +312,14 @@ export class CliScannerService {
             '    IFS=$vibby_old_ifs',
             '  done',
             '}',
+            // Launch-time metadata, captured here because arming cannot afford
+            // wsl.exe round-trips (the PTY spawn races it): where C:\ is
+            // mounted, and whether Windows binaries execute at all (binfmt
+            // interop — systemd distros routinely lose the registration).
+            `vibby_mount=$(wslpath -a -u 'C:\\' 2>/dev/null || true)`,
+            `[ -n "$vibby_mount" ] && printf '${WSL_RECORD}%s\\t%s\\t%s\\n' __mount__ "$vibby_mount" -`,
+            `vibby_curl=$(wslpath -a -u 'C:\\Windows\\System32\\curl.exe' 2>/dev/null || true)`,
+            `[ -n "$vibby_curl" ] && "$vibby_curl" --version >/dev/null 2>&1 && printf '${WSL_RECORD}%s\\t%s\\t%s\\n' __interop__ ok -`,
             functions,
         ].join('\n')
         const shell = await this.getWslShell(target)
@@ -328,12 +336,21 @@ export class CliScannerService {
             )
         }
         const commands = new Map<string, string>()
+        target.windowsInterop = false
         for (const line of output?.split(/\r?\n/) ?? []) {
             const marker = line.indexOf(WSL_RECORD)
             if (marker === -1) {
                 continue
             }
             const [id, resolved, windowsPath] = line.slice(marker + WSL_RECORD.length).split('\t')
+            if (id === '__mount__') {
+                target.windowsMountRoot = resolved || null
+                continue
+            }
+            if (id === '__interop__') {
+                target.windowsInterop = true
+                continue
+            }
             if (id && resolved && windowsPath && !isWindowsMountedWslPath(windowsPath) && !commands.has(id)) {
                 commands.set(id, resolved)
             }

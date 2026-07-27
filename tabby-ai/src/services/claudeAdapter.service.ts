@@ -6,12 +6,16 @@ import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
+import { WslCliRuntimeTarget } from '../api'
 import { spinnerAbsenceEndsTurn } from '../events'
 import {
-    HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName, isLegacyHookDirName, ownerPids,
-    quoteSh,
+    DROP_DIR_NAME, HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName, isLegacyHookDirName,
+    ownerPids, quoteSh,
 } from '../paths'
-import { translateWindowsPathForWsl } from '../runtimeTargets'
+import {
+    translateWindowsPathForWsl, translateWindowsPathWithMountRoot, windowsExecutableRunsInWsl,
+} from '../runtimeTargets'
+import { wslDropHookCommand } from '../wslHookBridge'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
@@ -212,11 +216,41 @@ export class ClaudeAdapterService {
             : null
         if (wslTarget?.type === 'wsl') {
             const curlPath = path.join(process.env.WINDIR ?? 'C:\\Windows', 'System32', 'curl.exe')
-            const [translatedSettings, translatedCurl] = await Promise.all([
-                translateWindowsPathForWsl(wslTarget, settingsPath),
-                translateWindowsPathForWsl(wslTarget, curlPath),
-            ])
-            if (!translatedSettings || !translatedCurl || !fs.existsSync(curlPath)) {
+            const dropDir = path.join(injectDir, DROP_DIR_NAME)
+            try {
+                fs.mkdirSync(dropDir, { recursive: true })
+            } catch { /* path translation still works; only writes would fail */ }
+
+            const mountRoot = wslTarget.windowsMountRoot
+            const bridge = mountRoot
+                // Scan-time metadata makes this branch fully synchronous — the
+                // PTY spawns on frontend-ready, and any wsl.exe round-trip
+                // here reliably loses that race and leaves the session
+                // launched without our --settings.
+                ? {
+                    settings: translateWindowsPathWithMountRoot(mountRoot, settingsPath),
+                    curl: translateWindowsPathWithMountRoot(mountRoot, curlPath),
+                    drop: translateWindowsPathWithMountRoot(mountRoot, dropDir),
+                    interop: wslTarget.windowsInterop === true,
+                }
+                // No scan metadata (excluded or stopped distro) — fall back to
+                // asking the distro, one parallel round-trip.
+                : await this.probeWslBridge(wslTarget, settingsPath, curlPath, dropDir)
+            if (tab.session) {
+                // The spawn won the race after all: the session is already
+                // running without our --settings. Injecting now would only
+                // pretend — leave the tab unmonitored and say so.
+                try {
+                    fs.unlinkSync(settingsPath)
+                } catch { /* already gone */ }
+                console.warn('[tabby-ai] session spawned during WSL hook bridge setup; full support skipped')
+                return
+            }
+            const translatedSettings = bridge.settings
+            const translatedCurl = bridge.curl
+            const translatedDrop = bridge.drop
+            const interopWorks = bridge.interop && fs.existsSync(curlPath)
+            if (!translatedSettings) {
                 try {
                     fs.unlinkSync(settingsPath)
                 } catch { /* already gone */ }
@@ -224,11 +258,27 @@ export class ClaudeAdapterService {
                 return
             }
             settingsArgument = translatedSettings
-            fs.writeFileSync(
-                settingsPath,
-                JSON.stringify(this.settingsFor(sessionId, quoteSh(translatedCurl)), null, 2),
-                { mode: 0o600 },
-            )
+            if (interopWorks && translatedCurl) {
+                fs.writeFileSync(
+                    settingsPath,
+                    JSON.stringify(this.settingsFor(sessionId, quoteSh(translatedCurl)), null, 2),
+                    { mode: 0o600 },
+                )
+            } else if (translatedDrop) {
+                fs.writeFileSync(
+                    settingsPath,
+                    JSON.stringify(this.settingsWithCommand(wslDropHookCommand(translatedDrop, sessionId)), null, 2),
+                    { mode: 0o600 },
+                )
+                this.ingress.registerFileDrop(sessionId, dropDir)
+                console.warn(`[tabby-ai] ${wslTarget.distro} cannot execute Windows binaries (binfmt interop); Claude hooks fall back to file delivery`)
+            } else {
+                try {
+                    fs.unlinkSync(settingsPath)
+                } catch { /* already gone */ }
+                console.warn(`[tabby-ai] WSL hook bridge unavailable in ${wslTarget.distro}; Claude will launch without full monitoring`)
+                return
+            }
         }
 
         if (isDirectLaunch) {
@@ -277,6 +327,7 @@ export class ClaudeAdapterService {
             try {
                 fs.unlinkSync(settingsPath)
             } catch { /* already gone */ }
+            this.ingress.unregisterFileDrop(sessionId)
             this.shimInstallations.get(tab)?.remove()
             this.panes.delete(sessionId)
             this.directory.unbind(sessionId)
@@ -284,6 +335,29 @@ export class ClaudeAdapterService {
             this.stopScraperIfIdle()
             this.zone.run(() => this.bus.dropSession(sessionId))
         })
+    }
+
+    /**
+     * The launch-time WSL bridge data when the scanner has none cached for
+     * this distro. The curl.exe lane needs more than the mount: executing a
+     * Windows binary rides the distro's binfmt interop handler, which systemd
+     * distros routinely lose — so the probe runs the real thing.
+     */
+    private async probeWslBridge (
+        wslTarget: WslCliRuntimeTarget,
+        settingsPath: string,
+        curlPath: string,
+        dropDir: string,
+    ): Promise<{ settings: string|null, curl: string|null, drop: string|null, interop: boolean }> {
+        const [settings, curl, drop, interop] = await Promise.all([
+            translateWindowsPathForWsl(wslTarget, settingsPath),
+            translateWindowsPathForWsl(wslTarget, curlPath),
+            translateWindowsPathForWsl(wslTarget, dropDir),
+            fs.existsSync(curlPath)
+                ? windowsExecutableRunsInWsl(wslTarget, curlPath)
+                : Promise.resolve(false),
+        ])
+        return { settings, curl, drop, interop }
     }
 
     /** True once the ingress is listening; false when every attempt failed */
@@ -418,7 +492,10 @@ export class ClaudeAdapterService {
 
     private settingsFor (sessionId: string, curlCommand = 'curl'): unknown {
         // values are baked in as literals — never rely on shell variable expansion (§2)
-        const command = `${curlCommand} -s -m 3 --data-binary @- "${this.ingress.endpointFor(sessionId)}"`
+        return this.settingsWithCommand(`${curlCommand} -s -m 3 --data-binary @- "${this.ingress.endpointFor(sessionId)}"`)
+    }
+
+    private settingsWithCommand (command: string): unknown {
         const hooks: Record<string, unknown> = {}
         for (const event of HOOK_EVENTS) {
             hooks[event] = [{ hooks: [{ type: 'command', command, timeout: 10 }] }]

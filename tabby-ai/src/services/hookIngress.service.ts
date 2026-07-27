@@ -1,11 +1,31 @@
+import * as fs from 'fs'
 import * as http from 'http'
 import * as crypto from 'crypto'
+import * as path from 'path'
 import { Injectable, NgZone } from '@angular/core'
 import { translateClaudeHook } from '../claudeHooks'
 import { CodexHookProjector } from '../codexHooks'
+import { DROP_FILE_LIMIT, dropFileSessionId, sortDropFiles } from '../wslHookBridge'
 import { AiEventBusService } from './eventBus.service'
 
 const BODY_LIMIT = 1024 * 1024
+
+/**
+ * Cadence for the file-drop lane (WSL distros without Windows-binary
+ * interop, see wslHookBridge.ts). Half the adapter's scrape interval:
+ * hooks block claude for their timeout, so the payload is on disk well
+ * before the turn visibly progresses, and one readdir of a tiny private
+ * directory costs nothing.
+ */
+const DROP_POLL_MS = 300
+
+function readDirOrEmpty (dir: string): string[] {
+    try {
+        return fs.readdirSync(dir)
+    } catch {
+        return [] // dir already cleaned up — session teardown will unregister
+    }
+}
 
 /**
  * Loopback HTTP ingress for hook events (docs/06-m2-plan.md §2).
@@ -23,6 +43,8 @@ export class HookIngressService {
     private token = crypto.randomBytes(16).toString('hex')
     private starting: Promise<void> | null = null
     private codexProjectors = new Map<string, CodexHookProjector>()
+    private dropDirs = new Map<string, string>()
+    private dropPoller: ReturnType<typeof setInterval> | null = null
 
     constructor (
         private zone: NgZone,
@@ -80,6 +102,75 @@ export class HookIngressService {
             throw new Error('hook ingress is not running')
         }
         return `http://127.0.0.1:${this.port}/vibby/${this.token}/codex/${sessionId}`
+    }
+
+    /**
+     * Second lane of the ingress: hook payloads arriving as files instead of
+     * HTTP requests, for WSL sessions whose distro cannot reach the loopback
+     * server (wslHookBridge.ts explains why that happens). Same translator,
+     * same bus — only the transport differs.
+     */
+    registerFileDrop (sessionId: string, dir: string): void {
+        this.dropDirs.set(sessionId, dir)
+        if (!this.dropPoller) {
+            // outside Angular: an empty poll must not drive change detection
+            this.zone.runOutsideAngular(() => {
+                this.dropPoller = setInterval(() => this.pollDropDirs(), DROP_POLL_MS)
+            })
+        }
+    }
+
+    unregisterFileDrop (sessionId: string): void {
+        this.dropDirs.delete(sessionId)
+        if (!this.dropDirs.size && this.dropPoller) {
+            clearInterval(this.dropPoller)
+            this.dropPoller = null
+        }
+    }
+
+    private pollDropDirs (): void {
+        for (const dir of new Set(this.dropDirs.values())) {
+            const files: { name: string, sessionId: string, mtimeMs: number }[] = []
+            for (const name of readDirOrEmpty(dir)) {
+                const sessionId = dropFileSessionId(name)
+                if (!sessionId) {
+                    continue // an in-flight mktemp file, not yet renamed
+                }
+                try {
+                    files.push({ name, sessionId, mtimeMs: fs.statSync(path.join(dir, name)).mtimeMs })
+                } catch { /* consumed by a concurrent poll */ }
+            }
+            for (const file of sortDropFiles(files)) {
+                this.consumeDropFile(dir, file.name, file.sessionId)
+            }
+        }
+    }
+
+    private consumeDropFile (dir: string, name: string, sessionId: string): void {
+        const filePath = path.join(dir, name)
+        let payload: unknown = null
+        try {
+            const stat = fs.statSync(filePath)
+            if (stat.size <= DROP_FILE_LIMIT) {
+                payload = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+            } else {
+                console.warn('[tabby-ai] discarding oversized hook drop file')
+            }
+        } catch {
+            payload = null // unreadable or malformed — still consumed below
+        }
+        try {
+            fs.unlinkSync(filePath)
+        } catch {
+            return // could not consume: leave processing to whoever can
+        }
+        if (payload === null || !this.dropDirs.has(sessionId)) {
+            return // malformed, or a leftover from a session already torn down
+        }
+        const event = translateClaudeHook(sessionId, payload, Date.now())
+        if (event) {
+            this.zone.run(() => this.bus.publish(event))
+        }
     }
 
     /**

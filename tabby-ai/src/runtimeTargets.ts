@@ -158,6 +158,26 @@ export function isWindowsMountedWslPath (windowsPath: string): boolean {
     return /^[A-Za-z]:[\\/]/.test(windowsPath.trim())
 }
 
+/**
+ * Synchronous drive-path translation from the C:\ mount point captured at
+ * scan time (`wslpath -a -u 'C:\'` → e.g. "/mnt/c/", or "/c/" for a custom
+ * automount root). The async wslpath round-trip does the same job, but it
+ * costs hundreds of milliseconds — which arming cannot afford, because the
+ * PTY spawns as soon as the frontend is ready and injection has to be done
+ * by then.
+ */
+export function translateWindowsPathWithMountRoot (
+    cDriveMountRoot: string,
+    windowsPath: string,
+): string|null {
+    const mount = /^(.*\/)[Cc]\/?$/.exec(cDriveMountRoot.trim())
+    const drive = /^([A-Za-z]):[\\/](.*)$/.exec(windowsPath.trim())
+    if (!mount || !drive) {
+        return null
+    }
+    return `${mount[1]}${drive[1].toLowerCase()}/${drive[2].replace(/\\/g, '/')}`
+}
+
 export function translateWindowsPathForWsl (
     target: WslCliRuntimeTarget,
     windowsPath: string,
@@ -174,6 +194,42 @@ export function translateWindowsPathForWsl (
                 encoding: 'utf8',
             },
             (error, stdout) => resolve(error ? null : stdout.trim() || null),
+        )
+    })
+}
+
+/**
+ * Whether the distro can execute Windows binaries at all. WSL registers a
+ * binfmt_misc handler for PE executables, but a distro with systemd enabled
+ * loses it whenever systemd-binfmt starts without WSL's config file present —
+ * stock Ubuntu-22.04 ships exactly this. The hook bridge's curl.exe lane
+ * rides that handler, so probe by running the real thing rather than
+ * trusting that the mount implies interop.
+ *
+ * Takes the Windows path and resolves it with wslpath inside the same probe:
+ * arming already races the PTY spawn, so this must not have to wait for a
+ * separate translation round-trip first.
+ */
+export function windowsExecutableRunsInWsl (
+    target: WslCliRuntimeTarget,
+    executableWindowsPath: string,
+    timeout = 3000,
+): Promise<boolean> {
+    const quoted = `'${executableWindowsPath.replace(/'/g, `'\\''`)}'`
+    return new Promise(resolve => {
+        execFile(
+            wslExecutablePath(),
+            [
+                '--distribution', target.distro, '--exec', '/bin/sh', '-c',
+                `"$(wslpath -a -u ${quoted})" --version >/dev/null 2>&1`,
+            ],
+            {
+                timeout,
+                windowsHide: true,
+                env: { ...process.env, WSL_UTF8: '1' },
+                encoding: 'utf8',
+            },
+            error => resolve(!error),
         )
     })
 }

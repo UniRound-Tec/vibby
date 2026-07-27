@@ -16,6 +16,14 @@ export const HOOK_DIR_PREFIX = 'vibby-hooks'
 export const SHIM_DIR_PREFIX = 'vibby-cli-'
 
 /**
+ * Subdirectory of the hook directory where WSL sessions whose distro cannot
+ * execute Windows binaries drop their hook payloads as files (see
+ * wslHookBridge.ts). Lives inside the mkdtemp directory so it shares its
+ * 0700 mode and its stale-directory sweep.
+ */
+export const DROP_DIR_NAME = 'drop'
+
+/**
  * Matches a hook directory, this process's or a leftover from an earlier run.
  *
  * Deliberately keyed on the exact shape mkdtemp produces — the prefix plus its
@@ -48,7 +56,9 @@ export function isLegacyHookDirName (name: string): boolean {
  * contents get a say before anything is removed.
  */
 export function holdsOnlyGeneratedFiles (entries: string[]): boolean {
-    return entries.every(entry => entry.endsWith('.json') || entry.startsWith(SHIM_DIR_PREFIX))
+    return entries.every(entry =>
+        entry.endsWith('.json') || entry.startsWith(SHIM_DIR_PREFIX) || entry === DROP_DIR_NAME,
+    )
 }
 
 const SETTINGS_PID_RE = /^(\d+)-/

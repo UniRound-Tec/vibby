@@ -17,6 +17,14 @@ export interface WslCliRuntimeTarget {
     wslVersion: 1 | 2 | null
     isDefault: boolean
     state: 'running' | 'stopped' | 'unknown'
+    /**
+     * Where this distro mounts C:\ (e.g. "/mnt/c/"), captured during the scan.
+     * Lets launch-time path translation be a synchronous string swap: arming
+     * races the PTY spawn, and every wsl.exe round-trip there loses the race.
+     */
+    windowsMountRoot?: string|null
+    /** Whether the distro can execute Windows binaries (binfmt interop), probed during the scan */
+    windowsInterop?: boolean
 }
 
 export type CliRuntimeTarget = NativeCliRuntimeTarget | WslCliRuntimeTarget
