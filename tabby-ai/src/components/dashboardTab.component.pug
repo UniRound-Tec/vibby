@@ -50,7 +50,7 @@
                     button.chip.cli-chip(
                         *ngFor='let card of pagedCliCards; trackBy: trackCard',
                         type='button',
-                        [disabled]='!card.detected',
+                        [class.installable]='!card.detected',
                         (click)='launchCard(card)',
                     )
                         .glyph([innerHTML]='card.icon')
@@ -61,8 +61,9 @@
                                 span.tier(*ngIf='card.detected', [class.full]='card.entry.tier === "full"')
                                     span(*ngIf='card.entry.tier === "full"', translate) Full monitoring
                                     span(*ngIf='card.entry.tier !== "full"', translate) Launch only
-                                span.not-detected(*ngIf='!card.detected', translate) Not detected
+                                span.not-detected(*ngIf='!card.detected', translate) Click to install
                         span.chip-arrow(*ngIf='card.detected') ›
+                        span.chip-arrow.install-arrow(*ngIf='!card.detected') ↓
 
             .dashboard-grid
                 section.zone.sessions-zone

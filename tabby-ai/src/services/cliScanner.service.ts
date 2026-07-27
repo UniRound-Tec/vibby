@@ -111,6 +111,17 @@ export class CliScannerService {
         return this.currentScan
     }
 
+    /** Re-read package-manager locations and login-shell PATH after an install */
+    async refresh (): Promise<DetectedCli[]> {
+        if (this.currentScan) {
+            await this.currentScan
+        }
+        this.npmGlobalBin = undefined
+        this.shellPathProbe = null
+        this.shellPathValue = null
+        return this.scan()
+    }
+
     private async performScan (): Promise<DetectedCli[]> {
         await this.config.ready$.toPromise()
         this.scanning.next(true)
@@ -259,14 +270,27 @@ export class CliScannerService {
     private runCaptured (cmd: { command: string, args: string[] }, timeout: number): Promise<string|null> {
         return new Promise(resolve => {
             let output = ''
-            const child = spawn(cmd.command, cmd.args, {
-                windowsHide: true,
-                detached: !WINDOWS,
-                stdio: ['ignore', 'pipe', 'pipe'],
-                // the CLI is usually an `#!/usr/bin/env node` script — the
-                // interpreter lookup needs the same PATH that found the CLI
-                env: this.execEnv(),
-            })
+            const spawned = (() => {
+                try {
+                    return spawn(cmd.command, cmd.args, {
+                        windowsHide: true,
+                        detached: !WINDOWS,
+                        stdio: ['ignore', 'pipe', 'pipe'],
+                        // the CLI is usually an `#!/usr/bin/env node` script — the
+                        // interpreter lookup needs the same PATH that found the CLI
+                        env: this.execEnv(),
+                    })
+                } catch {
+                    return null
+                }
+            })()
+            if (!spawned) {
+                // Finding the executable is enough for detection. Version
+                // probing is explicitly best-effort and must not turn an
+                // installed CLI into a grey "install" card.
+                resolve(null)
+                return
+            }
             // holder rather than two bare locals: `finish` has to clear the
             // timer that is only armed after `finish` itself is defined
             const pending: { done: boolean, timer?: ReturnType<typeof setTimeout> } = { done: false }
@@ -279,13 +303,13 @@ export class CliScannerService {
                 resolve(result)
             }
             pending.timer = setTimeout(() => {
-                killTree(child.pid)
+                killTree(spawned.pid)
                 finish(null)
             }, timeout)
-            child.stdout.on('data', d => output += d.toString())
-            child.stderr.on('data', d => output += d.toString())
-            child.on('error', () => finish(null))
-            child.on('close', () => finish(output))
+            spawned.stdout.on('data', d => output += d.toString())
+            spawned.stderr.on('data', d => output += d.toString())
+            spawned.on('error', () => finish(null))
+            spawned.on('close', () => finish(output))
         })
     }
 

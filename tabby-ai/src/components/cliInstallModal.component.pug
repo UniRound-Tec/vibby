@@ -1,0 +1,78 @@
+.cli-install-modal
+    .modal-header
+        .header-main
+            .cli-mark(*ngIf='cliIcon', [innerHTML]='cliIcon')
+            .heading
+                h5.modal-title
+                    span(translate) Install
+                    |  {{cli.name}}
+                .header-note
+                    span(*ngIf='platform === "windows"', translate) Windows installer
+                    span(*ngIf='platform === "macos"', translate) macOS installer
+                    span(*ngIf='platform === "linux"', translate) Linux installer
+                    span(*ngIf='!platform', translate) Unsupported system
+        button.close-button(
+            type='button',
+            (click)='close()',
+            [attr.aria-label]='"Close" | translate',
+        ) ×
+
+    .modal-body
+        ng-container(*ngIf='state === "confirm"')
+            .install-summary(*ngIf='automaticInstallAvailable; else manualInstall')
+                p(translate) Vibby will run the official installation command below in an embedded terminal.
+                .recipe-note(*ngIf='recipe.note') {{recipe.note}}
+                .command-preview
+                    code {{recipe.command}}
+                .safety-note(translate) Review the command before continuing. The installer may download software and modify your user environment.
+
+            ng-template(#manualInstall)
+                .manual-install
+                    .manual-icon !
+                    .manual-copy
+                        strong(*ngIf='recipe?.support === "requires-wsl"', translate) Installation requires WSL.
+                        strong(*ngIf='recipe?.support !== "requires-wsl"', translate) Automatic installation is unavailable on this system.
+                        span(*ngIf='recipe?.note') {{recipe.note}}
+                        span(*ngIf='!recipe?.note', translate) Open the official documentation for supported installation steps.
+
+        .terminal-stage(*ngIf='state !== "confirm"')
+            .terminal-frame
+                .terminal-toolbar
+                    span.terminal-dot
+                    span(translate) Installer terminal
+                    span.terminal-state(*ngIf='state === "running"', translate) Running
+                    span.terminal-state.success(*ngIf='state === "succeeded"', translate) Completed
+                    span.terminal-state.failed(*ngIf='state === "failed"')
+                        span(translate) Failed
+                        |  · {{exitCode}}
+                .terminal-host(#terminalHost)
+
+            .result-message.success(*ngIf='state === "succeeded" && detectedAfterInstall', translate)
+                | Installation completed and the CLI was detected.
+            .result-message(*ngIf='state === "succeeded" && !detectedAfterInstall', translate)
+                | Installation completed. Restart Vibby if the CLI is not detected yet.
+            .result-message.failed(*ngIf='state === "failed"', translate)
+                | Installation failed. Review the terminal output and retry.
+
+    .modal-footer
+        button.btn.btn-link(
+            *ngIf='recipe?.sourceUrl || cli.docsUrl',
+            type='button',
+            (click)='openDocs()',
+            translate,
+        ) Official instructions
+        button.btn.btn-secondary(type='button', (click)='close()')
+            span(*ngIf='state !== "running"', translate) Close
+            span(*ngIf='state === "running"', translate) Cancel installation
+        button.btn.btn-primary(
+            *ngIf='state === "confirm" && automaticInstallAvailable',
+            type='button',
+            (click)='install()',
+            translate,
+        ) Confirm and install
+        button.btn.btn-primary(
+            *ngIf='state === "failed"',
+            type='button',
+            (click)='retry()',
+            translate,
+        ) Retry

@@ -11,7 +11,7 @@ const { matchCli, executableName, looksInvoked } = require('../.test-build/cliMa
 const REGISTRY = [
     { id: 'claude-code', binaries: ['claude'], runtimeMarkers: ['@anthropic-ai/claude-code'] },
     { id: 'codex', binaries: ['codex'], runtimeMarkers: ['@openai/codex'] },
-    { id: 'pi', binaries: ['pi'] },
+    { id: 'pi', binaries: ['pi'], runtimeMarkers: ['@earendil-works/pi-coding-agent'] },
     { id: 'github-copilot', binaries: ['copilot'], runtimeMarkers: ['@github/copilot', 'github/copilot-cli'] },
     { id: 'antigravity-cli', binaries: ['agy'], runtimeMarkers: ['antigravity-cli'] },
     { id: 'cursor-agent', binaries: ['cursor-agent'], runtimeMarkers: ['cursor-agent'] },
@@ -27,7 +27,7 @@ const REGISTRY = [
     { id: 'factory-droid', binaries: ['droid'], runtimeMarkers: ['/node_modules/droid/', '@factory-ai/droid'] },
     { id: 'devin-cli', binaries: ['devin'], runtimeMarkers: ['devin-cli'] },
     { id: 'continue-cli', binaries: ['cn'], runtimeMarkers: ['@continuedev/cli', 'continuedev/continue'] },
-    { id: 'amp', binaries: ['amp'], runtimeMarkers: ['ampcode'] },
+    { id: 'amp', binaries: ['amp'], runtimeMarkers: ['@ampcode/cli', 'ampcode'] },
 ]
 const match = (...procs) => matchCli(procs, REGISTRY)
 const proc = (command, commandLine) => ({ command, commandLine })

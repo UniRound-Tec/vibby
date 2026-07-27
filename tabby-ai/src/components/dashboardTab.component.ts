@@ -3,6 +3,7 @@ import {
     Injector, OnDestroy, ViewChild,
 } from '@angular/core'
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser'
+import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import { auditTime, interval } from 'rxjs'
 import { BaseTabComponent, AppService, ConfigService, PartialProfile, ProfilesService, SplitTabComponent, TranslateService } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
@@ -17,6 +18,7 @@ import {
 } from '../presentation'
 import { AiCliProfile } from '../profiles'
 import { AI_CLI_REGISTRY } from '../registry'
+import { CliInstallModalComponent } from './cliInstallModal.component'
 import { CliScannerService } from '../services/cliScanner.service'
 import { AiEventBusService } from '../services/eventBus.service'
 import { AiSessionDirectoryService } from '../services/sessionDirectory.service'
@@ -120,6 +122,7 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
         private configService: ConfigService,
         private profilesService: ProfilesService,
         private scanner: CliScannerService,
+        private modal: NgbModal,
         private bus: AiEventBusService,
         private sessions: AiSessionDirectoryService,
         private sanitizer: DomSanitizer,
@@ -405,7 +408,16 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
             if (profile) {
                 await this.profilesService.launchProfile(profile)
             }
+            return
         }
+
+        const modal = this.modal.open(CliInstallModalComponent, {
+            centered: true,
+            size: 'lg',
+        })
+        modal.componentInstance.cli = card.entry
+        modal.componentInstance.cliIcon = card.icon
+        await modal.result.catch(() => null)
     }
 
     async launchTerminal (): Promise<void> {

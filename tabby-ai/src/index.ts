@@ -26,6 +26,7 @@ import { STARTUP_COVER_CLASS, StartupCoverService } from './services/startupCove
 import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
 import { CliLaunchModalComponent } from './components/cliLaunchModal.component'
+import { CliInstallModalComponent } from './components/cliInstallModal.component'
 import { tabBarStyles } from './styles/tabBar.styles'
 
 /** Follows the active Tabby theme instead of imposing a fixed brand colour. */
@@ -51,6 +52,7 @@ const ACCENT = 'var(--theme-primary)'
         DashboardTabComponent,
         AiSettingsTabComponent,
         CliLaunchModalComponent,
+        CliInstallModalComponent,
     ],
 })
 export default class AiModule {

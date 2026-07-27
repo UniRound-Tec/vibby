@@ -271,6 +271,16 @@ $wash-hover: rgba(128, 128, 128, .1);
         opacity: .3;
     }
 
+    &.installable {
+        filter: grayscale(1);
+        opacity: .42;
+
+        &:hover, &:focus-visible {
+            filter: grayscale(.65);
+            opacity: .78;
+        }
+    }
+
     .glyph {
         flex: none;
 
@@ -322,6 +332,10 @@ $wash-hover: rgba(128, 128, 128, .1);
         flex: none;
         font-size: 19px;
         opacity: .38;
+    }
+
+    .install-arrow {
+        font-size: 15px;
     }
 }
 
