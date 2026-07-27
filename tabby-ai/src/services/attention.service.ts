@@ -3,7 +3,7 @@ import { AppService, BaseTabComponent, ConfigService, HostWindowService, SplitTa
 import { TerminalTabComponent } from 'tabby-local'
 
 import { AiEventBusService, AiAttentionPulse } from './eventBus.service'
-import { ClaudeAdapterService } from './claudeAdapter.service'
+import { AiSessionDirectoryService } from './sessionDirectory.service'
 
 /** needs-you can flap (permission bursts) — don't spam per session */
 const THROTTLE_MS = 5000
@@ -21,7 +21,7 @@ export class AiAttentionService {
         private config: ConfigService,
         private hostWindow: HostWindowService,
         private bus: AiEventBusService,
-        private adapter: ClaudeAdapterService,
+        private sessions: AiSessionDirectoryService,
         private translate: TranslateService,
         private zone: NgZone,
     ) { }
@@ -44,7 +44,7 @@ export class AiAttentionService {
             return
         }
 
-        const pane = this.adapter.paneForSessionId(pulse.sessionId)
+        const pane = this.sessions.forSession(pulse.sessionId)?.pane ?? null
         const topTab = pane ? this.topTabFor(pane) : null
 
         // don't self-interrupt: the user is already looking at this session

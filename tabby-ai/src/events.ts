@@ -13,10 +13,16 @@ export type AiEventConfidence = 'high' | 'low'
 export type AiEventKind =
     'session-started' |
     'prompt-submitted' |
+    'thinking' |
     'tool-call' |
+    'tool-result' |
     'permission-request' |
+    'question-request' |
+    'request-resolved' |
+    'retrying' |
     'turn-completed' |
     'notification' |
+    'session-error' |
     'session-ended' |
     'process-exited'
 
@@ -39,6 +45,12 @@ export interface AiEvent {
 
     /** Original adapter payload; UI must not depend on its shape */
     raw?: unknown
+
+    /**
+     * Adapter-projected aggregate state. OpenCode uses this when several
+     * native root/child sessions share one Vibby pane. Claude leaves it unset.
+     */
+    projectedState?: AiSessionState
 }
 
 export interface AiSessionSnapshot {
@@ -76,10 +88,16 @@ export function stateAfter (kind: AiEventKind): AiSessionState | null {
     switch (kind) {
         case 'session-started': return 'idle'
         case 'prompt-submitted': return 'working'
+        case 'thinking': return 'working'
         case 'tool-call': return 'working'
+        case 'tool-result': return 'working'
         case 'permission-request': return 'needs-you'
+        case 'question-request': return 'needs-you'
+        case 'request-resolved': return null
+        case 'retrying': return 'working'
         case 'notification': return 'needs-you'
         case 'turn-completed': return 'idle'
+        case 'session-error': return 'error'
         case 'session-ended': return null
         case 'process-exited': return 'error'
     }
@@ -87,7 +105,7 @@ export function stateAfter (kind: AiEventKind): AiSessionState | null {
 
 export function reduceSnapshot (prev: AiSessionSnapshot | null, event: AiEvent): AiSessionSnapshot {
     const prevState = prev?.state ?? null
-    const nextState = stateAfter(event.kind) ?? prevState ?? 'idle'
+    const nextState = event.projectedState ?? stateAfter(event.kind) ?? prevState ?? 'idle'
     return {
         sessionId: event.sessionId,
         state: nextState,

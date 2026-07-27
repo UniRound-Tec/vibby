@@ -5,6 +5,7 @@ const {
     DISPLAY_STATE_RANK,
     displayStateFor,
     stateLabelKey,
+    activityLabelKey,
     captionFor,
     lastEventCaptionFor,
     loudest,
@@ -19,6 +20,23 @@ assert.equal(displayStateFor(facts({ sessionId: 's' })), 'listening', 'armed, no
 assert.equal(displayStateFor(facts({ sessionId: 's', snapshot: snap('working') })), 'working')
 // a snapshot outranks the plumbing even with no session id
 assert.equal(displayStateFor(facts({ snapshot: snap('error') })), 'error')
+
+// --- visible activity label: preserve the coarse state for ordering, but show thinking ---
+const thinking = facts({
+    sessionId: 's',
+    snapshot: snap('working', {
+        lastEvent: { kind: 'thinking', summary: 'Checking authentication state' },
+    }),
+})
+assert.equal(activityLabelKey(thinking), 'Thinking')
+assert.equal(displayStateFor(thinking), 'working', 'thinking must not become a fifth state')
+assert.equal(
+    activityLabelKey(facts({
+        sessionId: 's',
+        snapshot: snap('working', { lastEvent: { kind: 'tool-call', summary: 'read: auth.ts' } }),
+    })),
+    'Working',
+)
 
 // --- ordering: worst first, and error above merely-busy ---
 const order = Object.entries(DISPLAY_STATE_RANK).sort((a, b) => a[1] - b[1]).map(([k]) => k)

@@ -23,6 +23,7 @@ const ev = (kind, overrides = {}) => ({
 assert.equal(stateAfter('session-started'), 'idle')
 assert.equal(stateAfter('prompt-submitted'), 'working')
 assert.equal(stateAfter('tool-call'), 'working')
+assert.equal(stateAfter('thinking'), 'working')
 assert.equal(stateAfter('permission-request'), 'needs-you')
 assert.equal(stateAfter('notification'), 'needs-you')
 assert.equal(stateAfter('turn-completed'), 'idle')

@@ -16,6 +16,7 @@ import { CliScannerService } from './services/cliScanner.service'
 import { DashboardService } from './services/dashboard.service'
 import { HookIngressService } from './services/hookIngress.service'
 import { ClaudeAdapterService } from './services/claudeAdapter.service'
+import { OpenCodeAdapterService } from './services/openCodeAdapter.service'
 import { AiAttentionService } from './services/attention.service'
 import { AiTabStateService } from './services/tabState.service'
 import { RuntimeCliDetectorService } from './services/runtimeCliDetector.service'
@@ -61,6 +62,7 @@ export default class AiModule {
         hotkeys: HotkeysService,
         ingress: HookIngressService,
         claudeAdapter: ClaudeAdapterService,
+        openCodeAdapter: OpenCodeAdapterService,
         attention: AiAttentionService,
         tabState: AiTabStateService,
         runtimeDetector: RuntimeCliDetectorService,
@@ -75,6 +77,7 @@ export default class AiModule {
         // a reloaded renderer would otherwise leave the old listener bound
         window.addEventListener('beforeunload', () => ingress.stop())
         claudeAdapter.activate()
+        openCodeAdapter.activate()
         runtimeDetector.activate()
         attention.activate()
         tabState.activate()

@@ -8,13 +8,14 @@ import { AiCliRegistryEntry, DetectedCli } from '../api'
 import { VIBBY_WORDMARK } from '../branding'
 import { AiEvent, AiEventKind, AiSessionSnapshot, stateAfter } from '../events'
 import {
-    AiDisplayState, DISPLAY_STATE_RANK, SessionFacts, displayStateFor, lastEventCaptionFor, stateLabelKey,
+    AiDisplayState, DISPLAY_STATE_RANK, SessionFacts, activityLabelKey, displayStateFor,
+    lastEventCaptionFor, stateLabelKey,
 } from '../presentation'
 import { AiCliProfile } from '../profiles'
 import { AI_CLI_REGISTRY } from '../registry'
 import { CliScannerService } from '../services/cliScanner.service'
 import { AiEventBusService } from '../services/eventBus.service'
-import { ClaudeAdapterService } from '../services/claudeAdapter.service'
+import { AiSessionDirectoryService } from '../services/sessionDirectory.service'
 import { RuntimeCliDetectorService } from '../services/runtimeCliDetector.service'
 
 export interface AiSessionRow {
@@ -112,7 +113,7 @@ export class DashboardTabComponent extends BaseTabComponent {
         private profilesService: ProfilesService,
         private scanner: CliScannerService,
         private bus: AiEventBusService,
-        private adapter: ClaudeAdapterService,
+        private sessions: AiSessionDirectoryService,
         private sanitizer: DomSanitizer,
         private host: ElementRef,
         private translate: TranslateService,
@@ -172,7 +173,7 @@ export class DashboardTabComponent extends BaseTabComponent {
                 const kind = pane instanceof TerminalTabComponent ? this.runtimeDetector.kindForPane(pane) : null
                 if (pane instanceof TerminalTabComponent && kind) {
                     this.askCwd(pane)
-                    const sessionId = this.adapter.sessionIdForPane(pane, kind)
+                    const sessionId = this.sessions.forPane(pane, kind)?.sessionId ?? null
                     const snapshot = sessionId ? this.snapshots.get(sessionId) ?? null : null
                     const row: AiSessionRow = {
                         topTab,
@@ -189,7 +190,7 @@ export class DashboardTabComponent extends BaseTabComponent {
                         live: snapshot?.liveStatus ?? '',
                         duration: '',
                     }
-                    row.stateLabel = this.label(stateLabelKey(row.state))
+                    row.stateLabel = this.label(activityLabelKey(row))
                     row.name = this.nameFor(row)
                     row.caption = this.captionFor(row)
                     row.duration = this.durationFor(row)
@@ -340,8 +341,14 @@ export class DashboardTabComponent extends BaseTabComponent {
         switch (kind) {
             case 'session-started': return this.label('session start')
             case 'prompt-submitted': return this.label('prompt sent')
+            case 'thinking': return this.label('thinking')
             case 'tool-call': return this.label('tool call')
+            case 'tool-result': return this.label('tool result')
             case 'permission-request': return this.label('approval')
+            case 'question-request': return this.label('question')
+            case 'request-resolved': return this.label('resolved')
+            case 'retrying': return this.label('retrying')
+            case 'session-error': return this.label('error')
             case 'turn-completed': return this.label('turn done')
             case 'notification': return this.label('notice')
             case 'session-ended': return this.label('session end')

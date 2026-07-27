@@ -5,11 +5,11 @@ import { TerminalTabComponent } from 'tabby-local'
 
 import { AiSessionSnapshot } from '../events'
 import {
-    AiDisplayState, SessionFacts, captionFor, displayStateFor, loudest, stateLabelKey,
+    AiDisplayState, SessionFacts, activityLabelKey, captionFor, displayStateFor, loudest,
 } from '../presentation'
 import { AI_CLI_REGISTRY } from '../registry'
 import { AiEventBusService } from './eventBus.service'
-import { ClaudeAdapterService } from './claudeAdapter.service'
+import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { RuntimeCliChange, RuntimeCliDetectorService } from './runtimeCliDetector.service'
 
 /**
@@ -26,7 +26,7 @@ export class AiTabStateService {
     constructor (
         private app: AppService,
         private bus: AiEventBusService,
-        private adapter: ClaudeAdapterService,
+        private sessions: AiSessionDirectoryService,
         private runtimeDetector: RuntimeCliDetectorService,
         private translate: TranslateService,
     ) { }
@@ -112,7 +112,7 @@ export class AiTabStateService {
             const facts = this.factsFor(aiPane, kind, this.loudestSnapshot(tab))
             const state = displayStateFor(facts)
             tab['aiState'] = state
-            tab['aiStateLabel'] = this.label(stateLabelKey(state))
+            tab['aiStateLabel'] = this.label(activityLabelKey(facts))
             tab['aiSummary'] = this.caption(facts)
         }
     }
@@ -123,7 +123,7 @@ export class AiTabStateService {
         kind: string|null,
         snapshot: AiSessionSnapshot|null = null,
     ): SessionFacts {
-        const sessionId = this.adapter.sessionIdForPane(pane, kind)
+        const sessionId = this.sessions.forPane(pane, kind)?.sessionId ?? null
         return {
             snapshot: snapshot ?? (sessionId ? this.bus.snapshotFor(sessionId) : null),
             sessionId,
@@ -185,7 +185,7 @@ export class AiTabStateService {
             icon: AI_CLI_REGISTRY.find(x => x.id === kind)?.icon ?? null,
             kind,
             state,
-            stateLabel: this.label(stateLabelKey(state)),
+            stateLabel: this.label(activityLabelKey(facts)),
             summary: this.caption(facts),
         }
     }
@@ -257,10 +257,13 @@ export class AiTabStateService {
         const panes = tab instanceof SplitTabComponent ? tab.getAllTabs() : [tab]
         const snapshots: AiSessionSnapshot[] = []
         for (const pane of panes) {
-            const sessionId = this.adapter.sessionIdForPane(
+            if (!(pane instanceof TerminalTabComponent)) {
+                continue
+            }
+            const sessionId = this.sessions.forPane(
                 pane,
-                pane instanceof TerminalTabComponent ? this.runtimeDetector.kindForPane(pane) : null,
-            )
+                this.runtimeDetector.kindForPane(pane),
+            )?.sessionId ?? null
             const snapshot = sessionId ? this.bus.snapshotFor(sessionId) : null
             if (snapshot) {
                 snapshots.push(snapshot)

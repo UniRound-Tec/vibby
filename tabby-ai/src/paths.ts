@@ -82,6 +82,12 @@ export function isGeneratedPath (value: string): boolean {
         path.basename(value).startsWith(SHIM_DIR_PREFIX)
 }
 
+/** PID encoded in a generated shim directory, or null for anything else. */
+export function generatedPathOwnerPid (value: string): number|null {
+    const match = SHIM_PID_RE.exec(path.basename(value))
+    return match ? Number(match[1]) : null
+}
+
 /**
  * Quote a value for a generated .cmd wrapper.
  *

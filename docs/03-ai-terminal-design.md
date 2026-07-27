@@ -30,7 +30,7 @@ vibby 对没有硬件的用户必须有完整价值（状态一览、通知、�
 - CLI profile 本质是"带 AI 元数据的本地终端 profile"：底层复用 tabby-local 的 PTY 会话，多一个 `aiCli: { kind, version }` 字段，该字段即事件适配器的挂载开关。终端能力（分屏、配色、恢复）全部免费继承。
 - 扫描器数据驱动：已知 CLI 注册表（二进制名、探测命令、版本参数、图标、适配器类型）。新增支持一个 CLI = 注册表加一行。
 - 扫描时机：启动扫一次 + 设置页手动"重新扫描"，不做常驻监听。
-- 首发注册表：Claude Code、Codex CLI、Gemini CLI、OpenCode、Aider、pi。**探测广、适配窄**：全部可探测可启动，但只有 Claude Code 有事件监听，其余卡片如实标注"仅启动，无状态监听"。
+- 首发注册表：Claude Code、Codex CLI、Gemini CLI、OpenCode、Aider、pi。**探测广、适配窄**：全部可探测可启动；Claude Code 通过 hooks、OpenCode 通过本地鉴权 server/SSE 提供完整监听，其余卡片如实标注"仅启动，无状态监听"。
 
 ### D4. Home 重生为 Dashboard（废弃上游 StartPage）
 

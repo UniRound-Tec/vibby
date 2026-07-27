@@ -44,7 +44,7 @@ export const AI_CLI_REGISTRY: AiCliRegistryEntry[] = [
         versionArgs: ['--version'],
         versionPattern: VERSION,
         icon: require('./icons/opencode.svg'),
-        tier: 'launch',
+        tier: 'full',
         docsUrl: 'https://opencode.ai',
     },
     {

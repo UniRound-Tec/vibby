@@ -4,7 +4,8 @@ import { Injectable } from '@angular/core'
 import { TerminalTabComponent } from 'tabby-local'
 
 import { DetectedCli } from '../api'
-import { isGeneratedPath, quoteCmd, quoteSh } from '../paths'
+import { generatedPathOwnerPid, isGeneratedPath } from '../paths'
+import { buildPosixCliShim, buildWindowsCliShim } from '../terminalCliShim'
 
 const WINDOWS = process.platform === 'win32'
 
@@ -26,6 +27,8 @@ export class TerminalCliShimService {
         detected: DetectedCli,
         directory: string,
         injectedArgs: string[],
+        injectedEnv: Record<string, string> = {},
+        passthroughSubcommands: string[] = [],
     ): TerminalCliShimInstallation {
         fs.mkdirSync(directory, { recursive: true })
 
@@ -34,8 +37,8 @@ export class TerminalCliShimService {
             fs.writeFileSync(
                 wrapperPath,
                 WINDOWS
-                    ? this.windowsWrapper(detected, injectedArgs)
-                    : this.posixWrapper(detected, injectedArgs),
+                    ? buildWindowsCliShim(detected, injectedArgs, injectedEnv, passthroughSubcommands)
+                    : buildPosixCliShim(detected, injectedArgs, injectedEnv, passthroughSubcommands),
                 { mode: 0o700 },
             )
         }
@@ -43,7 +46,12 @@ export class TerminalCliShimService {
         const previous = tab.profile.options.pathPrefix ?? []
         tab.profile.options.pathPrefix = [
             directory,
-            ...previous.filter(item => !isGeneratedPath(item)),
+            // Keep other adapters armed in this process, but never resurrect a
+            // stale shim from a recovery token or crashed older instance.
+            ...previous.filter(item =>
+                !isGeneratedPath(item) ||
+                generatedPathOwnerPid(item) === process.pid && fs.existsSync(item),
+            ),
         ]
 
         return {
@@ -54,25 +62,5 @@ export class TerminalCliShimService {
                 } catch { /* already gone */ }
             },
         }
-    }
-
-    private windowsWrapper (detected: DetectedCli, args: string[]): string {
-        const command = quoteCmd(detected.command)
-        const forwarded = args.map(arg => quoteCmd(arg)).join(' ')
-        const invocation = detected.launcher === 'cmd'
-            ? `call ${command} ${forwarded} %*`
-            : detected.launcher === 'ps1'
-                ? `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${command} ${forwarded} %*`
-                : `${command} ${forwarded} %*`
-        return `@echo off\r\n${invocation.trim()}\r\n`
-    }
-
-    private posixWrapper (detected: DetectedCli, args: string[]): string {
-        const invocation = [
-            quoteSh(detected.command),
-            ...args.map(arg => quoteSh(arg)),
-            '"$@"',
-        ].join(' ')
-        return `#!/bin/sh\nexec ${invocation}\n`
     }
 }

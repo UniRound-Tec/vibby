@@ -8,6 +8,7 @@ const {
     isHookDirName,
     isLegacyHookDirName,
     isGeneratedPath,
+    generatedPathOwnerPid,
     holdsOnlyGeneratedFiles,
     ownerPids,
     quoteCmd,
@@ -58,6 +59,8 @@ assert.equal(isGeneratedPath(path.join('/tmp', 'vibby-hooks-Ab3xY9', 'vibby-cli-
 assert.equal(isGeneratedPath(path.join('/tmp', 'vibby-hooks', 'vibby-cli-123-uuid')), true)
 // the shim prefix alone is enough, wherever it sits
 assert.equal(isGeneratedPath(path.join('/somewhere', 'else', 'vibby-cli-9-abc')), true)
+assert.equal(generatedPathOwnerPid(path.join('/somewhere', 'else', 'vibby-cli-9-abc')), 9)
+assert.equal(generatedPathOwnerPid('/usr/local/bin'), null)
 
 // --- paths we must never strip out of a user's PATH ---
 assert.equal(isGeneratedPath('/usr/local/bin'), false)

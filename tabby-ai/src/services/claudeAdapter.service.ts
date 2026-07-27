@@ -12,6 +12,7 @@ import {
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
+import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalCliShim.service'
 
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Notification', 'Stop', 'SessionEnd']
@@ -88,8 +89,6 @@ function isPidAlive (pid: number): boolean {
  */
 @Injectable({ providedIn: 'root' })
 export class ClaudeAdapterService {
-    private sessionIds = new WeakMap<TerminalTabComponent, string>()
-    private sessionKinds = new WeakMap<TerminalTabComponent, string>()
     private panes = new Map<string, TerminalTabComponent>()
     private armed = new WeakSet<TerminalTabComponent>()
     private watchedSplits = new WeakSet<SplitTabComponent>()
@@ -106,6 +105,7 @@ export class ClaudeAdapterService {
         private zone: NgZone,
         private scanner: CliScannerService,
         private terminalShim: TerminalCliShimService,
+        private directory: AiSessionDirectoryService,
     ) { }
 
     activate (): void {
@@ -124,15 +124,15 @@ export class ClaudeAdapterService {
 
     /** Dashboard join: which bus session does this pane report as */
     sessionIdForPane (pane: BaseTabComponent, kind?: string|null): string | null {
-        if (!(pane instanceof TerminalTabComponent) || kind && this.sessionKinds.get(pane) !== kind) {
+        if (!(pane instanceof TerminalTabComponent)) {
             return null
         }
-        return this.sessionIds.get(pane) ?? null
+        return this.directory.forPane(pane, kind)?.sessionId ?? null
     }
 
     /** Reverse lookup for notification click-through */
     paneForSessionId (sessionId: string): TerminalTabComponent | null {
-        return this.panes.get(sessionId) ?? null
+        return this.directory.forSession(sessionId)?.pane ?? null
     }
 
     private visit (tab: BaseTabComponent): void {
@@ -230,8 +230,7 @@ export class ClaudeAdapterService {
         const envOverrides = Object.fromEntries(CLAUDE_ENV_MARKERS.map(k => [k, '']))
         tab.profile.options.env = { ...tab.profile.options.env, ...envOverrides }
 
-        this.sessionIds.set(tab, sessionId)
-        this.sessionKinds.set(tab, kind)
+        this.directory.bind({ sessionId, kind, pane: tab })
         this.panes.set(sessionId, tab)
         this.startScraper()
 
@@ -248,6 +247,7 @@ export class ClaudeAdapterService {
             } catch { /* already gone */ }
             this.shimInstallations.get(tab)?.remove()
             this.panes.delete(sessionId)
+            this.directory.unbind(sessionId)
             this.lastStatus.delete(sessionId)
             this.stopScraperIfIdle()
             this.zone.run(() => this.bus.dropSession(sessionId))

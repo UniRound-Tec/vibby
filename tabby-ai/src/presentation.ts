@@ -64,6 +64,22 @@ export function stateLabelKey (state: AiDisplayState): string {
 }
 
 /**
+ * The state machine deliberately keeps reasoning inside `working`, but the
+ * user-facing activity word should preserve that more precise live signal.
+ * Sorting, attention transitions and device output continue to use the coarse
+ * state returned by displayStateFor().
+ */
+export function activityLabelKey (facts: SessionFacts): string {
+    if (
+        facts.snapshot?.state === 'working' &&
+        facts.snapshot.lastEvent?.kind === 'thinking'
+    ) {
+        return _('Thinking')
+    }
+    return stateLabelKey(displayStateFor(facts))
+}
+
+/**
  * Why a session has nothing to report yet — which is a different statement
  * from "idle", and the one the rail and the dashboard were each spelling out
  * separately.
