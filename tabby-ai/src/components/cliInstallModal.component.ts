@@ -14,6 +14,7 @@ import { BaseTerminalProfile, Frontend, XTermFrontend } from 'tabby-terminal'
 import { AiCliRegistryEntry } from '../api'
 import {
     CliInstallRecipe, InstallPlatform, installPlatformFor, installRecipeFor, installShellCommand,
+    installShellEnvironment,
 } from '../installRecipes'
 import { CliScannerService } from '../services/cliScanner.service'
 
@@ -106,7 +107,7 @@ export class CliInstallModalComponent implements OnInit, OnDestroy {
                 encoding: null,
                 cwd: process.env.USERPROFILE ?? process.env.HOME,
                 env: {
-                    ...process.env,
+                    ...installShellEnvironment(process.env, this.platform),
                     PATH: path,
                     TERM: 'xterm-256color',
                     COLORTERM: 'truecolor',

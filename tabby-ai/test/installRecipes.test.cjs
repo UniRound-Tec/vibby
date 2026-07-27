@@ -4,6 +4,7 @@ const {
     installPlatformFor,
     installRecipeFor,
     installShellCommand,
+    installShellEnvironment,
 } = require('../.test-build/installRecipes.js')
 
 assert.equal(installPlatformFor('win32'), 'windows')
@@ -24,6 +25,24 @@ assert.deepEqual(installShellCommand(recipe, 'linux'), {
 assert.equal(installShellCommand(recipe, 'windows').command, 'powershell.exe')
 assert.ok(installShellCommand(recipe, 'windows').args.includes('-Command'))
 assert.equal(installRecipeFor('missing-cli', 'windows'), null)
+assert.deepEqual(
+    installShellEnvironment({ PATH: 'C:\\Tools', SAMPLE: 'value' }, 'windows'),
+    { PATH: 'C:\\Tools', SAMPLE: 'value' },
+)
+assert.deepEqual(
+    installShellEnvironment({
+        PATH: 'C:\\Tools',
+        PSModulePath: 'C:\\Program Files\\PowerShell\\Modules',
+        psmodulepath: 'C:\\shadowed-modules',
+    }, 'windows'),
+    { PATH: 'C:\\Tools' },
+    'Windows PowerShell must rebuild its own module path',
+)
+assert.deepEqual(
+    installShellEnvironment({ PATH: '/usr/bin', PSModulePath: '/custom/modules' }, 'linux'),
+    { PATH: '/usr/bin', PSModulePath: '/custom/modules' },
+    'non-Windows installers preserve the caller environment',
+)
 
 const expectedCliIds = [
     'amp',

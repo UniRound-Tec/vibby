@@ -445,3 +445,16 @@ export function installShellCommand (
         args: ['-lc', recipe.command],
     }
 }
+
+/** Environment inherited by the installer shell. */
+export function installShellEnvironment (
+    environment: Record<string, string|undefined>,
+    platform = installPlatformFor(),
+): Record<string, string|undefined> {
+    if (platform !== 'windows') {
+        return { ...environment }
+    }
+    return Object.fromEntries(
+        Object.entries(environment).filter(([key]) => key.toLowerCase() !== 'psmodulepath'),
+    )
+}
