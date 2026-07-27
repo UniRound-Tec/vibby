@@ -10,6 +10,10 @@ jobs:
   tagged-release:
     name: "Tagged Release"
     runs-on: "ubuntu-latest"
+    # The default GITHUB_TOKEN on this repo is read-only; creating the draft
+    # release fails with "Resource not accessible by integration" without this.
+    permissions:
+      contents: write
 
     steps:
       - uses: "marvinpinto/action-automatic-releases@latest"

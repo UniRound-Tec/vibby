@@ -338,7 +338,7 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
         if (row.pane.customTitle || row.topTab.customTitle) {
             return row.pane.customTitle || row.topTab.customTitle
         }
-        const configured = row.pane.profile?.options?.cwd
+        const configured = row.pane.profile.options.cwd
         return this.baseName(configured) ?? this.liveCwdNames.get(row.pane) ?? row.pane.title
     }
 
@@ -547,7 +547,7 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
 
     /** One shot per pane, and only once its session exists — the answer never changes for a CLI */
     private askCwd (pane: TerminalTabComponent): void {
-        if (this.cwdAsked.has(pane) || pane.profile?.options?.cwd || !pane.session) {
+        if (this.cwdAsked.has(pane) || !!pane.profile.options.cwd || !pane.session) {
             return
         }
         this.cwdAsked.add(pane)

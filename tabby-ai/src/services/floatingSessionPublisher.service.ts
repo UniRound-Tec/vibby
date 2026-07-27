@@ -178,12 +178,12 @@ export class FloatingSessionPublisherService {
     }
 
     private nameFor (pane: TerminalTabComponent): string {
-        const launchName = pane.profile?.options?.['aiCli']?.sessionName?.trim()
-        const cwd = pane.profile?.options?.cwd
+        const launchName = pane.profile.options['aiCli']?.sessionName?.trim()
+        const cwd = pane.profile.options.cwd
         return pane.customTitle ||
             launchName ||
             this.baseName(cwd) ||
-            pane.profile?.name ||
+            pane.profile.name ||
             pane.title ||
             this.translate.instant('AI session')
     }

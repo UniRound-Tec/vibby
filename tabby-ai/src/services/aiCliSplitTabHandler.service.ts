@@ -16,7 +16,7 @@ export class AiCliSplitTabHandler extends SplitTabHandler {
 
     supports (tab: BaseTabComponent): boolean {
         return tab instanceof TerminalTabComponent
-            && (tab.profile?.type === 'ai-cli' || !!this.runtimeDetector.kindForPane(tab))
+            && (tab.profile.type === 'ai-cli' || !!this.runtimeDetector.kindForPane(tab))
     }
 
     async create (_tab: BaseTabComponent): Promise<BaseTabComponent|null> {

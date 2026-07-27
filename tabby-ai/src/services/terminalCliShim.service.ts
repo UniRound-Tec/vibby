@@ -43,7 +43,7 @@ export class TerminalCliShimService {
             )
         }
 
-        const previous = tab.profile.options.pathPrefix ?? []
+        const previous = tab.profile.options.pathPrefix
         tab.profile.options.pathPrefix = [
             directory,
             // Keep other adapters armed in this process, but never resurrect a

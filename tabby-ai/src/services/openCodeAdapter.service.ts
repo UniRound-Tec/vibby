@@ -193,8 +193,8 @@ export class OpenCodeAdapterService {
         if (this.armed.has(tab)) {
             return
         }
-        const direct = tab.profile?.type === 'ai-cli'
-        const kind = direct ? tab.profile.options?.['aiCli']?.kind : KIND
+        const direct = tab.profile.type === 'ai-cli'
+        const kind = direct ? tab.profile.options['aiCli']?.kind : KIND
         if (kind !== KIND) {
             return
         }
@@ -208,10 +208,10 @@ export class OpenCodeAdapterService {
         }
         this.armed.add(tab)
 
-        const oldEnv = tab.profile.options.env ?? {}
+        const oldEnv = tab.profile.options.env
         const recovering = oldEnv[MONITOR_MARKER] === '1'
         const persistedEnv = withoutOldMonitorEnv(oldEnv, recovering)
-        let args = (tab.profile.options.args ?? []).slice()
+        let args = tab.profile.options.args.slice()
         if (recovering) {
             args = stripOption(stripOption(args, '--hostname'), '--port')
         } else if (direct && (hasOption(args, '--hostname') || hasOption(args, '--port'))) {
@@ -220,7 +220,7 @@ export class OpenCodeAdapterService {
         }
 
         let host = HOST
-        const targetId = direct ? tab.profile.options?.['aiCli']?.targetId : null
+        const targetId = direct ? tab.profile.options['aiCli']?.targetId : null
         const wslTarget = direct
             ? this.scanner.runtimeTargets.find(target => target.id === targetId && target.type === 'wsl')
             : null
@@ -322,7 +322,7 @@ export class OpenCodeAdapterService {
         }
         run.client = new OpenCodeSseClient({
             endpoint: `http://${run.host}:${run.port}`,
-            directory: run.tab.profile.options?.['aiCli']?.targetCwd ?? run.tab.profile.options.cwd,
+            directory: run.tab.profile.options['aiCli']?.targetCwd ?? run.tab.profile.options.cwd,
             onEvent: payload => this.publish(run, run.projector.apply(payload, Date.now())),
             onStatuses: payload => this.publish(run, run.projector.reconcileStatuses(payload, Date.now())),
             onFailure: (error, fatal) => {
@@ -350,7 +350,7 @@ export class OpenCodeAdapterService {
             run.tab.profile.options.env = run.persistedEnv
         } else if (run.shim) {
             run.tab.profile.options.pathPrefix =
-                (run.tab.profile.options.pathPrefix ?? []).filter(item => item !== run.shim!.directory)
+                run.tab.profile.options.pathPrefix.filter(item => item !== run.shim!.directory)
         }
     }
 

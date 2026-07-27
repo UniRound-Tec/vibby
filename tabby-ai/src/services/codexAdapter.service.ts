@@ -50,6 +50,15 @@ interface CodexRun {
     disposed: boolean
 }
 
+/**
+ * Read again through a call boundary: control flow analysis keeps the
+ * earlier `if (tab.session)` narrowing alive across the ingress await and
+ * would call an inline recheck dead — but the getter really can change.
+ */
+function sessionAppeared (tab: TerminalTabComponent): boolean {
+    return !!tab.session
+}
+
 /** A profile the user asked for themselves — Codex honours only one. */
 function selectsOwnProfile (args: string[]): boolean {
     return args.some(arg =>
@@ -168,8 +177,8 @@ export class CodexAdapterService {
         if (this.armed.has(tab)) {
             return
         }
-        const direct = tab.profile?.type === 'ai-cli'
-        const kind = direct ? tab.profile.options?.['aiCli']?.kind : KIND
+        const direct = tab.profile.type === 'ai-cli'
+        const kind = direct ? tab.profile.options['aiCli']?.kind : KIND
         if (kind !== KIND) {
             return
         }
@@ -196,14 +205,14 @@ export class CodexAdapterService {
             return
         }
         // ingress.start() yields, and the session can spawn in that window
-        if (tab.session) {
+        if (sessionAppeared(tab)) {
             console.warn('[tabby-ai] Codex session spawned before hook injection; full support skipped')
             return
         }
 
         const sessionId = crypto.randomUUID()
-        const originalArgs = withoutStaleHookConfig([...tab.profile.options.args ?? []])
-        const originalEnv = withoutStaleHookEnv({ ...tab.profile.options.env ?? {} })
+        const originalArgs = withoutStaleHookConfig([...tab.profile.options.args])
+        const originalEnv = withoutStaleHookEnv({ ...tab.profile.options.env })
         if (!this.writeHookProfile()) {
             return
         }

@@ -79,7 +79,9 @@ export class AiTabStateService {
                 continue
             }
             const aiPanes = this.aiPanesOf(tab)
-            const aiPane = aiPanes[0] ?? null
+            // an explicit length check: indexing past the end returns
+            // undefined at runtime, but the element type says otherwise
+            const aiPane = aiPanes.length > 0 ? aiPanes[0] : null
             const group = aiPane
                 ? this.label('AI sessions')
                 : this.label('Terminals')
@@ -170,11 +172,11 @@ export class AiTabStateService {
     private paneCard (pane: TerminalTabComponent, index: number): Record<string, unknown> {
         const kind = this.runtimeDetector.kindForPane(pane)
         const facts = this.factsFor(pane, kind)
-        const launchName = pane.profile?.options?.['aiCli']?.sessionName?.trim()
+        const launchName = pane.profile.options['aiCli']?.sessionName?.trim()
         const name = pane.customTitle ||
             launchName ||
-            this.baseName(pane.profile?.options?.cwd) ||
-            pane.profile?.name ||
+            this.baseName(pane.profile.options.cwd) ||
+            pane.profile.name ||
             pane.title
 
         const state = displayStateFor(facts)
@@ -286,12 +288,12 @@ export class AiTabStateService {
         if (this.userNamed(tab)) {
             return
         }
-        const launchName = pane.profile?.options?.['aiCli']?.sessionName?.trim()
+        const launchName = pane.profile.options['aiCli']?.sessionName?.trim()
         if (launchName) {
             this.autoName(tab, launchName)
             return
         }
-        const configured = this.baseName(pane.profile?.options?.cwd)
+        const configured = this.baseName(pane.profile.options.cwd)
         if (configured) {
             this.autoName(tab, configured)
             return
@@ -306,7 +308,7 @@ export class AiTabStateService {
         // never leave the rail showing the raw terminal title: claude writes
         // its own OSC title and tabby prefixes it, which reads as noise
         if (!tab.customTitle) {
-            this.autoName(tab, pane.profile?.name ?? null)
+            this.autoName(tab, pane.profile.name)
         }
     }
 

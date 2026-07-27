@@ -57,14 +57,14 @@ export class RuntimeCliDetectorService {
     }
 
     kindForPane (pane: TerminalTabComponent): string|null {
-        if (pane.profile?.type === 'ai-cli') {
-            return pane.profile.options?.['aiCli']?.kind ?? null
+        if (pane.profile.type === 'ai-cli') {
+            return pane.profile.options['aiCli']?.kind ?? null
         }
         return this.runtimeKinds.get(pane) ?? null
     }
 
     isRuntimeDetected (pane: TerminalTabComponent): boolean {
-        return pane.profile?.type !== 'ai-cli' && this.runtimeKinds.has(pane)
+        return pane.profile.type !== 'ai-cli' && this.runtimeKinds.has(pane)
     }
 
     private async scan (): Promise<void> {
@@ -74,7 +74,7 @@ export class RuntimeCliDetectorService {
         this.scanPending = true
         this.tick++
         try {
-            const panes = this.localPanes().filter(pane => pane.profile?.type !== 'ai-cli' && !!pane.session)
+            const panes = this.localPanes().filter(pane => pane.profile.type !== 'ai-cli' && !!pane.session)
             const current = new Set(panes)
             // the pane the user is looking at never backs off — starting a CLI
             // in it should light the rail up now, not up to five seconds later

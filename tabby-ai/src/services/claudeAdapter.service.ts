@@ -169,9 +169,9 @@ export class ClaudeAdapterService {
         if (this.armed.has(tab)) {
             return
         }
-        const isDirectLaunch = tab.profile?.type === 'ai-cli'
+        const isDirectLaunch = tab.profile.type === 'ai-cli'
         const kind = isDirectLaunch
-            ? tab.profile.options?.['aiCli']?.kind
+            ? tab.profile.options['aiCli']?.kind
             : 'claude-code'
         // Adapter ownership is explicit: future full-tier CLIs get their own
         // event translator while reusing TerminalCliShimService.
@@ -210,7 +210,7 @@ export class ClaudeAdapterService {
         const { injectDir, settingsPath } = written
         let settingsArgument = settingsPath
 
-        const targetId = tab.profile.options?.['aiCli']?.targetId
+        const targetId = tab.profile.options['aiCli']?.targetId
         const wslTarget = isDirectLaunch
             ? this.scanner.runtimeTargets.find(target => target.id === targetId && target.type === 'wsl')
             : null
@@ -235,11 +235,11 @@ export class ClaudeAdapterService {
                 }
                 // No scan metadata (excluded or stopped distro) — fall back to
                 // asking the distro, one parallel round-trip.
-                : await this.probeWslBridge(wslTarget, settingsPath, curlPath, dropDir)
-            if (tab.session) {
-                // The spawn won the race after all: the session is already
-                // running without our --settings. Injecting now would only
-                // pretend — leave the tab unmonitored and say so.
+                : await this.probeWslBridge(wslTarget, tab, settingsPath, curlPath, dropDir)
+            if (!bridge) {
+                // The spawn won the race during the probe round-trip: the
+                // session is already running without our --settings. Injecting
+                // now would only pretend — leave the tab unmonitored honestly.
                 try {
                     fs.unlinkSync(settingsPath)
                 } catch { /* already gone */ }
@@ -282,7 +282,7 @@ export class ClaudeAdapterService {
         }
 
         if (isDirectLaunch) {
-            const args = (tab.profile.options.args ?? []).slice()
+            const args = tab.profile.options.args.slice()
             for (let i = args.length - 2; i >= 0; i--) {
                 if (args[i] === '--settings' && String(args[i + 1]).includes(HOOK_DIR_PREFIX)) {
                     args.splice(i, 2)
@@ -342,13 +342,17 @@ export class ClaudeAdapterService {
      * this distro. The curl.exe lane needs more than the mount: executing a
      * Windows binary rides the distro's binfmt interop handler, which systemd
      * distros routinely lose — so the probe runs the real thing.
+     *
+     * Null when the PTY spawned during the round-trip and injection is
+     * already too late.
      */
     private async probeWslBridge (
         wslTarget: WslCliRuntimeTarget,
+        tab: TerminalTabComponent,
         settingsPath: string,
         curlPath: string,
         dropDir: string,
-    ): Promise<{ settings: string|null, curl: string|null, drop: string|null, interop: boolean }> {
+    ): Promise<{ settings: string|null, curl: string|null, drop: string|null, interop: boolean }|null> {
         const [settings, curl, drop, interop] = await Promise.all([
             translateWindowsPathForWsl(wslTarget, settingsPath),
             translateWindowsPathForWsl(wslTarget, curlPath),
@@ -357,6 +361,9 @@ export class ClaudeAdapterService {
                 ? windowsExecutableRunsInWsl(wslTarget, curlPath)
                 : Promise.resolve(false),
         ])
+        if (tab.session) {
+            return null
+        }
         return { settings, curl, drop, interop }
     }
 

@@ -156,7 +156,7 @@ export class CliInstallModalComponent implements OnInit, OnDestroy {
                 useConpty: process.platform === 'win32' &&
                     isWindowsBuild(WIN_BUILD_CONPTY_SUPPORTED) &&
                     this.config.store.terminal.useConPTY ? 1 : false,
-            }) as PTYProxy
+            })
             this.pty = pty
             pty.subscribe('data', (array: Uint8Array) => {
                 pty.ackData(array.length)
