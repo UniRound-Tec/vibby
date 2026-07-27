@@ -512,6 +512,11 @@ export class AppService {
     }
 
     async closeWindow (): Promise<void> {
+        // Close-to-tray keeps the window and every session alive in the
+        // background, so none of the teardown below may run.
+        if (this.hostWindow.hideToTray()) {
+            return
+        }
         this.tabRecovery.enabled = false
         await this.tabRecovery.saveTabs(this.tabs)
         if (await this.closeAllTabs()) {

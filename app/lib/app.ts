@@ -27,7 +27,7 @@ export class Application {
     private aiNotifications = new AiNotificationHub(sender => this.findWindowBySender(sender))
     private cachedPlasmaVersion?: [number, number] | null
     private globalHotkey$ = new Subject<void>()
-    private quitRequested = false
+    quitRequested = false
     userPluginsPath: string
 
     // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
@@ -201,10 +201,22 @@ export class Application {
 
         this.tray.on('click', () => setTimeout(() => this.focus()))
 
-        const contextMenu = Menu.buildFromTemplate([{
-            label: 'Show',
-            click: () => this.focus(),
-        }])
+        const contextMenu = Menu.buildFromTemplate([
+            {
+                label: 'Show',
+                click: () => this.focus(),
+            },
+            { type: 'separator' },
+            {
+                // The window's close button only hides to the tray, so this is
+                // the one obvious way out on Windows.
+                label: 'Quit Vibby',
+                click: () => {
+                    this.quitRequested = true
+                    app.quit()
+                },
+            },
+        ])
 
         if (process.platform !== 'darwin') {
             this.tray.setContextMenu(contextMenu)

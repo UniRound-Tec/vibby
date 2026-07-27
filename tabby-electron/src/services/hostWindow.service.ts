@@ -1,6 +1,6 @@
 import type { BrowserWindow, TouchBar } from 'electron'
-import { Injectable, Inject, NgZone } from '@angular/core'
-import { BootstrapData, BOOTSTRAP_DATA, HostWindowService } from 'tabby-core'
+import { Injectable, Inject, Injector, NgZone } from '@angular/core'
+import { BootstrapData, BOOTSTRAP_DATA, ConfigService, HostWindowService } from 'tabby-core'
 import { ElectronService } from '../services/electron.service'
 
 export interface Bounds {
@@ -21,6 +21,13 @@ export class ElectronHostWindow extends HostWindowService {
         zone: NgZone,
         private electron: ElectronService,
         @Inject(BOOTSTRAP_DATA) private bootstrapData: BootstrapData,
+        /**
+         * ConfigService cannot be injected here: it depends on PlatformService,
+         * which depends on this service, and asking for it during construction
+         * closes that loop into an NG0200 that fails the whole bootstrap. It is
+         * only needed long after startup, so hideToTray() resolves it on demand.
+         */
+        private injector: Injector,
     ) {
         super()
         electron.ipcRenderer.on('host:window-enter-full-screen', () => zone.run(() => {
@@ -98,6 +105,21 @@ export class ElectronHostWindow extends HostWindowService {
 
     close (): void {
         this.electron.ipcRenderer.send('window-close')
+    }
+
+    hideToTray (): boolean {
+        // Only Windows has a reliable tray here: Linux tray support is off and
+        // macOS already keeps the app running after the window closes. With the
+        // tray icon disabled there would be no way back to a hidden window.
+        if (
+            process.platform !== 'win32' ||
+            !this.bootstrapData.isMainWindow ||
+            (this.injector.get(ConfigService).store.hideTray ?? false)
+        ) {
+            return false
+        }
+        this.electron.ipcRenderer.send('window-hide-to-tray')
+        return true
     }
 
     setBounds (bounds: Bounds): void {

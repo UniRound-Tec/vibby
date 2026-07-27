@@ -356,7 +356,12 @@ export class Window {
         this.window.on('unmaximize', () => this.send('host:window-unmaximized'))
 
         this.window.on('close', event => {
-            if (!this.closing) {
+            // A quit already agreed upon (tray Quit, shutdown, installer)
+            // closes for real; routing it back through the renderer would
+            // just hide the window to the tray and stall the quit. macOS
+            // keeps its renderer round-trip so Cmd+Q still confirms tabs.
+            const forceClose = this.application.quitRequested && process.platform !== 'darwin'
+            if (!this.closing && !forceClose) {
                 event.preventDefault()
                 this.send('host:window-close-request')
                 return
@@ -429,6 +434,12 @@ export class Window {
         this.on('window-close', () => {
             this.closing = true
             this.window.close()
+        })
+
+        // Close-to-tray: the renderer's close button asks for a hide instead
+        // of a close; `visible$` dropping makes Application show the tray.
+        this.on('window-hide-to-tray', () => {
+            this.hide()
         })
 
         this.on('window-set-touch-bar', (_, segments, selectedIndex) => {

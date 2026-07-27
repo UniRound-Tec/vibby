@@ -33,4 +33,11 @@ export abstract class HostWindowService {
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     bringToFront (): void { }
+
+    /**
+     * Asks the host to hide the window to the system tray instead of closing
+     * it. Returns true when the host took over — the caller must then leave
+     * the window and its sessions alone. False means close normally.
+     */
+    hideToTray (): boolean { return false }
 }
