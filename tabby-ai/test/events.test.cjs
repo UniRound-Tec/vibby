@@ -5,10 +5,26 @@ const assert = require('node:assert/strict')
 const {
     SUMMARY_MAX_LENGTH,
     clampSummary,
+    sanitizeEvent,
     stateAfter,
     reduceSnapshot,
     isAttentionTransition,
 } = require('../.test-build/events.js')
+
+assert.deepEqual(sanitizeEvent({
+    sessionId: 's',
+    ts: 1,
+    kind: 'prompt-submitted',
+    confidence: 'high',
+    summary: 'user: private prompt',
+    raw: { prompt: 'private prompt' },
+}), {
+    sessionId: 's',
+    ts: 1,
+    kind: 'prompt-submitted',
+    confidence: 'high',
+    summary: 'user',
+})
 
 const ev = (kind, overrides = {}) => ({
     sessionId: 's1',

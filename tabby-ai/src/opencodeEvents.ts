@@ -343,7 +343,6 @@ export class OpenCodeEventProjector {
             kind,
             confidence: 'high',
             summary,
-            raw: payload,
             projectedState: this.aggregateState(),
         }
     }
@@ -366,7 +365,6 @@ export class OpenCodeEventProjector {
             kind: this.aggregateState() === 'idle' ? 'turn-completed' : 'notification',
             confidence: 'high',
             summary: 'state reconciled',
-            raw: statuses,
             projectedState: this.aggregateState(),
         }
     }

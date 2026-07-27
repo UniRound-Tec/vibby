@@ -16,10 +16,11 @@ import {
     wslExecutablePath, wslLaunchCommand,
 } from '../runtimeTargets'
 import { quoteSh } from '../paths'
+import { supportsCodexHooks } from '../codexCapabilities'
 
 const WINDOWS = process.platform === 'win32'
 const PROBE_TIMEOUT = 2000
-const SCAN_TIMEOUT = 5000
+const SCAN_TIMEOUT = 8000
 const WSL_SCAN_TIMEOUT = 12000
 const WSL_RECORD = '__VIBBY_WSL_CLI__'
 const WSL_SHELL_RECORD = '__VIBBY_WSL_SHELL__'
@@ -198,7 +199,10 @@ export class CliScannerService {
             }
             const launcher = launcherFor(command)
             const version = await this.probeVersion(entry, command, launcher)
-            return { entry, target, command, launcher, version, monitoring: entry.tier }
+            const monitoring = entry.id === 'codex'
+                ? await this.probeCodexMonitoring(command, launcher)
+                : entry.tier
+            return { entry, target, command, launcher, version, monitoring }
         } catch (e) {
             this.logger.warn(`Failed to detect ${entry.id}:`, e)
             return null
@@ -243,7 +247,8 @@ export class CliScannerService {
                     command,
                     launcher: 'sh' as const,
                     version,
-                    monitoring: entry.tier,
+                    // Ordinary WSL terminals are launch-only in this milestone.
+                    monitoring: entry.id === 'codex' ? 'launch' : entry.tier,
                 }
             }))
             return detections.filter((item): item is DetectedCli => !!item)
@@ -482,6 +487,17 @@ export class CliScannerService {
             return null
         }
         return entry.versionPattern.exec(output)?.[1] ?? null
+    }
+
+    private async probeCodexMonitoring (
+        command: string,
+        launcher: AiCliLauncher,
+    ): Promise<'full'|'launch'> {
+        const features = await this.runCaptured(
+            wrapCommand(command, ['features', 'list'], launcher),
+            PROBE_TIMEOUT,
+        )
+        return supportsCodexHooks(features) ? 'full' : 'launch'
     }
 
     /** Runs a process, captures stdout+stderr, kills the whole process tree on timeout */

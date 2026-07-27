@@ -2,6 +2,7 @@ import * as http from 'http'
 import * as crypto from 'crypto'
 import { Injectable, NgZone } from '@angular/core'
 import { translateClaudeHook } from '../claudeHooks'
+import { CodexHookProjector } from '../codexHooks'
 import { AiEventBusService } from './eventBus.service'
 
 const BODY_LIMIT = 1024 * 1024
@@ -21,6 +22,7 @@ export class HookIngressService {
     private port: number | null = null
     private token = crypto.randomBytes(16).toString('hex')
     private starting: Promise<void> | null = null
+    private codexProjectors = new Map<string, CodexHookProjector>()
 
     constructor (
         private zone: NgZone,
@@ -58,6 +60,7 @@ export class HookIngressService {
         this.server = null
         this.port = null
         this.starting = null
+        this.codexProjectors.clear()
     }
 
     get running (): boolean {
@@ -72,6 +75,13 @@ export class HookIngressService {
         return `http://127.0.0.1:${this.port}/vibby/${this.token}/event/${sessionId}`
     }
 
+    codexEndpointFor (sessionId: string): string {
+        if (!this.server) {
+            throw new Error('hook ingress is not running')
+        }
+        return `http://127.0.0.1:${this.port}/vibby/${this.token}/codex/${sessionId}`
+    }
+
     /**
      * Constant-time compare. The route only reaches here with 32 hex
      * characters, so the buffers are always the same length as the token.
@@ -83,13 +93,14 @@ export class HookIngressService {
     }
 
     private handle (req: http.IncomingMessage, res: http.ServerResponse): void {
-        const match = /^\/vibby\/([0-9a-f]{32})\/event\/([\w-]{1,64})$/.exec(req.url ?? '')
+        const match = /^\/vibby\/([0-9a-f]{32})\/(event|codex)\/([\w-]{1,64})$/.exec(req.url ?? '')
         if (req.method !== 'POST' || !match || !this.tokenMatches(match[1])) {
             res.statusCode = 404
             res.end()
             return
         }
-        const sessionId = match[2]
+        const source = match[2]
+        const sessionId = match[3]
 
         const chunks: Buffer[] = []
         let size = 0
@@ -113,11 +124,26 @@ export class HookIngressService {
                 console.warn('[tabby-ai] discarding malformed hook payload')
                 return
             }
-            const event = translateClaudeHook(sessionId, payload, Date.now())
+            const now = Date.now()
+            const event = source === 'codex'
+                ? this.codexProjectorFor(sessionId).apply(payload, now)
+                : translateClaudeHook(sessionId, payload, now)
             if (event) {
                 // http callbacks run outside Angular — re-enter for change detection
                 this.zone.run(() => this.bus.publish(event))
+                if (event.kind === 'session-ended') {
+                    this.codexProjectors.delete(sessionId)
+                }
             }
         })
+    }
+
+    private codexProjectorFor (sessionId: string): CodexHookProjector {
+        let projector = this.codexProjectors.get(sessionId)
+        if (!projector) {
+            projector = new CodexHookProjector(sessionId)
+            this.codexProjectors.set(sessionId, projector)
+        }
+        return projector
     }
 }

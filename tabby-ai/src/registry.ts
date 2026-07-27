@@ -22,7 +22,7 @@ export const AI_CLI_REGISTRY: AiCliRegistryEntry[] = [
         versionArgs: ['--version'],
         versionPattern: VERSION,
         icon: require('./icons/codex.svg'),
-        tier: 'launch',
+        tier: 'full',
         docsUrl: 'https://github.com/openai/codex',
     },
     {

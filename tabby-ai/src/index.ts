@@ -17,6 +17,7 @@ import { DashboardService } from './services/dashboard.service'
 import { HookIngressService } from './services/hookIngress.service'
 import { ClaudeAdapterService } from './services/claudeAdapter.service'
 import { OpenCodeAdapterService } from './services/openCodeAdapter.service'
+import { CodexAdapterService } from './services/codexAdapter.service'
 import { AiAttentionService } from './services/attention.service'
 import { AiTabStateService } from './services/tabState.service'
 import { RuntimeCliDetectorService } from './services/runtimeCliDetector.service'
@@ -65,6 +66,7 @@ export default class AiModule {
         ingress: HookIngressService,
         claudeAdapter: ClaudeAdapterService,
         openCodeAdapter: OpenCodeAdapterService,
+        codexAdapter: CodexAdapterService,
         attention: AiAttentionService,
         tabState: AiTabStateService,
         runtimeDetector: RuntimeCliDetectorService,
@@ -80,6 +82,7 @@ export default class AiModule {
         window.addEventListener('beforeunload', () => ingress.stop())
         claudeAdapter.activate()
         openCodeAdapter.activate()
+        codexAdapter.activate()
         runtimeDetector.activate()
         attention.activate()
         tabState.activate()

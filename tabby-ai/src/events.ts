@@ -43,9 +43,6 @@ export interface AiEvent {
     /** Small-screen-ready short text, e.g. `edit: auth.ts` — clamped by the bus */
     summary: string
 
-    /** Original adapter payload; UI must not depend on its shape */
-    raw?: unknown
-
     /**
      * Adapter-projected aggregate state. OpenCode uses this when several
      * native root/child sessions share one Vibby pane. Claude leaves it unset.
@@ -78,6 +75,18 @@ export function clampSummary (text: string): string {
         return flat
     }
     return flat.slice(0, SUMMARY_MAX_LENGTH - 1) + '…'
+}
+
+/** Final privacy boundary before an adapter event enters retained UI state. */
+export function sanitizeEvent (event: AiEvent): AiEvent {
+    const safe = { ...event } as AiEvent & { raw?: unknown }
+    delete safe.raw
+    return {
+        ...safe,
+        summary: event.kind === 'prompt-submitted'
+            ? 'user'
+            : clampSummary(event.summary),
+    }
 }
 
 /**

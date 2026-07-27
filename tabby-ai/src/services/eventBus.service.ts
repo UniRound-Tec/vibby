@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core'
 import { BehaviorSubject, Observable, Subject } from 'rxjs'
 import {
     AiEvent, AiSessionSnapshot, AiSessionState,
-    clampSummary, isAttentionTransition, reduceSnapshot,
+    clampSummary, isAttentionTransition, reduceSnapshot, sanitizeEvent,
 } from '../events'
 
 export interface AiAttentionPulse {
@@ -41,7 +41,7 @@ export class AiEventBusService {
     get snapshots$ (): Observable<ReadonlyMap<string, AiSessionSnapshot>> { return this.snapshotsSubject }
 
     publish (event: AiEvent): void {
-        event = { ...event, summary: clampSummary(event.summary) }
+        event = sanitizeEvent(event)
 
         const prev = this.snapshots.get(event.sessionId) ?? null
         const next = reduceSnapshot(prev, event)

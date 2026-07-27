@@ -2,8 +2,8 @@
  * Claude Code hook payload → AiEvent translation (docs/06-m2-plan.md §1).
  * Pure module — unit-tested alongside events.ts.
  *
- * Summary verbs stay English regardless of UI locale (design §2.5);
- * free-text parts follow the session content.
+ * Summary verbs stay English regardless of UI locale (design §2.5).
+ * Prompt text, command arguments and raw hook payloads never enter AiEvent.
  */
 import { AiEvent } from './events'
 
@@ -11,6 +11,12 @@ function basename (p: string): string {
     const flat = String(p)
     const i = Math.max(flat.lastIndexOf('/'), flat.lastIndexOf('\\'))
     return i >= 0 ? flat.slice(i + 1) : flat
+}
+
+function commandName (value: unknown): string {
+    const command = String(value ?? '').trim()
+    const first = /^(?:"([^"]+)"|'([^']+)'|(\S+))/.exec(command)?.slice(1).find(Boolean) ?? ''
+    return basename(first).replace(/\.(exe|cmd|bat|ps1)$/i, '') || 'command'
 }
 
 export function summaryForToolCall (toolName: string, toolInput: Record<string, unknown> | undefined): string {
@@ -24,17 +30,16 @@ export function summaryForToolCall (toolName: string, toolInput: Record<string, 
         case 'Read':
             return `read: ${basename(String(input['file_path'] ?? ''))}`
         case 'Bash':
-            return `bash: ${String(input['command'] ?? '')}`
+            return `command: ${commandName(input['command'])}`
         case 'Grep':
-            return `grep: ${String(input['pattern'] ?? '')}`
         case 'Glob':
-            return `glob: ${String(input['pattern'] ?? '')}`
+            return 'search'
         case 'Task':
         case 'Agent':
-            return `agent: ${String(input['description'] ?? '')}`
+            return 'agent'
         case 'WebFetch':
         case 'WebSearch':
-            return `web: ${String(input['url'] ?? input['query'] ?? '')}`
+            return 'web'
         default:
             return toolName.toLowerCase()
     }
@@ -49,13 +54,13 @@ export function translateClaudeHook (sessionId: string, payload: unknown, ts: nu
         return null
     }
     const p = payload as Record<string, unknown>
-    const base = { sessionId, ts, confidence: 'high' as const, raw: payload }
+    const base = { sessionId, ts, confidence: 'high' as const }
 
     switch (p['hook_event_name']) {
         case 'SessionStart':
             return { ...base, kind: 'session-started', summary: 'ready' }
         case 'UserPromptSubmit':
-            return { ...base, kind: 'prompt-submitted', summary: `user: ${String(p['prompt'] ?? '')}` }
+            return { ...base, kind: 'prompt-submitted', summary: 'user' }
         case 'PreToolUse':
             return {
                 ...base,
