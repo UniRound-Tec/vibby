@@ -7,7 +7,7 @@ import { BehaviorSubject, Observable } from 'rxjs'
 import { ConfigService, LogService, Logger } from 'tabby-core'
 import { AI_CLI_REGISTRY } from '../registry'
 import { AiCliLauncher, AiCliRegistryEntry, DetectedCli } from '../api'
-import { selectLookupResult } from '../binaryResolution'
+import { mergeWindowsPath, parseWindowsRegistryPath, selectLookupResult } from '../binaryResolution'
 
 const WINDOWS = process.platform === 'win32'
 const PROBE_TIMEOUT = 2000
@@ -92,8 +92,8 @@ export class CliScannerService {
     }
 
     /**
-     * PATH as the user's login shell sees it; null on Windows (GUI processes
-     * already inherit the user environment there) or when probing failed.
+     * PATH as the user's login shell sees it, including Windows user-PATH
+     * changes made after this GUI process started; null when probing failed.
      * Launched profiles need it too: a CLI resolved through this PATH usually
      * starts with `#!/usr/bin/env node`, which has to make the same lookup.
      */
@@ -219,7 +219,20 @@ export class CliScannerService {
      */
     private ensureShellPath (): Promise<string|null> {
         if (WINDOWS) {
-            return Promise.resolve(null)
+            this.shellPathProbe ??= new Promise<string|null>(resolve => {
+                execFile(
+                    'reg.exe',
+                    ['query', 'HKCU\\Environment', '/v', 'Path'],
+                    { timeout: PROBE_TIMEOUT, windowsHide: true },
+                    (err, stdout) => resolve(err ? null : parseWindowsRegistryPath(stdout, process.env)),
+                )
+            }).then(userPath => {
+                const value = mergeWindowsPath(process.env.PATH, userPath)
+                this.shellPathValue = value
+                this.logger.info(userPath ? 'Refreshed Windows user PATH' : 'Windows user PATH probe failed, using process PATH')
+                return value
+            })
+            return this.shellPathProbe
         }
         this.shellPathProbe ??= new Promise<string|null>(resolve => {
             execFile(

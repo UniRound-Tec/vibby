@@ -1,5 +1,9 @@
 const assert = require('node:assert/strict')
-const { selectLookupResult } = require('../.test-build/binaryResolution.js')
+const {
+    mergeWindowsPath,
+    parseWindowsRegistryPath,
+    selectLookupResult,
+} = require('../.test-build/binaryResolution.js')
 
 assert.equal(selectLookupResult(null), null)
 assert.equal(selectLookupResult(''), null)
@@ -20,5 +24,26 @@ assert.equal(
     'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\codex.cmd',
     'a later standalone CLI remains selectable',
 )
+
+const registryOutput = [
+    '',
+    'HKEY_CURRENT_USER\\Environment',
+    '    Path    REG_EXPAND_SZ    %LOCALAPPDATA%\\Programs\\OpenAI\\Codex\\bin;C:\\Tools',
+].join('\r\n')
+assert.equal(
+    parseWindowsRegistryPath(registryOutput, { LOCALAPPDATA: 'C:\\Users\\Jesse\\AppData\\Local' }),
+    'C:\\Users\\Jesse\\AppData\\Local\\Programs\\OpenAI\\Codex\\bin;C:\\Tools',
+)
+assert.equal(parseWindowsRegistryPath('ERROR: missing', {}), null)
+assert.equal(
+    mergeWindowsPath(
+        'C:\\Existing;C:\\Shared\\;C:\\Program Files\\WindowsApps\\OpenAI.Codex\\app\\resources',
+        'C:\\New;C:\\Shared',
+    ),
+    'C:\\New;C:\\Shared;C:\\Existing;C:\\Program Files\\WindowsApps\\OpenAI.Codex\\app\\resources',
+    'fresh user entries take precedence and duplicates are removed',
+)
+assert.equal(mergeWindowsPath(undefined, 'C:\\New'), 'C:\\New')
+assert.equal(mergeWindowsPath(undefined, null), null)
 
 console.log('binaryResolution.test.cjs: all assertions passed')
