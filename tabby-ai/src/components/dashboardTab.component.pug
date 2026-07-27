@@ -34,7 +34,7 @@
                             [title]='"Next page" | translate',
                         ) ›
 
-                .strip
+                .strip(#launchStrip)
                     button.chip.terminal-chip(
                         *ngIf='launchPage === 0',
                         type='button',

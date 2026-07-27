@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, Injector } from '@angular/core'
+import {
+    AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef,
+    Injector, OnDestroy, ViewChild,
+} from '@angular/core'
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser'
 import { auditTime, interval } from 'rxjs'
 import { BaseTabComponent, AppService, ConfigService, PartialProfile, ProfilesService, SplitTabComponent, TranslateService } from 'tabby-core'
@@ -7,6 +10,7 @@ import { TerminalTabComponent } from 'tabby-local'
 import { AiCliRegistryEntry, DetectedCli } from '../api'
 import { VIBBY_WORDMARK } from '../branding'
 import { AiEvent, AiEventKind, AiSessionSnapshot, stateAfter } from '../events'
+import { MIN_LAUNCH_PAGE_CAPACITY, launchPageCapacity } from '../launchPagination'
 import {
     AiDisplayState, DISPLAY_STATE_RANK, SessionFacts, activityLabelKey, displayStateFor,
     lastEventCaptionFor, stateLabelKey,
@@ -55,7 +59,6 @@ export interface AiCliLaunchCard {
 const TIMELINE_LENGTH = 20
 const SESSION_PAGE_SIZE = 6
 const ACTIVITY_PAGE_SIZE = 6
-const LAUNCH_PAGE_SIZE = 8
 
 /** @hidden */
 @Component({
@@ -66,7 +69,7 @@ const LAUNCH_PAGE_SIZE = 8
     // which call markForCheck — app-wide CD cycles don't need to re-check it
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DashboardTabComponent extends BaseTabComponent {
+export class DashboardTabComponent extends BaseTabComponent implements AfterViewInit, OnDestroy {
     /** Renders the tab header as a compact icon-only tab (tabHeader.component.ts hook) */
     miniHeader = true
 
@@ -77,6 +80,10 @@ export class DashboardTabComponent extends BaseTabComponent {
     sessionPage = 0
     activityPage = 0
     launchPage = 0
+    launchPageSize = MIN_LAUNCH_PAGE_CAPACITY
+
+    @ViewChild('launchStrip', { read: ElementRef })
+    private launchStrip?: ElementRef<HTMLElement>
 
     /** Mirrors tabby's own Tabs location setting — same store key, same values */
     readonly tabsLocations = [
@@ -105,6 +112,7 @@ export class DashboardTabComponent extends BaseTabComponent {
     private sessionNames = new Map<string, string>()
     /** Labels come from a small fixed key set — skip ngx-translate interpolation per row per refresh */
     private labelCache = new Map<string, string>()
+    private launchGridObserver: ResizeObserver|null = null
 
     constructor (
         injector: Injector,
@@ -158,6 +166,20 @@ export class DashboardTabComponent extends BaseTabComponent {
 
     ngOnInit (): void {
         this.applyThemeVars()
+    }
+
+    ngAfterViewInit (): void {
+        if (!this.launchStrip) {
+            return
+        }
+        this.launchGridObserver = new ResizeObserver(() => this.updateLaunchPageSize())
+        this.launchGridObserver.observe(this.launchStrip.nativeElement)
+        this.updateLaunchPageSize()
+    }
+
+    ngOnDestroy (): void {
+        this.launchGridObserver?.disconnect()
+        super.ngOnDestroy()
     }
 
     refreshRows (): void {
@@ -254,13 +276,13 @@ export class DashboardTabComponent extends BaseTabComponent {
     }
 
     get pagedCliCards (): AiCliLaunchCard[] {
-        const start = Math.max(0, this.launchPage * LAUNCH_PAGE_SIZE - 1)
-        const count = LAUNCH_PAGE_SIZE - (this.launchPage === 0 ? 1 : 0)
+        const start = Math.max(0, this.launchPage * this.launchPageSize - 1)
+        const count = this.launchPageSize - (this.launchPage === 0 ? 1 : 0)
         return this.cliCards.slice(start, start + count)
     }
 
     get launchPageCount (): number {
-        return Math.max(1, Math.ceil((this.cliCards.length + 1) / LAUNCH_PAGE_SIZE))
+        return Math.max(1, Math.ceil((this.cliCards.length + 1) / this.launchPageSize))
     }
 
     get detectedCliCount (): number {
@@ -448,6 +470,23 @@ export class DashboardTabComponent extends BaseTabComponent {
         this.cliCards = AI_CLI_REGISTRY
             .map(entry => ({ entry, detected: detected.get(entry.id) ?? null, icon: this.iconForKind(entry.id) }))
             .sort((a, b) => Number(!!b.detected) - Number(!!a.detected))
+        this.launchPage = this.clampPage(this.launchPage, this.launchPageCount)
+        this.cdr.markForCheck()
+    }
+
+    private updateLaunchPageSize (): void {
+        const strip = this.launchStrip?.nativeElement
+        if (!strip) {
+            return
+        }
+        const renderedTracks = getComputedStyle(strip).gridTemplateColumns
+            .split(/\s+/)
+            .filter(track => track && track !== 'none')
+        const nextSize = launchPageCapacity(renderedTracks.length)
+        if (nextSize === this.launchPageSize) {
+            return
+        }
+        this.launchPageSize = nextSize
         this.launchPage = this.clampPage(this.launchPage, this.launchPageCount)
         this.cdr.markForCheck()
     }
