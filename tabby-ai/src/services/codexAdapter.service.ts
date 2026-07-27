@@ -140,6 +140,9 @@ export class CodexAdapterService {
     ) {}
 
     activate (): void {
+        // Get the listener up before any pane arms. arm() has to await it to
+        // learn the port, and that await is the window the session can spawn in.
+        this.ingress.start().catch(() => null)
         this.app.tabOpened$.subscribe(tab => this.visit(tab))
         this.app.tabsChanged$.subscribe(() => this.app.tabs.forEach(tab => this.visit(tab)))
         this.scanner.scanResults$.subscribe(() => this.app.tabs.forEach(tab => this.visit(tab)))
@@ -178,6 +181,13 @@ export class CodexAdapterService {
         if (!direct && !detected) {
             return
         }
+        // Injection rewrites the profile the session is spawned from, so a pane
+        // that already has one is out of reach — but leave it unarmed. Marking
+        // it here burns the tab for good, and `visit` runs again on every tab
+        // change: a pane whose session is later replaced deserves another look.
+        if (tab.session) {
+            return
+        }
         this.armed.add(tab)
         try {
             await this.ingress.start()
@@ -185,6 +195,7 @@ export class CodexAdapterService {
             console.warn('[tabby-ai] Codex hook ingress unavailable', error)
             return
         }
+        // ingress.start() yields, and the session can spawn in that window
         if (tab.session) {
             console.warn('[tabby-ai] Codex session spawned before hook injection; full support skipped')
             return
