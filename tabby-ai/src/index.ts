@@ -29,6 +29,7 @@ import { DashboardTabComponent } from './components/dashboardTab.component'
 import { AiSettingsTabComponent } from './components/aiSettingsTab.component'
 import { CliLaunchModalComponent } from './components/cliLaunchModal.component'
 import { CliInstallModalComponent } from './components/cliInstallModal.component'
+import { CodexTrustModalComponent } from './components/codexTrustModal.component'
 import { tabBarStyles } from './styles/tabBar.styles'
 
 /** Follows the active Tabby theme instead of imposing a fixed brand colour. */
@@ -55,6 +56,7 @@ const ACCENT = 'var(--theme-primary)'
         AiSettingsTabComponent,
         CliLaunchModalComponent,
         CliInstallModalComponent,
+        CodexTrustModalComponent,
     ],
 })
 export default class AiModule {

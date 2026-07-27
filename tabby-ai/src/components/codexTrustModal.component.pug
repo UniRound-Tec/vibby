@@ -1,0 +1,31 @@
+.codex-trust-modal
+    .modal-header
+        .header-main
+            .warning-mark
+                i.fas.fa-shield-halved
+            .heading
+                h5.modal-title(translate) Codex runs with hook trust disabled
+                .modal-subtitle(translate) Required for session monitoring
+        button.close-button(
+            type='button',
+            (click)='acknowledge()',
+            [attr.aria-label]='"Close" | translate',
+        ) ×
+
+    .modal-body
+        p.lead(translate)
+            | Monitoring only works if Codex runs the hooks vibby installs, so vibby
+            | starts it with #[code --dangerously-bypass-hook-trust].
+        .impact
+            .impact-row
+                i.fas.fa-circle-exclamation
+                span(translate) Codex also stops reviewing every other hook it loads, including hooks from plugins and from cloud or MDM policy.
+            .impact-row
+                i.fas.fa-circle-exclamation
+                span(translate) Hooks can run outside the Codex sandbox.
+        p.escape-hatch(translate)
+            | Turn Codex off under Settings → AI to stop launching it this way.
+
+    .modal-footer
+        button.btn.btn-link.muted(type='button', (click)='silence()', translate) Don't show again
+        button.btn.btn-primary(type='button', (click)='acknowledge()', autofocus, translate) Got it

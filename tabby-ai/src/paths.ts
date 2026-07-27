@@ -91,12 +91,37 @@ export function generatedPathOwnerPid (value: string): number|null {
 /**
  * Quote a value for a generated .cmd wrapper.
  *
- * `%%` as well as the doubled quotes: cmd expands `%VAR%` when it runs the
- * batch file, so an unescaped percent sign in a path or argument arrives
- * mangled — or, for an undefined name, silently empty.
+ * Two parsers read this line and they disagree. cmd expands `%VAR%` when it
+ * runs the batch file, so a percent sign has to be doubled or it arrives
+ * mangled — or, for an undefined name, silently empty. The program cmd then
+ * launches re-splits the same text under CommandLineToArgvW rules, where a
+ * backslash escapes a following quote.
+ *
+ * So a literal quote is written `""`, which keeps cmd inside its own quoted
+ * state (any `|` or `&` in the value stays inert) while still reaching the
+ * callee as one quote — and every backslash that lands directly in front of a
+ * quote is doubled first, otherwise CommandLineToArgvW reads it as an escape
+ * and the argument boundaries shift from there on. A run at the very end
+ * counts too: it sits against the closing quote.
  */
 export function quoteCmd (value: string): string {
-    return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`
+    let out = '"'
+    let backslashes = 0
+    for (const char of value) {
+        if (char === '\\') {
+            backslashes++
+            continue
+        }
+        if (char === '"') {
+            out += '\\'.repeat(backslashes * 2) + '""'
+            backslashes = 0
+            continue
+        }
+        // backslashes not followed by a quote are literal to both parsers
+        out += '\\'.repeat(backslashes) + (char === '%' ? '%%' : char)
+        backslashes = 0
+    }
+    return out + '\\'.repeat(backslashes * 2) + '"'
 }
 
 /** Quote a value for a generated /bin/sh wrapper */

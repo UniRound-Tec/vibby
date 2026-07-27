@@ -30,6 +30,10 @@ export class AiConfigProvider extends ConfigProvider {
             floatingWindow: {
                 enabled: false,
             },
+            codex: {
+                /** Set once the hook-trust-bypass notice is dismissed for good */
+                trustBypassAcknowledged: false,
+            },
         },
         hotkeys: {
             'toggle-dashboard': ['Ctrl-Shift-H'],

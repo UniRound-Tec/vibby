@@ -434,7 +434,9 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
     }
 
     rescan (): void {
-        this.scanner.scan()
+        // refresh(), not scan(): a CLI installed outside the app lands on a
+        // PATH the scanner cached at startup and would stay invisible here
+        this.scanner.refresh()
     }
 
     get tabsLocation (): string {
