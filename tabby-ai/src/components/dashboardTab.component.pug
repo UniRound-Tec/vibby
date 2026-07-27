@@ -165,6 +165,17 @@ footer.statusline
             span.dot(aria-hidden='true')
             span {{c.count}} {{c.label}}
     .status-right
+        button.floating-window-switch(
+            type='button',
+            [class.active]='floatingWindowEnabled',
+            [attr.aria-pressed]='floatingWindowEnabled',
+            [attr.aria-label]='"Floating window" | translate',
+            [title]='"Floating window" | translate',
+            (click)='toggleFloatingWindow()',
+        )
+            span.status-label(translate) Floating window
+            span.switch-track(aria-hidden='true')
+                span.switch-thumb
         span.status-label(translate) Tabs location
         .mini-segmented
             button(

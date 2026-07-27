@@ -25,8 +25,11 @@ export default () => ({
     target: 'node',
     entry: {
         'index.ignore': 'file-loader?name=index.html!pug-html-loader!' + path.resolve(__dirname, './index.pug'),
+        'floating-sessions.ignore': 'file-loader?name=floating-sessions.html!pug-html-loader!' + path.resolve(__dirname, './floating-sessions.pug'),
         preload: path.resolve(__dirname, 'src/entry.preload.ts'),
         bundle: path.resolve(__dirname, 'src/entry.ts'),
+        'floating-sessions-preload': path.resolve(__dirname, 'src/floatingSessions.preload.ts'),
+        'floating-sessions': path.resolve(__dirname, 'src/floatingSessions.entry.ts'),
     },
     mode: isDev ? 'development' : 'production',
     optimization: {

@@ -32,6 +32,7 @@ const activityIcon = nativeImage.createFromPath(`${app.getAppPath()}/assets/acti
 
 export class Window {
     ready: Promise<void>
+    readonly id: number
     isMainWindow = false
     webContents: WebContents
     private visible = new Subject<boolean>()
@@ -108,6 +109,7 @@ export class Window {
         } else {
             this.window = new glasstron.BrowserWindow(bwOptions)
         }
+        this.id = this.window.id
 
         this.webContents = this.window.webContents
 
@@ -274,6 +276,16 @@ export class Window {
     async present (): Promise<void> {
         await this.show()
         this.window.moveTop()
+    }
+
+    async restoreAndPresent (): Promise<void> {
+        if (!this.window) {
+            return
+        }
+        if (this.window.isMinimized()) {
+            this.window.restore()
+        }
+        await this.present()
     }
 
     passCliArguments (argv: string[], cwd: string, secondInstance: boolean): void {

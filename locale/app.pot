@@ -31,6 +31,10 @@ msgstr ""
 msgid "Accessibility"
 msgstr ""
 
+#: locale/tmp-html/tabby-ai/src/components/aiSettingsTab.component.html:0
+msgid "AI Session floating window"
+msgstr ""
+
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:27
 msgid "Acrylic background"
 msgstr ""
@@ -820,6 +824,10 @@ msgstr ""
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:147
 msgid "Fixed"
+msgstr ""
+
+#: locale/tmp-html/tabby-ai/src/components/aiSettingsTab.component.html:0
+msgid "Floating window"
 msgstr ""
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:219
@@ -2016,6 +2024,10 @@ msgstr ""
 
 #: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:68
 msgid "Show recent profiles in selector"
+msgstr ""
+
+#: locale/tmp-html/tabby-ai/src/components/aiSettingsTab.component.html:0
+msgid "Show recent AI sessions and click to return to their terminal"
 msgstr ""
 
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:36

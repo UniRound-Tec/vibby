@@ -1,9 +1,8 @@
 import { Injectable, NgZone } from '@angular/core'
-import { AppService, BaseTabComponent, ConfigService, HostWindowService, SplitTabComponent, TranslateService } from 'tabby-core'
-import { TerminalTabComponent } from 'tabby-local'
-
+import { AppService, ConfigService, HostWindowService, TranslateService } from 'tabby-core'
 import { AiEventBusService, AiAttentionPulse } from './eventBus.service'
 import { AiSessionDirectoryService } from './sessionDirectory.service'
+import { AiSessionNavigatorService } from './sessionNavigator.service'
 
 /** needs-you can flap (permission bursts) — don't spam per session */
 const THROTTLE_MS = 5000
@@ -22,6 +21,7 @@ export class AiAttentionService {
         private hostWindow: HostWindowService,
         private bus: AiEventBusService,
         private sessions: AiSessionDirectoryService,
+        private navigator: AiSessionNavigatorService,
         private translate: TranslateService,
         private zone: NgZone,
     ) { }
@@ -45,7 +45,7 @@ export class AiAttentionService {
         }
 
         const pane = this.sessions.forSession(pulse.sessionId)?.pane ?? null
-        const topTab = pane ? this.topTabFor(pane) : null
+        const topTab = pane ? this.navigator.topTabFor(pane) : null
 
         // don't self-interrupt: the user is already looking at this session
         if (document.hasFocus() && topTab && this.app.activeTab === topTab) {
@@ -66,18 +66,9 @@ export class AiAttentionService {
         })
         notification.onclick = () => this.zone.run(() => {
             this.hostWindow.bringToFront()
-            if (pane && topTab) {
-                this.app.selectTab(topTab)
-                if (topTab instanceof SplitTabComponent) {
-                    topTab.focus(pane)
-                }
+            if (pane) {
+                this.navigator.focusPane(pane)
             }
         })
-    }
-
-    private topTabFor (pane: TerminalTabComponent): BaseTabComponent | null {
-        return this.app.tabs.find(t =>
-            t === pane || t instanceof SplitTabComponent && t.getAllTabs().includes(pane),
-        ) ?? null
     }
 }

@@ -441,6 +441,15 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
         return this.configService.store.appearance.tabsLocation
     }
 
+    get floatingWindowEnabled (): boolean {
+        return !!this.configService.store.aiCli.floatingWindow.enabled
+    }
+
+    toggleFloatingWindow (): void {
+        this.configService.store.aiCli.floatingWindow.enabled = !this.floatingWindowEnabled
+        this.configService.save()
+    }
+
     setTabsLocation (value: string): void {
         this.configService.store.appearance.tabsLocation = value
         this.configService.save()

@@ -1,0 +1,296 @@
+:root {
+    color-scheme: dark;
+    --panel: #19181c;
+    --surface-hover: #2d2a31;
+    --text: #f6f3f1;
+    --muted: #aaa3ad;
+    --faint: #77717b;
+    --border: rgba(255, 255, 255, .10);
+    --shadow: rgba(0, 0, 0, .38);
+    --working: #8d99ff;
+    --needs-you: #ffb445;
+    --idle: #45d391;
+    --error: #ff7474;
+    font-family: "Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+:root[data-color-scheme='light'] {
+    color-scheme: light;
+    --panel: #ffffff;
+    --surface-hover: #eceae8;
+    --text: #191719;
+    --muted: #6e6870;
+    --faint: #918b92;
+    --border: rgba(0, 0, 0, .10);
+    --shadow: rgba(40, 32, 36, .14);
+    --working: #4053c7;
+    --needs-you: #a85a00;
+    --idle: #147547;
+    --error: #bc3030;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: transparent;
+}
+
+body {
+    padding: 8px 10px 12px;
+    color: var(--text);
+    -webkit-app-region: drag;
+}
+
+button {
+    font: inherit;
+    -webkit-app-region: no-drag;
+}
+
+#floating-session-root {
+    height: 100%;
+}
+
+.panel {
+    display: flex;
+    max-height: 100%;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: 0 5px 14px -6px var(--shadow);
+}
+
+.drag-handle {
+    display: grid;
+    height: 14px;
+    flex: 0 0 14px;
+    place-items: center;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-app-region: no-drag;
+}
+
+.drag-handle::after {
+    width: 24px;
+    height: 3px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--muted) 38%, transparent);
+    content: "";
+}
+
+.drag-handle:hover::after {
+    width: 32px;
+    background: color-mix(in srgb, var(--text) 58%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.drag-handle:active,
+.drag-handle.dragging {
+    cursor: grabbing;
+}
+
+.drag-handle:active::after,
+.drag-handle.dragging::after {
+    width: 36px;
+    background: color-mix(in srgb, var(--text) 72%, transparent);
+}
+
+.session-list {
+    min-height: 0;
+    padding: 7px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -webkit-app-region: no-drag;
+}
+
+.session-list::-webkit-scrollbar {
+    display: none;
+}
+
+.session {
+    --state: var(--working);
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 9px;
+    align-items: center;
+    width: 100%;
+    min-height: 52px;
+    padding: 8px 9px;
+    border: 1px solid transparent;
+    border-radius: 11px;
+    color: inherit;
+    text-align: left;
+    background: transparent;
+    cursor: pointer;
+}
+
+.session + .session {
+    margin-top: 1px;
+}
+
+.session:hover,
+.session:focus-visible {
+    border-color: var(--border);
+    outline: none;
+    background: var(--surface-hover);
+}
+
+.session.needs-you {
+    --state: var(--needs-you);
+}
+
+.session.idle,
+.session.listening {
+    --state: var(--idle);
+}
+
+.session.error {
+    --state: var(--error);
+}
+
+.session.untracked {
+    --state: var(--faint);
+}
+
+.session-icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.session-icon img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+}
+
+:root[data-color-scheme='light'] .session-icon img {
+    filter: brightness(.28);
+}
+
+.session-icon-fallback {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.session-content {
+    min-width: 0;
+}
+
+.session-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--state);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--state) 13%, transparent);
+}
+
+.session-name {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.session-state {
+    flex: 0 0 auto;
+    color: var(--state);
+    font-size: 10px;
+}
+
+.session-event {
+    display: block;
+    margin-top: 3px;
+    overflow: hidden;
+    color: var(--muted);
+    font: 10px/1.35 "Cascadia Mono", Consolas, monospace;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.session-time {
+    align-self: start;
+    padding-top: 2px;
+    color: var(--faint);
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+.panel-footer {
+    display: flex;
+    justify-content: center;
+    padding: 3px 7px 4px;
+    border-top: 1px solid var(--border);
+}
+
+.panel-footer[hidden] {
+    display: none;
+}
+
+.expand-button {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 18px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 9px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.expand-button:hover,
+.expand-button:focus-visible {
+    color: var(--text);
+    outline: none;
+    background: var(--surface-hover);
+}
+
+.expand-chevron {
+    font-size: 9px;
+    transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .drag-handle::after {
+        transition: width 100ms ease, background-color 100ms ease, box-shadow 100ms ease;
+    }
+
+    .session {
+        animation: session-in 120ms ease-out;
+    }
+
+    @keyframes session-in {
+        from {
+            opacity: 0;
+            transform: translateY(3px);
+        }
+    }
+}

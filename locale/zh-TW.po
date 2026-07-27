@@ -41,6 +41,10 @@ msgstr "只接受一次"
 msgid "Accessibility"
 msgstr "輔助"
 
+#: locale/tmp-html/tabby-ai/src/components/aiSettingsTab.component.html:0
+msgid "AI Session floating window"
+msgstr "AI 工作階段浮動視窗"
+
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:27
 msgid "Acrylic background"
 msgstr "壓克力背景"
@@ -831,6 +835,10 @@ msgstr "篩選器"
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:147
 msgid "Fixed"
 msgstr "固定寬度"
+
+#: locale/tmp-html/tabby-ai/src/components/aiSettingsTab.component.html:0
+msgid "Floating window"
+msgstr "浮動視窗"
 
 #: locale/tmp-html/tabby-settings/src/components/windowSettingsTab.component.html:219
 msgid "Fluent background sometimes causes drag lag"
@@ -2027,6 +2035,10 @@ msgstr "顯示設定選擇器"
 #: locale/tmp-html/tabby-settings/src/components/profilesSettingsTab.component.html:68
 msgid "Show recent profiles in selector"
 msgstr "在選擇器中顯示最近使用的設定"
+
+#: locale/tmp-html/tabby-ai/src/components/aiSettingsTab.component.html:0
+msgid "Show recent AI sessions and click to return to their terminal"
+msgstr "顯示最近的 AI 工作階段，點擊即可返回其終端機"
 
 #: locale/tmp-html/tabby-settings/src/components/settingsTab.component.html:36
 msgid "Show release notes"
