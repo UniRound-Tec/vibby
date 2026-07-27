@@ -43,6 +43,27 @@ assert.deepEqual(
     { PATH: '/usr/bin', PSModulePath: '/custom/modules' },
     'non-Windows installers preserve the caller environment',
 )
+assert.deepEqual(
+    installShellEnvironment({
+        PATH: 'C:\\Tools',
+        npm_config_argv: '{}',
+        NPM_CONFIG_VERSION_COMMIT_HOOKS: 'true',
+        npm_config_version_git_message: 'v%s',
+        npm_config_version_git_sign: '',
+        npm_config_version_git_tag: 'true',
+        npm_config_version_tag_prefix: 'v',
+        npm_config_registry: 'https://registry.example.com',
+        npm_config_proxy: 'http://proxy.example.com',
+        npm_config_strict_ssl: 'false',
+    }, 'windows'),
+    {
+        PATH: 'C:\\Tools',
+        npm_config_registry: 'https://registry.example.com',
+        npm_config_proxy: 'http://proxy.example.com',
+        npm_config_strict_ssl: 'false',
+    },
+    'Yarn lifecycle metadata is removed while user npm networking config is preserved',
+)
 
 const expectedCliIds = [
     'amp',

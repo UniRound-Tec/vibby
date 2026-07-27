@@ -446,15 +446,25 @@ export function installShellCommand (
     }
 }
 
+const YARN_LIFECYCLE_ENV_KEYS = new Set([
+    'npm_config_argv',
+    'npm_config_version_commit_hooks',
+    'npm_config_version_git_message',
+    'npm_config_version_git_sign',
+    'npm_config_version_git_tag',
+    'npm_config_version_tag_prefix',
+])
+
 /** Environment inherited by the installer shell. */
 export function installShellEnvironment (
     environment: Record<string, string|undefined>,
     platform = installPlatformFor(),
 ): Record<string, string|undefined> {
-    if (platform !== 'windows') {
-        return { ...environment }
-    }
     return Object.fromEntries(
-        Object.entries(environment).filter(([key]) => key.toLowerCase() !== 'psmodulepath'),
+        Object.entries(environment).filter(([key]) => {
+            const normalized = key.toLowerCase()
+            return !YARN_LIFECYCLE_ENV_KEYS.has(normalized) &&
+                (platform !== 'windows' || normalized !== 'psmodulepath')
+        }),
     )
 }
