@@ -91,9 +91,15 @@ const ENDPOINT = process.env.${PI_HOOK_ENDPOINT_ENV}
 const DROP_DIR = process.env.${PI_HOOK_DROP_DIR_ENV}
 const SESSION_ID = process.env.${PI_HOOK_SESSION_ENV}
 
+let loggedDrop = false
+let loggedHttp = false
+
 function sendEvent(piEvent) {
     if (!ENDPOINT && !DROP_DIR) return
-    const payload = { ...piEvent, vibby_session_id: SESSION_ID }
+    const payload = { ...piEvent }
+    if (SESSION_ID) {
+        payload.vibby_session_id = SESSION_ID
+    }
     const body = JSON.stringify(payload)
 
     if (DROP_DIR && SESSION_ID) {
@@ -102,7 +108,13 @@ function sendEvent(piEvent) {
         try {
             fs.writeFileSync(tmp, body)
             fs.renameSync(tmp, tmp + ".json")
-        } catch {}
+            console.log("[vibby-pi] dropped", piEvent.type)
+        } catch (err) {
+            if (!loggedDrop) {
+                loggedDrop = true
+                console.error("[vibby-pi] drop failed:", err.message)
+            }
+        }
         return
     }
 
@@ -120,16 +132,28 @@ function sendEvent(piEvent) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             timeout: 3000,
-        }, () => {})
-        req.on("error", () => {})
+        }, (res) => {
+            console.log("[vibby-pi] posted", piEvent.type, res.statusCode)
+        })
+        req.on("error", (err) => {
+            if (!loggedHttp) {
+                loggedHttp = true
+                console.error("[vibby-pi] post failed:", err.message)
+            }
+        })
         req.write(body)
         req.end()
     }
 }
 
 export default function (pi) {
+    console.log("[vibby-pi] extension loaded; endpoint:", ENDPOINT, "drop:", DROP_DIR)
     pi.on("session_start", (event) => sendEvent({ type: "session_start", event }))
-    pi.on("input", (event) => sendEvent({ type: "input", event }))
+    pi.on("input", (event) => {
+        sendEvent({ type: "input", event })
+        // input is a mutation hook: returning undefined can block Pi's composer.
+        return { action: "continue" }
+    })
     pi.on("tool_call", (event) => sendEvent({ type: "tool_call", event }))
     pi.on("tool_result", (event) => sendEvent({ type: "tool_result", event }))
     pi.on("turn_end", (event) => sendEvent({ type: "turn_end", event }))

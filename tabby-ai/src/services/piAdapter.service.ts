@@ -83,6 +83,29 @@ function withoutStaleHookEnv (env: Record<string, string>): Record<string, strin
 }
 
 /**
+ * Windows npm shims wrap the real CLI in `cmd.exe /c pi.cmd <args>` or
+ * `powershell.exe -File pi.ps1 <args>`. The `-e` extension flag must be
+ * inserted after the shim's CLI path, not at the very front of the wrapped
+ * argument list, or cmd/PowerShell never passes it to Pi.
+ */
+function injectPiExtensionArgs (wrappedArgs: string[], extensionPath: string): string[] {
+    // wsl.exe --distribution <distro> --cd <cwd> --exec <executable> <args>
+    if (wrappedArgs.length >= 6 && wrappedArgs[0] === '--distribution' && wrappedArgs[4] === '--exec') {
+        return [...wrappedArgs.slice(0, 6), '-e', extensionPath, ...wrappedArgs.slice(6)]
+    }
+    // cmd.exe /c <cli-path> <args>
+    if (wrappedArgs.length >= 2 && wrappedArgs[0] === '/c') {
+        return [wrappedArgs[0], wrappedArgs[1], '-e', extensionPath, ...wrappedArgs.slice(2)]
+    }
+    // powershell.exe -NoProfile -ExecutionPolicy Bypass -File <cli-path> <args>
+    if (wrappedArgs.length >= 4 && wrappedArgs[2] === '-File') {
+        return [...wrappedArgs.slice(0, 4), '-e', extensionPath, ...wrappedArgs.slice(4)]
+    }
+    // direct executable launch
+    return ['-e', extensionPath, ...wrappedArgs]
+}
+
+/**
  * Pi monitoring uses a generated TypeScript extension loaded by `pi -e`.
  * The extension forwards Pi lifecycle hooks to vibby's HookIngressService,
  * either over HTTP (native) or via the WSL file-drop bridge.
@@ -222,12 +245,12 @@ export class PiAdapterService {
             this.ingress.registerFileDrop(sessionId, tempRoot, 'pi')
 
             if (direct) {
-                tab.profile.options.args = ['-e', translatedExtension, ...originalArgs]
+                tab.profile.options.args = injectPiExtensionArgs(originalArgs, translatedExtension)
                 tab.profile.options.env = { ...originalEnv, ...injectedEnv }
             }
         } else {
             if (direct) {
-                tab.profile.options.args = ['-e', extensionPath, ...originalArgs]
+                tab.profile.options.args = injectPiExtensionArgs(originalArgs, extensionPath)
                 tab.profile.options.env = { ...originalEnv, ...injectedEnv }
             }
         }

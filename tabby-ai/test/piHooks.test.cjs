@@ -41,6 +41,7 @@ assert.match(extension, new RegExp(`process\.env\.${PI_HOOK_SESSION_ENV}`))
 assert.match(extension, /writeFileSync/)
 assert.match(extension, /renameSync/)
 assert.match(extension, /\.json/)
+assert.match(extension, /return \{ action: "continue" \}/, 'input hook must let Pi continue processing')
 assert.doesNotMatch(extension, /127\.0\.0\.1|session-[0-9]/, 'endpoint must come from env, not baked into source')
 
 // --- hook event mapping ---
