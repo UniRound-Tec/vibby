@@ -9,7 +9,13 @@
         flex: auto;
         position: relative;
         display: block;
+        // IME composition moves xterm's hidden textarea to the cursor. When a
+        // TUI parks the real cursor near the right edge, Chromium can scroll an
+        // overflow:hidden host to reveal that textarea, clipping the terminal's
+        // first columns. `clip` keeps the same visual crop without becoming a
+        // programmatically scrollable container.
         overflow: hidden;
+        overflow: clip;
         margin: calc(max(0px, 30px * var(--spaciness) - 15px));
         transition: opacity ease-out 0.25s;
         opacity: 0;

@@ -11,6 +11,7 @@ import {
     PI_HOOK_ENDPOINT_ENV,
     PI_HOOK_SESSION_ENV,
     buildPiExtensionSource,
+    piWslDistroFromArgs,
 } from '../piHooks'
 import { SHIM_DIR_PREFIX } from '../paths'
 import {
@@ -186,9 +187,21 @@ export class PiAdapterService {
         const originalArgs = withoutStaleHookArgs([...tab.profile.options.args])
         const originalEnv = withoutStaleHookEnv({ ...tab.profile.options.env })
         const targetId = tab.profile.options['aiCli']?.targetId
+        const wrappedWslDistro = piWslDistroFromArgs(originalArgs)
         const wslTarget = direct
-            ? this.scanner.runtimeTargets.find(target => target.id === targetId && target.type === 'wsl')
+            ? this.scanner.runtimeTargets.find(target =>
+                target.type === 'wsl' &&
+                (
+                    wrappedWslDistro
+                        ? target.distro.toLocaleLowerCase() === wrappedWslDistro.toLocaleLowerCase()
+                        : target.id === targetId
+                ),
+            )
             : null
+        if (direct && wrappedWslDistro && !wslTarget) {
+            console.warn(`[tabby-ai] WSL target metadata unavailable for ${wrappedWslDistro}; Pi will launch without full monitoring`)
+            return
+        }
 
         let tempRoot: string|null = null
         let shim: TerminalCliShimInstallation|null = null
@@ -216,6 +229,7 @@ export class PiAdapterService {
         const injectedEnv: Record<string, string> = {
             [PI_HOOK_ENDPOINT_ENV]: this.ingress.piEndpointFor(sessionId),
         }
+        const logPath = path.join(tempRoot, 'vibby-pi-extension.log')
 
         if (wslTarget?.type === 'wsl') {
             const translatedExtension = wslTarget.windowsMountRoot
@@ -242,6 +256,7 @@ export class PiAdapterService {
                 originalEnv['WSLENV'] || process.env.WSLENV,
                 [PI_HOOK_DROP_DIR_ENV, PI_HOOK_SESSION_ENV],
             )
+            injectedEnv['VIBBY_PI_LOG_PATH'] = path.posix.join(translatedDrop, 'vibby-pi-extension.log')
             this.ingress.registerFileDrop(sessionId, tempRoot, 'pi')
 
             if (direct) {
@@ -251,7 +266,7 @@ export class PiAdapterService {
         } else {
             if (direct) {
                 tab.profile.options.args = injectPiExtensionArgs(originalArgs, extensionPath)
-                tab.profile.options.env = { ...originalEnv, ...injectedEnv }
+                tab.profile.options.env = { ...originalEnv, ...injectedEnv, VIBBY_PI_LOG_PATH: logPath }
             }
         }
 
@@ -263,7 +278,7 @@ export class PiAdapterService {
                     detected!,
                     shimDirectory,
                     ['-e', extensionPath],
-                    { [PI_HOOK_ENDPOINT_ENV]: this.ingress.piEndpointFor(sessionId) },
+                    { [PI_HOOK_ENDPOINT_ENV]: this.ingress.piEndpointFor(sessionId), VIBBY_PI_LOG_PATH: logPath },
                     PASSTHROUGH_SUBCOMMANDS,
                 )
             } catch (error) {

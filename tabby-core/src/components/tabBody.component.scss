@@ -2,7 +2,11 @@
     display: flex;
     flex: auto;
     position: relative;
+    // A focused descendant (notably xterm's IME textarea) must not be able to
+    // scroll the whole tab body sideways. Inactive tabs are positioned far off
+    // screen, so this container is for clipping only, never for scrolling.
     overflow: hidden;
+    overflow: clip;
 
     >* {
         flex: auto;

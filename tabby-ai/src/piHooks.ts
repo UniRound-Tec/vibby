@@ -5,6 +5,24 @@ export const PI_HOOK_ENDPOINT_ENV = 'VIBBY_PI_HOOK_ENDPOINT'
 export const PI_HOOK_DROP_DIR_ENV = 'VIBBY_PI_HOOK_DROP_DIR'
 export const PI_HOOK_SESSION_ENV = 'VIBBY_PI_HOOK_SESSION_ID'
 
+/**
+ * Returns the distro encoded in a direct `wsl.exe` Pi launch.
+ *
+ * Restored tabs created by older builds may not carry aiCli.targetId, but the
+ * wrapper arguments remain authoritative. Without this fallback a WSL launch
+ * receives a Windows `C:\...` extension path and Pi resolves it below $HOME.
+ */
+export function piWslDistroFromArgs (args: string[]): string|null {
+    if (
+        args.length >= 6 &&
+        args[0] === '--distribution' &&
+        args[4] === '--exec'
+    ) {
+        return args[1]?.trim() || null
+    }
+    return null
+}
+
 function text (value: unknown): string {
     return typeof value === 'string' ? value : ''
 }
@@ -90,9 +108,18 @@ import * as http from "http"
 const ENDPOINT = process.env.${PI_HOOK_ENDPOINT_ENV}
 const DROP_DIR = process.env.${PI_HOOK_DROP_DIR_ENV}
 const SESSION_ID = process.env.${PI_HOOK_SESSION_ENV}
+const LOG_PATH = process.env.VIBBY_PI_LOG_PATH
 
 let loggedDrop = false
 let loggedHttp = false
+let thinkingActive = false
+
+function logError(message) {
+    if (!LOG_PATH) return
+    try {
+        fs.appendFileSync(LOG_PATH, new Date().toISOString() + " " + message + "\\n")
+    } catch {}
+}
 
 function sendEvent(piEvent) {
     if (!ENDPOINT && !DROP_DIR) return
@@ -103,16 +130,17 @@ function sendEvent(piEvent) {
     const body = JSON.stringify(payload)
 
     if (DROP_DIR && SESSION_ID) {
-        const nonce = Math.random().toString(36).slice(2)
+        // The Windows file-drop poller accepts the same six-character nonce
+        // contract used by mktemp-based Claude and Codex hooks.
+        const nonce = Math.random().toString(36).slice(2, 8).padEnd(6, "0")
         const tmp = path.join(DROP_DIR, SESSION_ID + "." + nonce)
         try {
             fs.writeFileSync(tmp, body)
             fs.renameSync(tmp, tmp + ".json")
-            console.log("[vibby-pi] dropped", piEvent.type)
         } catch (err) {
             if (!loggedDrop) {
                 loggedDrop = true
-                console.error("[vibby-pi] drop failed:", err.message)
+                logError("drop failed: " + err.message)
             }
         }
         return
@@ -132,13 +160,11 @@ function sendEvent(piEvent) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             timeout: 3000,
-        }, (res) => {
-            console.log("[vibby-pi] posted", piEvent.type, res.statusCode)
-        })
+        }, () => {})
         req.on("error", (err) => {
             if (!loggedHttp) {
                 loggedHttp = true
-                console.error("[vibby-pi] post failed:", err.message)
+                logError("post failed: " + err.message)
             }
         })
         req.write(body)
@@ -147,16 +173,36 @@ function sendEvent(piEvent) {
 }
 
 export default function (pi) {
-    console.log("[vibby-pi] extension loaded; endpoint:", ENDPOINT, "drop:", DROP_DIR)
     pi.on("session_start", (event) => sendEvent({ type: "session_start", event }))
     pi.on("input", (event) => {
         sendEvent({ type: "input", event })
         // input is a mutation hook: returning undefined can block Pi's composer.
         return { action: "continue" }
     })
+    pi.on("message_update", (event) => {
+        const updateType = event?.assistantMessageEvent?.type
+        if (
+            (updateType === "thinking_start" || updateType === "thinking_delta") &&
+            !thinkingActive
+        ) {
+            thinkingActive = true
+            // Forward only a marker: reasoning text is private and deltas are high-volume.
+            sendEvent({ type: "thinking" })
+        } else if (
+            updateType === "thinking_end" ||
+            updateType === "text_start" ||
+            updateType === "done" ||
+            updateType === "error"
+        ) {
+            thinkingActive = false
+        }
+    })
     pi.on("tool_call", (event) => sendEvent({ type: "tool_call", event }))
     pi.on("tool_result", (event) => sendEvent({ type: "tool_result", event }))
-    pi.on("turn_end", (event) => sendEvent({ type: "turn_end", event }))
+    pi.on("turn_end", (event) => {
+        thinkingActive = false
+        sendEvent({ type: "turn_end", event })
+    })
     pi.on("agent_end", (event) => sendEvent({ type: "agent_end", event }))
     pi.on("session_shutdown", (event) => sendEvent({ type: "session_shutdown", event }))
 }
@@ -188,6 +234,8 @@ export function translatePiHook (
             }
             return { ...base, kind: 'prompt-submitted', summary: `user: ${text(event['text'])}` }
         }
+        case 'thinking':
+            return { ...base, kind: 'thinking', summary: 'thinking' }
         case 'tool_call': {
             const toolName = text(event['toolName'])
             return { ...base, kind: 'tool-call', summary: toolSummary(toolName, record(event['input'])) }

@@ -55,7 +55,7 @@ export class TerminalConfigProvider extends ConfigProvider {
                 wholeWord: false,
                 caseSensitive: false,
             },
-            detectProgress: true,
+            detectProgress: false,
             scrollbackLines: 25000,
             drawBoldTextInBrightColors: true,
             sixel: true,
