@@ -5,6 +5,8 @@ const {
     CODEX_PROFILE_NAME,
     CodexHookProjector,
     codexHookProfile,
+    codexWslProfileInstallScript,
+    injectCodexLaunchArgs,
     translateCodexHook,
 } = require('../.test-build/codexHooks.js')
 const { buildWindowsCliShim } = require('../.test-build/terminalCliShim.js')
@@ -18,9 +20,42 @@ for (const event of CODEX_HOOK_EVENTS) {
 }
 assert.match(profile, new RegExp(`\\$${CODEX_HOOK_ENDPOINT_ENV}`))
 assert.match(profile, new RegExp(`\\$env:${CODEX_HOOK_ENDPOINT_ENV}`))
+assert.match(profile, /\$VIBBY_CODEX_HOOK_DROP_DIR/)
+assert.match(profile, /\$VIBBY_CODEX_HOOK_SESSION_ID/)
+assert.match(profile, /\bmktemp\b/)
+assert.match(profile, /\bmv\b/)
 assert.doesNotMatch(profile, /timeout = (?!3\b)\d+/)
 assert.doesNotMatch(profile, /127\.0\.0\.1|session-[0-9]/)
 assert.match(CODEX_PROFILE_NAME, /^[A-Za-z0-9_-]+$/)
+
+const injectedArgs = ['-p', CODEX_PROFILE_NAME, '--dangerously-bypass-hook-trust']
+assert.deepEqual(
+    injectCodexLaunchArgs(
+        ['--distribution', 'Ubuntu-22.04', '--cd', '~', '--exec', '/home/jesse/.local/bin/codex'],
+        injectedArgs,
+        true,
+    ),
+    [
+        '--distribution', 'Ubuntu-22.04',
+        '--cd', '~',
+        '--exec', '/home/jesse/.local/bin/codex',
+    ].concat(injectedArgs),
+    'Codex arguments must be inserted after the WSL --exec executable',
+)
+assert.deepEqual(
+    injectCodexLaunchArgs([], injectedArgs, false),
+    injectedArgs,
+    'native Codex arguments remain direct process arguments',
+)
+assert.equal(
+    injectCodexLaunchArgs(['--distribution', 'Ubuntu-22.04'], injectedArgs, true),
+    null,
+    'a malformed WSL wrapper must not receive Codex-only arguments',
+)
+const wslInstaller = codexWslProfileInstallScript()
+assert.match(wslInstaller, /\$\{CODEX_HOME:-\$HOME\/\.codex\}/)
+assert.match(wslInstaller, /vibby\.config\.toml/)
+assert.match(wslInstaller, /__VIBBY_WSL_CODEX_PROFILE_OK__/)
 
 // The Windows handler must move bytes, not text: decoding stdin through the
 // console code page corrupts every non-ASCII payload, and Stop carries the

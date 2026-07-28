@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict')
 const {
+    appendWslenv,
     decodeWslOutput,
     isWindowsMountedWslPath,
     mergeWslTargets,
@@ -20,6 +21,10 @@ assert.deepEqual(nativeRuntimeTarget('win32'), {
 })
 assert.equal(nativeRuntimeTarget('freebsd'), null)
 assert.equal(wslTargetId('Ubuntu Dev'), 'wsl:Ubuntu%20Dev')
+assert.equal(
+    appendWslenv('PATH/l:EXISTING/u', ['existing', 'VIBBY_DROP', 'VIBBY_SESSION']),
+    'PATH/l:EXISTING/u:VIBBY_DROP:VIBBY_SESSION',
+)
 
 assert.deepEqual(parseWslNames('\uFEFFUbuntu-22.04\r\nDebian\r\n'), ['Ubuntu-22.04', 'Debian'])
 assert.deepEqual(

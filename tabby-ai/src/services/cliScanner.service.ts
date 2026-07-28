@@ -17,6 +17,10 @@ import {
 } from '../runtimeTargets'
 import { quoteSh } from '../paths'
 import { supportsCodexHooks } from '../codexCapabilities'
+import {
+    CODEX_WSL_PROFILE_INSTALLED_RECORD,
+    codexWslProfileInstallScript,
+} from '../codexHooks'
 
 const WINDOWS = process.platform === 'win32'
 const PROBE_TIMEOUT = 2000
@@ -241,14 +245,16 @@ export class CliScannerService {
                     return null
                 }
                 const version = await this.probeWslVersion(target, entry, command)
+                const monitoring = entry.id === 'codex'
+                    ? await this.probeWslCodexMonitoring(target, command)
+                    : entry.tier
                 return {
                     entry,
                     target,
                     command,
                     launcher: 'sh' as const,
                     version,
-                    // Ordinary WSL terminals are launch-only in this milestone.
-                    monitoring: entry.id === 'codex' ? 'launch' : entry.tier,
+                    monitoring,
                 }
             }))
             return detections.filter((item): item is DetectedCli => !!item)
@@ -369,6 +375,31 @@ export class CliScannerService {
             { ...process.env, WSL_UTF8: '1' },
         )
         return output === null ? null : entry.versionPattern.exec(output)?.[1] ?? null
+    }
+
+    private async probeWslCodexMonitoring (
+        target: WslCliRuntimeTarget,
+        command: string,
+    ): Promise<'full'|'launch'> {
+        const environment = { ...process.env, WSL_UTF8: '1' }
+        const features = await this.runCaptured(
+            wslLaunchCommand(target, command, ['features', 'list']),
+            PROBE_TIMEOUT,
+            environment,
+        )
+        if (!supportsCodexHooks(features)) {
+            return 'launch'
+        }
+
+        // The profile is static: the per-session endpoint/drop path arrives in
+        // the launch environment. Installing it at scan time avoids a wsl.exe
+        // round-trip in the narrow pre-PTY arming window.
+        const installed = await this.runCaptured(
+            wslLaunchCommand(target, '/bin/sh', ['-c', codexWslProfileInstallScript()]),
+            PROBE_TIMEOUT,
+            environment,
+        )
+        return installed?.includes(CODEX_WSL_PROFILE_INSTALLED_RECORD) ? 'full' : 'launch'
     }
 
     private runTextCommand (

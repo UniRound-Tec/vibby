@@ -9,9 +9,21 @@ import { TerminalTabComponent } from 'tabby-local'
 
 import { CodexTrustModalComponent } from '../components/codexTrustModal.component'
 
-import { CODEX_HOOK_ENDPOINT_ENV, CODEX_PROFILE_NAME, codexHookProfile } from '../codexHooks'
+import {
+    CODEX_HOOK_DROP_DIR_ENV,
+    CODEX_HOOK_ENDPOINT_ENV,
+    CODEX_HOOK_SESSION_ENV,
+    CODEX_PROFILE_NAME,
+    codexHookProfile,
+    injectCodexLaunchArgs,
+} from '../codexHooks'
 import { clampSummary } from '../events'
 import { SHIM_DIR_PREFIX } from '../paths'
+import {
+    appendWslenv,
+    translateWindowsPathForWsl,
+    translateWindowsPathWithMountRoot,
+} from '../runtimeTargets'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
@@ -118,6 +130,8 @@ function withoutStaleHookEnv (env: Record<string, string>): Record<string, strin
     return Object.fromEntries(
         Object.entries(env).filter(([key]) =>
             key !== CODEX_HOOK_ENDPOINT_ENV &&
+            key !== CODEX_HOOK_DROP_DIR_ENV &&
+            key !== CODEX_HOOK_SESSION_ENV &&
             !key.startsWith(LEGACY_REMOTE_TOKEN_PREFIX),
         ),
     )
@@ -213,7 +227,21 @@ export class CodexAdapterService {
         const sessionId = crypto.randomUUID()
         const originalArgs = withoutStaleHookConfig([...tab.profile.options.args])
         const originalEnv = withoutStaleHookEnv({ ...tab.profile.options.env })
-        if (!this.writeHookProfile()) {
+        const targetId = tab.profile.options['aiCli']?.targetId
+        const wslTarget = direct
+            ? this.scanner.runtimeTargets.find(target => target.id === targetId && target.type === 'wsl')
+            : null
+        const wslDetection = wslTarget?.type === 'wsl'
+            ? this.scanner.scanResults.find(item =>
+                item.entry.id === KIND &&
+                item.target.id === wslTarget.id,
+            )
+            : null
+        if (wslTarget?.type === 'wsl' && wslDetection?.monitoring !== 'full') {
+            console.warn(`[tabby-ai] Codex hooks unavailable in ${wslTarget.distro}; launching without full monitoring`)
+            return
+        }
+        if (!wslTarget && !this.writeHookProfile()) {
             return
         }
         // Codex keeps only one profile, and the user's own choice is the one
@@ -228,10 +256,45 @@ export class CodexAdapterService {
         let shim: TerminalCliShimInstallation|null = null
         let tempRoot: string|null = null
         if (direct) {
-            tab.profile.options.args = [...injectedArgs, ...originalArgs]
+            const launchedArgs = injectCodexLaunchArgs(
+                originalArgs,
+                injectedArgs,
+                wslTarget?.type === 'wsl',
+            )
+            if (!launchedArgs) {
+                console.warn('[tabby-ai] malformed WSL Codex launch; hook monitoring skipped')
+                return
+            }
+            const injectedEnv: Record<string, string> = {
+                [CODEX_HOOK_ENDPOINT_ENV]: this.ingress.codexEndpointFor(sessionId),
+            }
+            if (wslTarget?.type === 'wsl') {
+                try {
+                    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'vibby-codex-'))
+                } catch (error) {
+                    console.warn('[tabby-ai] could not create the WSL Codex hook drop directory', error)
+                    return
+                }
+                const translatedDrop = wslTarget.windowsMountRoot
+                    ? translateWindowsPathWithMountRoot(wslTarget.windowsMountRoot, tempRoot)
+                    : await translateWindowsPathForWsl(wslTarget, tempRoot)
+                if (sessionAppeared(tab) || !translatedDrop) {
+                    this.removeTempRoot(tempRoot)
+                    console.warn(`[tabby-ai] WSL hook bridge unavailable in ${wslTarget.distro}; Codex will launch without full monitoring`)
+                    return
+                }
+                injectedEnv[CODEX_HOOK_DROP_DIR_ENV] = translatedDrop
+                injectedEnv[CODEX_HOOK_SESSION_ENV] = sessionId
+                injectedEnv['WSLENV'] = appendWslenv(
+                    originalEnv['WSLENV'] || process.env.WSLENV,
+                    [CODEX_HOOK_DROP_DIR_ENV, CODEX_HOOK_SESSION_ENV],
+                )
+                this.ingress.registerFileDrop(sessionId, tempRoot, 'codex')
+            }
+            tab.profile.options.args = launchedArgs
             tab.profile.options.env = {
                 ...originalEnv,
-                [CODEX_HOOK_ENDPOINT_ENV]: this.ingress.codexEndpointFor(sessionId),
+                ...injectedEnv,
             }
         } else {
             try {
@@ -407,6 +470,7 @@ export class CodexAdapterService {
             this.removeTempRoot(run.tempRoot)
         }
         this.panes.delete(run.sessionId)
+        this.ingress.unregisterFileDrop(run.sessionId)
         this.directory.unbind(run.sessionId)
         this.zone.run(() => this.bus.dropSession(run.sessionId))
         if (this.scraper && this.panes.size === 0) {

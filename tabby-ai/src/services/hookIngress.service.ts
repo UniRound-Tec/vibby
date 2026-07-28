@@ -9,6 +9,7 @@ import { DROP_FILE_LIMIT, dropFileSessionId, sortDropFiles } from '../wslHookBri
 import { AiEventBusService } from './eventBus.service'
 
 const BODY_LIMIT = 1024 * 1024
+type HookSource = 'claude'|'codex'
 
 /**
  * Cadence for the file-drop lane (WSL distros without Windows-binary
@@ -43,7 +44,7 @@ export class HookIngressService {
     private token = crypto.randomBytes(16).toString('hex')
     private starting: Promise<void> | null = null
     private codexProjectors = new Map<string, CodexHookProjector>()
-    private dropDirs = new Map<string, string>()
+    private dropRegistrations = new Map<string, { dir: string, source: HookSource }>()
     private dropPoller: ReturnType<typeof setInterval> | null = null
 
     constructor (
@@ -110,8 +111,8 @@ export class HookIngressService {
      * server (wslHookBridge.ts explains why that happens). Same translator,
      * same bus — only the transport differs.
      */
-    registerFileDrop (sessionId: string, dir: string): void {
-        this.dropDirs.set(sessionId, dir)
+    registerFileDrop (sessionId: string, dir: string, source: HookSource = 'claude'): void {
+        this.dropRegistrations.set(sessionId, { dir, source })
         if (!this.dropPoller) {
             // outside Angular: an empty poll must not drive change detection
             this.zone.runOutsideAngular(() => {
@@ -121,15 +122,16 @@ export class HookIngressService {
     }
 
     unregisterFileDrop (sessionId: string): void {
-        this.dropDirs.delete(sessionId)
-        if (!this.dropDirs.size && this.dropPoller) {
+        this.dropRegistrations.delete(sessionId)
+        this.codexProjectors.delete(sessionId)
+        if (!this.dropRegistrations.size && this.dropPoller) {
             clearInterval(this.dropPoller)
             this.dropPoller = null
         }
     }
 
     private pollDropDirs (): void {
-        for (const dir of new Set(this.dropDirs.values())) {
+        for (const dir of new Set([...this.dropRegistrations.values()].map(value => value.dir))) {
             const files: { name: string, sessionId: string, mtimeMs: number }[] = []
             for (const name of readDirOrEmpty(dir)) {
                 const sessionId = dropFileSessionId(name)
@@ -164,12 +166,19 @@ export class HookIngressService {
         } catch {
             return // could not consume: leave processing to whoever can
         }
-        if (payload === null || !this.dropDirs.has(sessionId)) {
+        const registration = this.dropRegistrations.get(sessionId)
+        if (payload === null || registration?.dir !== dir) {
             return // malformed, or a leftover from a session already torn down
         }
-        const event = translateClaudeHook(sessionId, payload, Date.now())
+        const now = Date.now()
+        const event = registration.source === 'codex'
+            ? this.codexProjectorFor(sessionId).apply(payload, now)
+            : translateClaudeHook(sessionId, payload, now)
         if (event) {
             this.zone.run(() => this.bus.publish(event))
+            if (event.kind === 'session-ended') {
+                this.codexProjectors.delete(sessionId)
+            }
         }
     }
 

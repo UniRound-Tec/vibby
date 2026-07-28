@@ -1,6 +1,10 @@
 import { AiEvent } from './events'
+import { quoteSh } from './paths'
 
 export const CODEX_HOOK_ENDPOINT_ENV = 'VIBBY_CODEX_HOOK_ENDPOINT'
+export const CODEX_HOOK_DROP_DIR_ENV = 'VIBBY_CODEX_HOOK_DROP_DIR'
+export const CODEX_HOOK_SESSION_ENV = 'VIBBY_CODEX_HOOK_SESSION_ID'
+export const CODEX_WSL_PROFILE_INSTALLED_RECORD = '__VIBBY_WSL_CODEX_PROFILE_OK__'
 
 /** Every event Codex ships (codex-rs/config/src/hook_config.rs) */
 export const CODEX_HOOK_EVENTS = [
@@ -68,6 +72,39 @@ function tomlString (value: string): string {
 export const CODEX_PROFILE_NAME = 'vibby'
 
 /**
+ * Injects Codex-only arguments without leaking them into the WSL launcher.
+ * A WSL profile is `wsl.exe ... --exec <codex> <codex args>`, so its insertion
+ * point is after the executable rather than at the beginning of argv.
+ */
+export function injectCodexLaunchArgs (
+    args: string[],
+    injected: string[],
+    wsl: boolean,
+): string[]|null {
+    if (!wsl) {
+        return [...injected, ...args]
+    }
+    const exec = args.indexOf('--exec')
+    if (exec < 0 || !args[exec + 1]) {
+        return null
+    }
+    return [
+        ...args.slice(0, exec + 2),
+        ...injected,
+        ...args.slice(exec + 2),
+    ]
+}
+
+export function codexPosixHookCommand (): string {
+    return [
+        `if [ -n "\${${CODEX_HOOK_DROP_DIR_ENV}:-}" ] && [ -n "\${${CODEX_HOOK_SESSION_ENV}:-}" ]; then`,
+        `f=$(mktemp "$${CODEX_HOOK_DROP_DIR_ENV}/$${CODEX_HOOK_SESSION_ENV}.XXXXXX")`,
+        '&& cat > "$f" && mv "$f" "$f.json";',
+        `else curl -s -m 3 --data-binary @- "$${CODEX_HOOK_ENDPOINT_ENV}"; fi`,
+    ].join(' ')
+}
+
+/**
  * Hook handlers as a standalone profile document.
  *
  * Deliberately a file rather than an inline `-c hooks={...}` override. The
@@ -82,7 +119,11 @@ export const CODEX_PROFILE_NAME = 'vibby'
  * or session IDs.
  */
 export function codexHookProfile (): string {
-    const posix = `curl -s -m 3 --data-binary @- "$${CODEX_HOOK_ENDPOINT_ENV}"`
+    // Native POSIX sessions post to loopback. WSL sessions cannot depend on
+    // loopback reaching the Windows host (NAT mode), so their launch exports a
+    // mounted drop directory and session ID. mktemp + rename keeps the poller
+    // from ever observing a partially written payload.
+    const posix = codexPosixHookCommand()
     // Bytes, never text. [Console]::In decodes stdin with the console code page
     // and re-encodes on the way out, which mangles every non-ASCII payload —
     // Stop carries last_assistant_message, so any answer that is not plain
@@ -96,6 +137,17 @@ export function codexHookProfile (): string {
     ].join(' ')
     const handler = `[{ hooks = [{ type = "command", command = ${tomlString(posix)}, command_windows = ${tomlString(windows)}, timeout = 3 }] }]`
     return `[hooks]\n${CODEX_HOOK_EVENTS.map(event => `${event} = ${handler}`).join('\n')}\n`
+}
+
+/** Installs the static managed profile in the home seen by WSL Codex. */
+export function codexWslProfileInstallScript (): string {
+    return [
+        'd="${CODEX_HOME:-$HOME/.codex}"',
+        'mkdir -p "$d" || exit 1',
+        'umask 077',
+        `printf %s ${quoteSh(codexHookProfile())} > "$d/${CODEX_PROFILE_NAME}.config.toml" || exit 1`,
+        `printf '${CODEX_WSL_PROFILE_INSTALLED_RECORD}\\n'`,
+    ].join('\n')
 }
 
 /**

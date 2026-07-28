@@ -33,6 +33,19 @@ export function wslTargetId (distro: string): string {
     return `${WSL_TARGET_PREFIX}${encodeURIComponent(distro)}`
 }
 
+/** Adds variables to WSLENV without discarding the user's flags or entries. */
+export function appendWslenv (value: string|undefined, names: string[]): string {
+    const entries = (value ?? '').split(':').filter(Boolean)
+    const existing = new Set(entries.map(entry => entry.split('/', 1)[0].toUpperCase()))
+    for (const name of names) {
+        if (!existing.has(name.toUpperCase())) {
+            entries.push(name)
+            existing.add(name.toUpperCase())
+        }
+    }
+    return entries.join(':')
+}
+
 export function wslExecutablePath (environment = process.env): string {
     // win32 join explicitly: this is a Windows path by definition, and the
     // pure-module tests run on Linux CI where the platform default is posix
