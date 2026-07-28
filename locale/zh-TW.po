@@ -2578,6 +2578,74 @@ msgstr "放大"
 msgid "Zoom out"
 msgstr "縮小"
 
+#: tabby-ai/src/presentation.ts
+msgid "🙋 Your turn"
+msgstr "🙋 該你啦"
+
+#: tabby-ai/src/presentation.ts
+msgid "⚠️ Trouble"
+msgstr "⚠️ 出狀況了"
+
+#: tabby-ai/src/presentation.ts
+msgid "⚡ Moving"
+msgstr "⚡ 推進中"
+
+#: tabby-ai/src/presentation.ts
+msgid "✨ Standing by"
+msgstr "✨ 隨時待命"
+
+#: tabby-ai/src/presentation.ts
+msgid "📡 Tuned in"
+msgstr "📡 已接入"
+
+#: tabby-ai/src/presentation.ts
+msgid "🌙 Off radar"
+msgstr "🌙 未接入"
+
+#: tabby-ai/src/presentation.ts
+msgid "🚀 Ready to roll"
+msgstr "🚀 準備出發"
+
+#: tabby-ai/src/presentation.ts
+msgid "🚀 Getting started"
+msgstr "🚀 開始幹活"
+
+#: tabby-ai/src/presentation.ts
+msgid "🧠 Thinking"
+msgstr "🧠 想一想"
+
+#: tabby-ai/src/presentation.ts
+msgid "✍️ Writing back"
+msgstr "✍️ 組織回覆"
+
+#: tabby-ai/src/presentation.ts
+msgid "🛠️ On it"
+msgstr "🛠️ 忙著呢"
+
+#: tabby-ai/src/presentation.ts
+msgid "🔐 Needs your okay"
+msgstr "🔐 等你點頭"
+
+#: tabby-ai/src/presentation.ts
+msgid "💬 Has a question"
+msgstr "💬 有個問題"
+
+#: tabby-ai/src/presentation.ts
+msgid "🔄 Trying again"
+msgstr "🔄 再試一次"
+
+#: tabby-ai/src/presentation.ts
+msgid "✅ Wrapped up"
+msgstr "✅ 搞定"
+
+#: tabby-ai/src/presentation.ts
+msgid "👋 Signed off"
+msgstr "👋 已收工"
+
+#: tabby-ai/src/presentation.ts
+msgid "⏹️ Stopped"
+msgstr "⏹️ 已停下"
+
 #: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:43
 #: locale/tmp-html/tabby-ssh/src/components/sshPortForwardingConfig.component.html:5
 msgctxt "[Dynamic] port forwarding"

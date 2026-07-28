@@ -7,6 +7,8 @@ const {
     stateLabelKey,
     activityLabelKey,
     captionFor,
+    decorateToolCaption,
+    eventCaptionFor,
     lastEventCaptionFor,
     loudest,
 } = require('../.test-build/presentation.js')
@@ -28,14 +30,29 @@ const thinking = facts({
         lastEvent: { kind: 'thinking', summary: 'Checking authentication state' },
     }),
 })
-assert.equal(activityLabelKey(thinking), 'Thinking')
+assert.equal(activityLabelKey(thinking), '🧠 Thinking')
 assert.equal(displayStateFor(thinking), 'working', 'thinking must not become a fifth state')
 assert.equal(
     activityLabelKey(facts({
         sessionId: 's',
         snapshot: snap('working', { lastEvent: { kind: 'tool-call', summary: 'read: auth.ts' } }),
     })),
-    'Working',
+    '🛠️ On it',
+)
+
+assert.equal(
+    activityLabelKey(facts({
+        sessionId: 's',
+        snapshot: snap('working', { lastEvent: { kind: 'responding', summary: 'responding' } }),
+    })),
+    '✍️ Writing back',
+)
+assert.equal(
+    activityLabelKey(facts({
+        sessionId: 's',
+        snapshot: snap('idle', { lastEvent: { kind: 'turn-completed', summary: 'done' } }),
+    })),
+    '✅ Wrapped up',
 )
 
 // --- ordering: worst first, and error above merely-busy ---
@@ -76,13 +93,50 @@ const webSearch = facts({
 })
 assert.deepEqual(
     captionFor(webSearch),
-    { text: 'web' },
+    { text: '🌐 web' },
     'rail: tool call must remain visible over the spinner',
 )
 
 // falls back to the last event when the spinner is not running
-const idle = facts({ sessionId: 's', snapshot: snap('idle', { lastEvent: { summary: 'done' } }) })
-assert.deepEqual(captionFor(idle), { text: 'done' })
+const idle = facts({
+    sessionId: 's',
+    snapshot: snap('idle', { lastEvent: { kind: 'turn-completed', summary: 'done' } }),
+})
+assert.deepEqual(captionFor(idle), { text: '' }, 'generic completion copy is not repeated under the state')
+
+// Generic adapter words get polished at the presentation boundary. Useful
+// adapter details such as filenames and CLI-authored messages stay untouched.
+assert.deepEqual(
+    eventCaptionFor({ kind: 'session-started', summary: 'ready' }),
+    { key: '🚀 Ready to roll' },
+)
+assert.deepEqual(
+    eventCaptionFor({ kind: 'turn-completed', summary: 'idle' }),
+    { key: '✅ Wrapped up' },
+)
+assert.deepEqual(
+    eventCaptionFor({ kind: 'prompt-submitted', summary: 'working' }),
+    { key: '🚀 Getting started' },
+)
+assert.deepEqual(
+    eventCaptionFor({ kind: 'tool-result', summary: 'tool: working' }),
+    { key: '🛠️ On it' },
+)
+assert.deepEqual(
+    eventCaptionFor({ kind: 'session-ended', summary: 'ended: logout' }),
+    { key: '👋 Signed off' },
+)
+assert.deepEqual(
+    eventCaptionFor({ kind: 'tool-call', summary: 'edit: auth.ts' }),
+    { text: '✏️ edit: auth.ts' },
+)
+assert.equal(decorateToolCaption('web'), '🌐 web')
+assert.equal(decorateToolCaption('read: auth.ts'), '📖 read: auth.ts')
+assert.equal(decorateToolCaption('write: settings.json'), '📝 write: settings.json')
+assert.equal(decorateToolCaption('grep: sessionId'), '🔍 grep: sessionId')
+assert.equal(decorateToolCaption('command: yarn'), '💻 command: yarn')
+assert.equal(decorateToolCaption('agent done'), '🤖 agent done')
+assert.equal(decorateToolCaption('custom-tool: details'), 'custom-tool: details')
 
 // --- silence stays silent: the adjacent state label already explains it ---
 assert.deepEqual(captionFor(facts()), { text: '' })

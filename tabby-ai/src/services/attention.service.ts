@@ -7,6 +7,7 @@ import {
     activatedSessionId, AiNotificationReason, normalizeAiNotificationCliKind,
     shouldDeliverAiNotification,
 } from '../notifications'
+import { eventCaptionFor } from '../presentation'
 
 /** needs-you can flap (permission bursts) — don't spam per session */
 const THROTTLE_MS = 5000
@@ -69,13 +70,17 @@ export class AiAttentionService {
         this.lastNotified.set(pulse.sessionId, now)
 
         const title = pane?.title ?? this.translate.instant('AI session')
+        const caption = eventCaptionFor(pulse.event)
+        const body = 'key' in caption
+            ? this.translate.instant(caption.key)
+            : caption.text
         console.debug(`[tabby-ai] attention notify [${pulse.sessionId.slice(0, 8)}] ${pulse.from}→${pulse.to}: ${pulse.event.summary}`)
         window.vibbyAiNotifications?.notify({
             sessionId: pulse.sessionId,
             reason,
             cliKind: normalizeAiNotificationCliKind(binding?.kind),
             title,
-            body: pulse.event.summary,
+            body,
         })
     }
 

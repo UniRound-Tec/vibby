@@ -16,6 +16,18 @@ const REQUEST_TIMEOUT_MS = 5000
 const MONITOR_PORT_MIN = 49152
 const MONITOR_PORT_MAX = 65536
 
+export function parseOpenCodeMonitorPort (value: unknown): number|null {
+    const port = typeof value === 'string' && /^\d+$/.test(value)
+        ? Number(value)
+        : null
+    return port !== null &&
+        Number.isInteger(port) &&
+        port >= MONITOR_PORT_MIN &&
+        port < MONITOR_PORT_MAX
+        ? port
+        : null
+}
+
 export function selectOpenCodeMonitorPort (
     reserved: ReadonlySet<number>,
     randomInt = (min: number, max: number): number =>

@@ -14,7 +14,7 @@ import { AiEvent, AiEventKind, AiSessionSnapshot, stateAfter } from '../events'
 import { MIN_LAUNCH_PAGE_CAPACITY, launchPageCapacity } from '../launchPagination'
 import {
     AiDisplayState, DISPLAY_STATE_RANK, SessionFacts, activityLabelKey, displayStateFor,
-    lastEventCaptionFor, stateLabelKey,
+    eventCaptionFor, lastEventCaptionFor, stateLabelKey,
 } from '../presentation'
 import { AiCliProfile } from '../profiles'
 import { AI_CLI_REGISTRY } from '../registry'
@@ -50,6 +50,7 @@ export interface AiEventRow {
     dot: string
     who: string
     kindLabel: string
+    summary: string
 }
 
 export interface AiCliLaunchCard {
@@ -249,6 +250,7 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
             dot: this.dotFor(event),
             who: this.sessionNameFor(event.sessionId),
             kindLabel: this.kindLabel(event.kind),
+            summary: this.resolveCaption(eventCaptionFor(event)),
         }))
 
         const counts = new Map<AiDisplayState, number>()
@@ -349,8 +351,7 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
 
     /** What the session last did — the hook event, high confidence */
     captionFor (row: AiSessionRow): string {
-        const caption = lastEventCaptionFor(row as SessionFacts)
-        return 'key' in caption ? this.label(caption.key) : caption.text
+        return this.resolveCaption(lastEventCaptionFor(row as SessionFacts))
     }
 
     durationFor (row: AiSessionRow): string {
@@ -479,6 +480,10 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
             this.labelCache.set(key, value!)
         }
         return value!
+    }
+
+    private resolveCaption (caption: { key: string } | { text: string }): string {
+        return 'key' in caption ? this.label(caption.key) : caption.text
     }
 
     private baseName (dir: string|null|undefined): string|null {

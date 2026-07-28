@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const http = require('node:http')
 const {
     OpenCodeSseClient,
+    parseOpenCodeMonitorPort,
     SseDecoder,
     selectOpenCodeMonitorPort,
 } = require('../.test-build/openCodeSse.js')
@@ -20,6 +21,10 @@ assert.equal(
     50001,
     'WSL launch selects a port synchronously without yielding the PTY race'
 )
+assert.equal(parseOpenCodeMonitorPort('58732'), 58732)
+assert.equal(parseOpenCodeMonitorPort('49151'), null)
+assert.equal(parseOpenCodeMonitorPort('65536'), null)
+assert.equal(parseOpenCodeMonitorPort('not-a-port'), null)
 
 const waitFor = async (predicate, timeout = 4000) => {
     const deadline = Date.now() + timeout

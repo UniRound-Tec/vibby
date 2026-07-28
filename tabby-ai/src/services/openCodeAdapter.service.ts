@@ -6,9 +6,14 @@ import * as path from 'path'
 import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
+import { BaseSession } from 'tabby-terminal'
 
 import { OpenCodeEventProjector } from '../opencodeEvents'
-import { OpenCodeSseClient, selectOpenCodeMonitorPort } from '../openCodeSse'
+import {
+    OpenCodeSseClient,
+    parseOpenCodeMonitorPort,
+    selectOpenCodeMonitorPort,
+} from '../openCodeSse'
 import { SHIM_DIR_PREFIX } from '../paths'
 import { usesMirroredWslNetworking } from '../runtimeTargets'
 import { CliScannerService } from './cliScanner.service'
@@ -238,7 +243,20 @@ export class OpenCodeAdapterService {
         }
 
         let port = 0
-        if (wslTarget?.type === 'wsl') {
+        let reusingLiveMonitor = false
+        const rememberedPort = recovering && direct && tab.profile.options.restoreFromPTYID
+            ? parseOpenCodeMonitorPort(oldEnv[PORT_MARKER])
+            : null
+        if (
+            rememberedPort &&
+            !this.monitorPorts.has(rememberedPort)
+        ) {
+            // Reuse synchronously. If the PTY survives, its server already owns
+            // this port; if restoration falls back to a fresh spawn, the
+            // remembered --port must be injected before that spawn races us.
+            port = rememberedPort
+            reusingLiveMonitor = true
+        } else if (wslTarget?.type === 'wsl') {
             port = selectOpenCodeMonitorPort(this.monitorPorts) ?? 0
             if (!port) {
                 console.warn('[tabby-ai] could not select an OpenCode WSL monitor port')
@@ -261,7 +279,7 @@ export class OpenCodeAdapterService {
                 return
             }
         }
-        if (tab.session) {
+        if (tab.session && !reusingLiveMonitor) {
             console.warn('[tabby-ai] OpenCode session spawned before monitor injection; full listening skipped')
             return
         }
@@ -320,7 +338,8 @@ export class OpenCodeAdapterService {
         this.runs.set(tab, run)
         this.directory.bind({ sessionId, kind: KIND, pane: tab })
 
-        tab.sessionChanged$.subscribe(session => {
+        let currentSession: BaseSession|null = tab.session
+        const onSession = (session: BaseSession|null): void => {
             if (session) {
                 this.detachRuntimeSecretsFromProfile(run)
             }
@@ -332,7 +351,15 @@ export class OpenCodeAdapterService {
                     this.onDirectSessionDown(run)
                 }
             })
+        }
+        tab.sessionChanged$.subscribe(session => {
+            if (session === currentSession) {
+                return
+            }
+            currentSession = session
+            onSession(session)
         })
+        onSession(currentSession)
         tab.destroyed$.subscribe(() => this.dispose(run))
     }
 
@@ -361,8 +388,10 @@ export class OpenCodeAdapterService {
 
     /**
      * Session.start() has already copied options into the child environment.
-     * Remove ephemeral credentials/port/shim from the recovery profile so
-     * saved tabs never persist live secrets or stale generated paths.
+     * Keep only the non-secret route marker while a direct PTY is alive. A
+     * renderer reload or PTY restore uses it to reconnect to that same server;
+     * if restoration spawns a replacement, the remembered --port is injected
+     * before the spawn.
      */
     private detachRuntimeSecretsFromProfile (run: OpenCodeRun): void {
         if (run.profileDetached) {
@@ -371,7 +400,12 @@ export class OpenCodeAdapterService {
         run.profileDetached = true
         if (run.direct) {
             run.tab.profile.options.args = run.persistedArgs
-            run.tab.profile.options.env = run.persistedEnv
+            run.tab.profile.options.env = {
+                ...run.persistedEnv,
+                [MONITOR_MARKER]: '1',
+                [PORT_MARKER]: String(run.port),
+            }
+            this.markRecoveryStateChanged(run.tab)
         } else if (run.shim) {
             run.tab.profile.options.pathPrefix =
                 run.tab.profile.options.pathPrefix.filter(item => item !== run.shim!.directory)
@@ -393,6 +427,9 @@ export class OpenCodeAdapterService {
 
     private onDirectSessionDown (run: OpenCodeRun): void {
         this.stopClient(run)
+        run.tab.profile.options.args = run.persistedArgs
+        run.tab.profile.options.env = run.persistedEnv
+        this.markRecoveryStateChanged(run.tab)
         const snapshot = this.bus.snapshotFor(run.sessionId)
         if (snapshot?.state === 'working' || snapshot?.state === 'needs-you') {
             this.zone.run(() => this.bus.publish({
@@ -411,6 +448,11 @@ export class OpenCodeAdapterService {
         }
         run.disposed = true
         this.stopClient(run)
+        if (run.direct) {
+            run.tab.profile.options.args = run.persistedArgs
+            run.tab.profile.options.env = run.persistedEnv
+            this.markRecoveryStateChanged(run.tab)
+        }
         this.monitorPorts.delete(run.port)
         run.shim?.remove()
         if (run.tempRoot) {
@@ -430,5 +472,15 @@ export class OpenCodeAdapterService {
         try {
             fs.rmSync(resolved, { recursive: true, force: true })
         } catch { /* already gone */ }
+    }
+
+    private markRecoveryStateChanged (tab: TerminalTabComponent): void {
+        // BaseTab intentionally exposes only the observable side publicly.
+        // Adapters mutate the launch profile behind the terminal component, so
+        // they must explicitly ping the protected recovery-state subject.
+        const recoveryTab = tab as unknown as {
+            recoveryStateChangedHint: { next: () => void }
+        }
+        recoveryTab.recoveryStateChangedHint.next()
     }
 }

@@ -2854,3 +2854,71 @@ msgstr "WSL 环境"
 #: tabby-ai/src/components/aiSettingsTab.component.pug
 msgid "Default"
 msgstr "默认"
+
+#: tabby-ai/src/presentation.ts
+msgid "🙋 Your turn"
+msgstr "🙋 该你啦"
+
+#: tabby-ai/src/presentation.ts
+msgid "⚠️ Trouble"
+msgstr "⚠️ 出状况了"
+
+#: tabby-ai/src/presentation.ts
+msgid "⚡ Moving"
+msgstr "⚡ 推进中"
+
+#: tabby-ai/src/presentation.ts
+msgid "✨ Standing by"
+msgstr "✨ 随时待命"
+
+#: tabby-ai/src/presentation.ts
+msgid "📡 Tuned in"
+msgstr "📡 已接入"
+
+#: tabby-ai/src/presentation.ts
+msgid "🌙 Off radar"
+msgstr "🌙 未接入"
+
+#: tabby-ai/src/presentation.ts
+msgid "🚀 Ready to roll"
+msgstr "🚀 准备出发"
+
+#: tabby-ai/src/presentation.ts
+msgid "🚀 Getting started"
+msgstr "🚀 开始干活"
+
+#: tabby-ai/src/presentation.ts
+msgid "🧠 Thinking"
+msgstr "🧠 想一想"
+
+#: tabby-ai/src/presentation.ts
+msgid "✍️ Writing back"
+msgstr "✍️ 组织回复"
+
+#: tabby-ai/src/presentation.ts
+msgid "🛠️ On it"
+msgstr "🛠️ 忙着呢"
+
+#: tabby-ai/src/presentation.ts
+msgid "🔐 Needs your okay"
+msgstr "🔐 等你点头"
+
+#: tabby-ai/src/presentation.ts
+msgid "💬 Has a question"
+msgstr "💬 有个问题"
+
+#: tabby-ai/src/presentation.ts
+msgid "🔄 Trying again"
+msgstr "🔄 再试一次"
+
+#: tabby-ai/src/presentation.ts
+msgid "✅ Wrapped up"
+msgstr "✅ 搞定"
+
+#: tabby-ai/src/presentation.ts
+msgid "👋 Signed off"
+msgstr "👋 已收工"
+
+#: tabby-ai/src/presentation.ts
+msgid "⏹️ Stopped"
+msgstr "⏹️ 已停下"

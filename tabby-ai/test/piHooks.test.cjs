@@ -9,9 +9,11 @@ const {
     PI_HOOK_ENDPOINT_ENV,
     PI_HOOK_DROP_DIR_ENV,
     PI_HOOK_LOG_ENV,
+    PI_HOOK_ROUTE_FILE_NAME,
     PI_HOOK_SESSION_ENV,
     buildPiExtensionSource,
     injectPiExtensionArgs,
+    piHookRecovery,
     piWslDistroFromArgs,
     piHookEnvironment,
     translatePiHook,
@@ -37,6 +39,49 @@ assert.deepEqual(
     injectPiExtensionArgs(['--model', 'test'], '/tmp/vibby-extension.ts'),
     ['-e', '/tmp/vibby-extension.ts', '--model', 'test'],
     'macOS/Linux direct launch',
+)
+
+assert.deepEqual(
+    piHookRecovery(
+        ['/c', 'pi.cmd', '-e', 'C:\\Temp\\vibby-pi-abc123\\vibby-extension.ts'],
+        {
+            [PI_HOOK_DROP_DIR_ENV]: 'C:\\Temp\\vibby-pi-abc123',
+            [PI_HOOK_SESSION_ENV]: 'session-1',
+        },
+    ),
+    {
+        sessionId: 'session-1',
+        dropDir: 'C:\\Temp\\vibby-pi-abc123',
+        tempName: 'vibby-pi-abc123',
+    },
+)
+assert.deepEqual(
+    piHookRecovery(
+        [
+            '--distribution', 'Ubuntu', '--cd', '~', '--exec', '/usr/bin/pi',
+            '-e', '/mnt/c/Temp/vibby-pi-wsl123/vibby-extension.ts',
+        ],
+        {
+            [PI_HOOK_DROP_DIR_ENV]: '/mnt/c/Temp/vibby-pi-wsl123',
+            [PI_HOOK_SESSION_ENV]: 'session-wsl',
+        },
+    ),
+    {
+        sessionId: 'session-wsl',
+        dropDir: '/mnt/c/Temp/vibby-pi-wsl123',
+        tempName: 'vibby-pi-wsl123',
+    },
+)
+assert.equal(
+    piHookRecovery(
+        ['-e', 'C:\\Temp\\vibby-pi-one\\vibby-extension.ts'],
+        {
+            [PI_HOOK_DROP_DIR_ENV]: 'C:\\Temp\\vibby-pi-other',
+            [PI_HOOK_SESSION_ENV]: 'session-1',
+        },
+    ),
+    null,
+    'extension and drop route must refer to the same generated temp root',
 )
 assert.deepEqual(
     injectPiExtensionArgs(['/c', 'C:\\npm\\pi.cmd', '--model', 'test'], extensionPath),
@@ -125,6 +170,8 @@ assert.doesNotMatch(extension, /pi\.on\("agent_end"/)
 assert.match(extension, new RegExp(`process\.env\.${PI_HOOK_ENDPOINT_ENV}`))
 assert.match(extension, new RegExp(`process\.env\.${PI_HOOK_DROP_DIR_ENV}`))
 assert.match(extension, new RegExp(`process\.env\.${PI_HOOK_SESSION_ENV}`))
+assert.match(extension, new RegExp(PI_HOOK_ROUTE_FILE_NAME))
+assert.match(extension, /readFileSync\(ROUTE_PATH/)
 assert.match(extension, /writeFileSync/)
 assert.match(extension, /renameSync/)
 assert.match(extension, /appendFileSync/)

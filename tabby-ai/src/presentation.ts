@@ -10,7 +10,7 @@
  */
 import { marker as _ } from '@biesbjerg/ngx-translate-extract-marker'
 
-import { AiSessionSnapshot, AiSessionState } from './events'
+import { AiEvent, AiSessionSnapshot, AiSessionState } from './events'
 
 /**
  * A session's state as shown, which is wider than the event protocol's:
@@ -54,12 +54,12 @@ export function displayStateFor (facts: SessionFacts): AiDisplayState {
 
 export function stateLabelKey (state: AiDisplayState): string {
     switch (state) {
-        case 'needs-you': return _('Needs you')
-        case 'error': return _('Error')
-        case 'working': return _('Working')
-        case 'idle': return _('Idle')
-        case 'listening': return _('Listening')
-        case 'untracked': return _('Untracked')
+        case 'needs-you': return _('🙋 Your turn')
+        case 'error': return _('⚠️ Trouble')
+        case 'working': return _('⚡ Moving')
+        case 'idle': return _('✨ Standing by')
+        case 'listening': return _('📡 Tuned in')
+        case 'untracked': return _('🌙 Off radar')
     }
 }
 
@@ -70,13 +70,119 @@ export function stateLabelKey (state: AiDisplayState): string {
  * state returned by displayStateFor().
  */
 export function activityLabelKey (facts: SessionFacts): string {
-    if (
-        facts.snapshot?.state === 'working' &&
-        facts.snapshot.lastEvent?.kind === 'thinking'
-    ) {
-        return _('Thinking')
+    switch (facts.snapshot?.lastEvent?.kind) {
+        case 'session-started': return _('🚀 Ready to roll')
+        case 'prompt-submitted': return _('🚀 Getting started')
+        case 'thinking': return _('🧠 Thinking')
+        case 'responding': return _('✍️ Writing back')
+        case 'tool-call':
+        case 'tool-result':
+            return _('🛠️ On it')
+        case 'permission-request': return _('🔐 Needs your okay')
+        case 'question-request': return _('💬 Has a question')
+        case 'retrying': return _('🔄 Trying again')
+        case 'turn-completed': return _('✅ Wrapped up')
+        case 'notification': return _('🙋 Your turn')
+        case 'session-error': return _('⚠️ Trouble')
+        case 'session-ended': return _('👋 Signed off')
+        case 'process-exited': return _('⏹️ Stopped')
+        default:
+            return stateLabelKey(displayStateFor(facts))
     }
-    return stateLabelKey(displayStateFor(facts))
+}
+
+/**
+ * Tool summaries come from several CLIs with slightly different spelling.
+ * Match only their leading action word, so filenames and command details stay
+ * byte-for-byte intact and ordinary prompt text is never decorated by mistake.
+ */
+export function decorateToolCaption (summary: string): string {
+    const action = /^([a-z][a-z-]*)(?=\s*:|\s|$)/i.exec(summary.trim())?.[1]?.toLowerCase()
+    let emoji: string|null = null
+    switch (action) {
+        case 'web':
+        case 'webfetch':
+        case 'websearch':
+            emoji = '🌐'
+            break
+        case 'edit':
+        case 'multiedit':
+        case 'notebookedit':
+            emoji = '✏️'
+            break
+        case 'read':
+            emoji = '📖'
+            break
+        case 'write':
+            emoji = '📝'
+            break
+        case 'search':
+        case 'grep':
+        case 'glob':
+            emoji = '🔍'
+            break
+        case 'command':
+        case 'bash':
+        case 'shell':
+            emoji = '💻'
+            break
+        case 'agent':
+        case 'task':
+        case 'subtask':
+            emoji = '🤖'
+            break
+        case 'tool':
+            emoji = '🔧'
+            break
+        case 'compacting':
+        case 'compacted':
+            emoji = '🗜️'
+            break
+        default:
+            return summary
+    }
+    return emoji ? `${emoji} ${summary.trim()}` : summary
+}
+
+/**
+ * Rewrites only generic machine words that adapters use as protocol summaries.
+ * Prompt text, filenames, tool names and CLI-authored messages remain intact.
+ */
+export function eventCaptionFor (event: AiEvent): Caption {
+    const generic = event.summary.trim().toLowerCase()
+    switch (event.kind) {
+        case 'session-started':
+            return { key: _('🚀 Ready to roll') }
+        case 'prompt-submitted':
+            return generic === 'working'
+                ? { key: _('🚀 Getting started') }
+                : { text: event.summary }
+        case 'thinking':
+            return generic === 'thinking'
+                ? { key: _('🧠 Thinking') }
+                : { text: event.summary }
+        case 'responding':
+            return generic === 'responding' || generic === 'working'
+                ? { key: _('✍️ Writing back') }
+                : { text: event.summary }
+        case 'retrying':
+            return generic === 'retrying'
+                ? { key: _('🔄 Trying again') }
+                : { text: event.summary }
+        case 'tool-call':
+        case 'tool-result':
+            return generic === 'tool: working'
+                ? { key: _('🛠️ On it') }
+                : { text: decorateToolCaption(event.summary) }
+        case 'turn-completed':
+            return generic === 'done' || generic === 'idle' || generic === 'turn complete'
+                ? { key: _('✅ Wrapped up') }
+                : { text: event.summary }
+        case 'session-ended':
+            return { key: _('👋 Signed off') }
+        default:
+            return { text: event.summary }
+    }
 }
 
 /**
@@ -86,11 +192,17 @@ export function activityLabelKey (facts: SessionFacts): string {
  * Untracked; repeating that as a sentence only adds visual noise.
  */
 export function lastEventCaptionFor (facts: SessionFacts): Caption {
-    const summary = facts.snapshot?.lastEvent?.summary
-    if (summary) {
-        return { text: summary }
+    const event = facts.snapshot?.lastEvent
+    if (!event?.summary) {
+        return { text: '' }
     }
-    return { text: '' }
+    const caption = eventCaptionFor(event)
+    // Generic lifecycle copy is already the prominent state label beside this
+    // caption. Do not repeat "✅ Wrapped up" or "👋 Signed off" underneath it.
+    if ('key' in caption && caption.key === activityLabelKey(facts)) {
+        return { text: '' }
+    }
+    return caption
 }
 
 /**

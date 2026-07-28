@@ -6,8 +6,15 @@ export const PI_HOOK_DROP_DIR_ENV = 'VIBBY_PI_HOOK_DROP_DIR'
 export const PI_HOOK_SESSION_ENV = 'VIBBY_PI_HOOK_SESSION_ID'
 export const PI_HOOK_LOG_ENV = 'VIBBY_PI_LOG_PATH'
 export const PI_EXTENSION_FILE_NAME = 'vibby-extension.ts'
+export const PI_HOOK_ROUTE_FILE_NAME = 'vibby-route.json'
 
 const PI_TEMP_DIR_PREFIX = 'vibby-pi-'
+
+export interface PiHookRecovery {
+    sessionId: string
+    dropDir: string
+    tempName: string
+}
 
 /**
  * Returns the distro encoded in a direct `wsl.exe` Pi launch.
@@ -53,6 +60,53 @@ export function withoutStalePiHookArgs (args: string[]): string[] {
         }
     }
     return clean
+}
+
+/**
+ * Route metadata retained only while a recoverable PTY is alive. The temp
+ * directory name must agree in both the extension argument and environment,
+ * so the file-drop consumer never follows an arbitrary persisted path.
+ */
+export function piHookRecovery (
+    args: string[],
+    env: Record<string, string>,
+): PiHookRecovery|null {
+    const rawSessionId: unknown = env[PI_HOOK_SESSION_ENV]
+    const rawDropDir: unknown = env[PI_HOOK_DROP_DIR_ENV]
+    const sessionId = typeof rawSessionId === 'string' ? rawSessionId.trim() : ''
+    const dropDir = typeof rawDropDir === 'string' ? rawDropDir.trim() : ''
+    if (!sessionId || !/^[\w-]{1,64}$/.test(sessionId) || !dropDir) {
+        return null
+    }
+
+    let extensionPath: string|null = null
+    for (let i = 0; i < args.length; i++) {
+        if ((args[i] === '-e' || args[i] === '--extension') && isStalePiExtensionPath(args[i + 1])) {
+            extensionPath = args[i + 1]
+            break
+        }
+        if (args[i].startsWith('--extension=')) {
+            const value = args[i].slice('--extension='.length)
+            if (isStalePiExtensionPath(value)) {
+                extensionPath = value
+                break
+            }
+        }
+    }
+    if (!extensionPath) {
+        return null
+    }
+
+    const normalizedExtension = extensionPath.replace(/\\/g, '/')
+    const tempName = normalizedExtension.split('/').slice(-2, -1)[0] ?? ''
+    const normalizedDrop = dropDir.replace(/[\\/]+$/, '').replace(/\\/g, '/')
+    if (
+        !tempName.startsWith(PI_TEMP_DIR_PREFIX) ||
+        normalizedDrop.split('/').pop() !== tempName
+    ) {
+        return null
+    }
+    return { sessionId, dropDir, tempName }
 }
 
 /**
@@ -162,10 +216,11 @@ export function buildPiExtensionSource (): string {
 import * as path from "path"
 import * as http from "http"
 
-const ENDPOINT = process.env.${PI_HOOK_ENDPOINT_ENV}
-const DROP_DIR = process.env.${PI_HOOK_DROP_DIR_ENV}
-const SESSION_ID = process.env.${PI_HOOK_SESSION_ENV}
+const DEFAULT_ENDPOINT = process.env.${PI_HOOK_ENDPOINT_ENV}
+const DEFAULT_DROP_DIR = process.env.${PI_HOOK_DROP_DIR_ENV}
+const DEFAULT_SESSION_ID = process.env.${PI_HOOK_SESSION_ENV}
 const LOG_PATH = process.env.${PI_HOOK_LOG_ENV}
+const ROUTE_PATH = LOG_PATH ? path.join(path.dirname(LOG_PATH), "${PI_HOOK_ROUTE_FILE_NAME}") : null
 const MAX_TEXT_LENGTH = 512
 const MAX_EVENT_BYTES = 64 * 1024
 
@@ -222,11 +277,30 @@ function compactToolEvent(event) {
     return compact
 }
 
+function currentRoute() {
+    let route = {
+        endpoint: DEFAULT_ENDPOINT,
+        dropDir: DEFAULT_DROP_DIR,
+        sessionId: DEFAULT_SESSION_ID,
+    }
+    if (!ROUTE_PATH) return route
+    try {
+        const saved = JSON.parse(fs.readFileSync(ROUTE_PATH, "utf8"))
+        route = {
+            endpoint: typeof saved?.endpoint === "string" ? saved.endpoint : route.endpoint,
+            dropDir: typeof saved?.dropDir === "string" ? saved.dropDir : route.dropDir,
+            sessionId: typeof saved?.sessionId === "string" ? saved.sessionId : route.sessionId,
+        }
+    } catch {}
+    return route
+}
+
 function sendEvent(piEvent) {
-    if (!ENDPOINT && !DROP_DIR) return
+    const route = currentRoute()
+    if (!route.endpoint && !route.dropDir) return
     const payload = { ...piEvent }
-    if (SESSION_ID) {
-        payload.vibby_session_id = SESSION_ID
+    if (route.sessionId) {
+        payload.vibby_session_id = route.sessionId
     }
     let body
     try {
@@ -240,11 +314,11 @@ function sendEvent(piEvent) {
         return
     }
 
-    if (DROP_DIR && SESSION_ID) {
+    if (route.dropDir && route.sessionId) {
         // The Windows file-drop poller accepts the same six-character nonce
         // contract used by mktemp-based Claude and Codex hooks.
         const nonce = Math.random().toString(36).slice(2, 8).padEnd(6, "0")
-        const tmp = path.join(DROP_DIR, SESSION_ID + "." + nonce)
+        const tmp = path.join(route.dropDir, route.sessionId + "." + nonce)
         try {
             fs.writeFileSync(tmp, body)
             fs.renameSync(tmp, tmp + ".json")
@@ -257,9 +331,9 @@ function sendEvent(piEvent) {
         return
     }
 
-    if (ENDPOINT) {
+    if (route.endpoint) {
         try {
-            const url = new URL(ENDPOINT)
+            const url = new URL(route.endpoint)
             const req = http.request({
                 hostname: url.hostname,
                 port: url.port,

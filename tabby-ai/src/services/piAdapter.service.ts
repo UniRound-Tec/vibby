@@ -11,10 +11,12 @@ import {
     PI_HOOK_DROP_DIR_ENV,
     PI_HOOK_ENDPOINT_ENV,
     PI_HOOK_LOG_ENV,
+    PI_HOOK_ROUTE_FILE_NAME,
     PI_HOOK_SESSION_ENV,
     PI_EXTENSION_FILE_NAME,
     buildPiExtensionSource,
     injectPiExtensionArgs,
+    piHookRecovery,
     piHookEnvironment,
     piWslDistroFromArgs,
     withoutStalePiHookArgs,
@@ -121,6 +123,13 @@ export class PiAdapterService {
         const direct = tab.profile.type === 'ai-cli'
         const kind = direct ? tab.profile.options['aiCli']?.kind : KIND
         if (kind !== KIND) {
+            return
+        }
+        if (
+            direct &&
+            tab.profile.options.restoreFromPTYID &&
+            this.restoreRun(tab)
+        ) {
             return
         }
         if (direct) {
@@ -266,6 +275,7 @@ export class PiAdapterService {
                 },
                 path.posix.join(translatedDrop, 'vibby-pi-extension.log'),
             )
+            this.writeRouteFile(tempRoot, endpoint, translatedDrop, sessionId)
             this.ingress.registerFileDrop(sessionId, tempRoot, 'pi')
 
             if (direct) {
@@ -275,7 +285,15 @@ export class PiAdapterService {
         } else {
             if (direct) {
                 tab.profile.options.args = injectPiExtensionArgs(originalArgs, extensionPath)
-                tab.profile.options.env = piHookEnvironment(endpoint, null, undefined, originalEnv, logPath)
+                tab.profile.options.env = piHookEnvironment(
+                    endpoint,
+                    tempRoot,
+                    sessionId,
+                    originalEnv,
+                    logPath,
+                )
+                this.writeRouteFile(tempRoot, endpoint, tempRoot, sessionId)
+                this.ingress.registerFileDrop(sessionId, tempRoot, 'pi')
             }
         }
 
@@ -305,13 +323,60 @@ export class PiAdapterService {
             tempRoot,
             disposed: false,
         }
-        this.runs.set(tab, run)
-        this.armed.add(tab)
-        this.directory.bind({ sessionId, kind: KIND, pane: tab })
+        this.registerRun(run, direct)
+    }
 
-        if (direct) {
+    private restoreRun (tab: TerminalTabComponent): boolean {
+        const recovery = piHookRecovery(tab.profile.options.args, tab.profile.options.env)
+        if (!recovery) {
+            return false
+        }
+        const tempRoot = path.join(os.tmpdir(), recovery.tempName)
+        if (
+            path.dirname(path.resolve(tempRoot)) !== path.resolve(os.tmpdir()) ||
+            !fs.existsSync(path.join(tempRoot, PI_EXTENSION_FILE_NAME))
+        ) {
+            return false
+        }
+        // Upgrade the generated extension in place. A surviving Pi process can
+        // pick this up with /reload, and current builds read the sidecar route
+        // on every event so later renderer reloads need no Pi reload at all.
+        try {
+            fs.writeFileSync(
+                path.join(tempRoot, PI_EXTENSION_FILE_NAME),
+                buildPiExtensionSource(),
+                { mode: 0o600 },
+            )
+        } catch (error) {
+            console.warn('[tabby-ai] could not refresh the recovered Pi extension', error)
+            return false
+        }
+        this.ingress.registerFileDrop(recovery.sessionId, tempRoot, 'pi')
+        this.writeRouteFile(
+            tempRoot,
+            tab.profile.options.env[PI_HOOK_ENDPOINT_ENV],
+            recovery.dropDir,
+            recovery.sessionId,
+        )
+        this.registerRun({
+            tab,
+            sessionId: recovery.sessionId,
+            direct: true,
+            shim: null,
+            tempRoot,
+            disposed: false,
+        }, true)
+        return true
+    }
+
+    private registerRun (run: PiRun, publishReady: boolean): void {
+        this.runs.set(run.tab, run)
+        this.armed.add(run.tab)
+        this.directory.bind({ sessionId: run.sessionId, kind: KIND, pane: run.tab })
+
+        if (publishReady) {
             this.zone.run(() => this.bus.publish({
-                sessionId,
+                sessionId: run.sessionId,
                 ts: Date.now(),
                 kind: 'session-started',
                 confidence: 'low',
@@ -325,9 +390,9 @@ export class PiAdapterService {
             }
             session.destroyed$.subscribe(() => this.onSessionDown(run))
         }
-        tab.sessionChanged$.subscribe(attachSession)
-        attachSession(tab.session)
-        tab.destroyed$.subscribe(() => this.dispose(run))
+        run.tab.sessionChanged$.subscribe(attachSession)
+        attachSession(run.tab.session)
+        run.tab.destroyed$.subscribe(() => this.dispose(run))
     }
 
     private onSessionDown (run: PiRun): void {
@@ -371,5 +436,24 @@ export class PiAdapterService {
         try {
             fs.rmSync(resolved, { recursive: true, force: true })
         } catch { /* already gone */ }
+    }
+
+    private writeRouteFile (
+        tempRoot: string,
+        endpoint: string,
+        dropDir: string,
+        sessionId: string,
+    ): void {
+        const target = path.join(tempRoot, PI_HOOK_ROUTE_FILE_NAME)
+        const temporary = `${target}.tmp`
+        try {
+            fs.writeFileSync(temporary, JSON.stringify({ endpoint, dropDir, sessionId }), { mode: 0o600 })
+            fs.renameSync(temporary, target)
+        } catch (error) {
+            try {
+                fs.unlinkSync(temporary)
+            } catch {}
+            console.warn('[tabby-ai] could not update the Pi hook route', error)
+        }
     }
 }
