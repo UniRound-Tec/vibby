@@ -149,20 +149,24 @@ export const SPINNER_QUIET_MS_TO_END_TURN = 5000
  * best-effort: each one is a `curl` the CLI fires and forgets, so a timeout or a
  * failed spawn loses it silently. Losing the terminating event strands the
  * session on `working` until the next prompt, frozen spinner caption and all.
- * A vanished spinner is the only other evidence that the turn is over.
+ * A spinner that was seen during this turn and then vanished is the only other
+ * evidence that the turn is over. Never seeing one is not equivalent: Claude
+ * may still be waiting for its first response after prompt submission.
  *
  * This is a net for lost events, not for interrupts: Claude Code does fire Stop
  * when the user presses ESC (verified on 2.1.220), and that path needs no help.
  *
- * Both guards earn their place. The poll count rides out a repaint that lands
- * between two reads. The quiet window covers the gap between submitting a prompt
- * and the first spinner frame, which would otherwise read as a finished turn —
- * and it restarts on every event, so a tool call keeps the session alive.
+ * All three guards earn their place. The observed flag prevents a slow first
+ * response from being called idle. The poll count rides out a repaint that
+ * lands between two reads. The quiet window restarts on every event, so a tool
+ * call keeps the session alive.
  */
 export function spinnerAbsenceEndsTurn (
     consecutiveMisses: number,
     msSinceLastEvent: number,
+    observedSpinnerThisTurn: boolean,
 ): boolean {
-    return consecutiveMisses >= SPINNER_MISSES_TO_END_TURN &&
+    return observedSpinnerThisTurn &&
+        consecutiveMisses >= SPINNER_MISSES_TO_END_TURN &&
         msSinceLastEvent >= SPINNER_QUIET_MS_TO_END_TURN
 }

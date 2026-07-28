@@ -35,11 +35,36 @@ e = t({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command:
 assert.equal(e.kind, 'tool-call')
 assert.equal(e.summary, 'command: ls')
 
-e = t({ hook_event_name: 'Notification', message: 'Claude needs your permission to use Bash' })
+e = t({
+    hook_event_name: 'Notification',
+    notification_type: 'permission_prompt',
+    message: 'Claude needs a decision',
+})
 assert.equal(e.kind, 'permission-request')
 
-e = t({ hook_event_name: 'Notification', message: 'Claude is waiting for your input' })
-assert.equal(e.kind, 'notification')
+e = t({
+    hook_event_name: 'Notification',
+    notification_type: 'elicitation_dialog',
+    message: 'Please fill in the MCP form',
+})
+assert.equal(e.kind, 'question-request')
+
+e = t({
+    hook_event_name: 'Notification',
+    notification_type: 'idle_prompt',
+    message: 'Claude is waiting for your input',
+})
+assert.equal(e.kind, 'turn-completed')
+
+assert.equal(t({
+    hook_event_name: 'Notification',
+    notification_type: 'auth_success',
+    message: 'Authentication succeeded',
+}), null, 'non-actionable notifications must not ask for attention')
+
+// Older Claude payloads did not include notification_type.
+e = t({ hook_event_name: 'Notification', message: 'Claude needs your permission to use Bash' })
+assert.equal(e.kind, 'permission-request')
 
 e = t({ hook_event_name: 'Stop' })
 assert.equal(e.kind, 'turn-completed')

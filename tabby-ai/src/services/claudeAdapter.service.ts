@@ -7,6 +7,7 @@ import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
 import { WslCliRuntimeTarget } from '../api'
+import { claudeEnvironmentOverrides } from '../claudeEnvironment'
 import { spinnerAbsenceEndsTurn } from '../events'
 import {
     DROP_DIR_NAME, HOOK_DIR_PREFIX, SHIM_DIR_PREFIX, holdsOnlyGeneratedFiles, isHookDirName, isLegacyHookDirName,
@@ -23,23 +24,6 @@ import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalCliShim.service'
 
 const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Notification', 'Stop', 'SessionEnd']
-
-/**
- * Session markers claude sets in its own environment. If vibby itself was
- * launched from inside a claude session (dev workflows, terminals spawned
- * by agents), children would inherit them and misdetect a nested session
- * ("Transcript saving is off"). ANTHROPIC_* stays — that's user config.
- */
-const CLAUDE_ENV_MARKERS = [
-    'CLAUDECODE',
-    'CLAUDE_CODE_CHILD_SESSION',
-    'CLAUDE_CODE_SESSION_ID',
-    'CLAUDE_CODE_ENTRYPOINT',
-    'CLAUDE_CODE_EXECPATH',
-    'CLAUDE_CODE_SSE_PORT',
-    'CLAUDE_PID',
-    'CLAUDE_EFFORT',
-]
 
 /**
  * claude's own status line: `✻ Flambéing… (17s · ↓ 1.2k tokens · esc to interrupt)`.
@@ -104,6 +88,8 @@ export class ClaudeAdapterService {
     private scraper: any = null
     /** Consecutive spinner-less polls per session — see scrapeOnce() */
     private spinnerMisses = new Map<string, number>()
+    /** `snapshot.since` for turns whose spinner has actually been observed. */
+    private spinnerObservedForTurn = new Map<string, number>()
     private shimInstallations = new WeakMap<TerminalTabComponent, TerminalCliShimInstallation>()
 
     constructor (
@@ -309,8 +295,10 @@ export class ClaudeAdapterService {
         }
 
         // empty string beats any inherited value in mergeEnv and reads as unset
-        const envOverrides = Object.fromEntries(CLAUDE_ENV_MARKERS.map(k => [k, '']))
-        tab.profile.options.env = { ...tab.profile.options.env, ...envOverrides }
+        tab.profile.options.env = {
+            ...tab.profile.options.env,
+            ...claudeEnvironmentOverrides(),
+        }
 
         this.directory.bind({ sessionId, kind, pane: tab })
         this.panes.set(sessionId, tab)
@@ -332,6 +320,7 @@ export class ClaudeAdapterService {
             this.panes.delete(sessionId)
             this.directory.unbind(sessionId)
             this.spinnerMisses.delete(sessionId)
+            this.spinnerObservedForTurn.delete(sessionId)
             this.stopScraperIfIdle()
             this.zone.run(() => this.bus.dropSession(sessionId))
         })
@@ -422,12 +411,14 @@ export class ClaudeAdapterService {
             const snapshot = this.bus.snapshotFor(sessionId)
             if (snapshot?.state !== 'working') {
                 this.spinnerMisses.delete(sessionId)
+                this.spinnerObservedForTurn.delete(sessionId)
                 continue
             }
 
             const status = this.readStatusLine(pane)
             if (status) {
                 this.spinnerMisses.delete(sessionId)
+                this.spinnerObservedForTurn.set(sessionId, snapshot.since)
                 // compared against the bus, not a private cache: reduceSnapshot
                 // clears liveStatus at the end of a turn, so a cache would
                 // suppress an identical caption for the whole next turn
@@ -443,10 +434,12 @@ export class ClaudeAdapterService {
             const misses = (this.spinnerMisses.get(sessionId) ?? 0) + 1
             this.spinnerMisses.set(sessionId, misses)
             const quietFor = Date.now() - (snapshot.lastEvent?.ts ?? snapshot.since)
-            if (!spinnerAbsenceEndsTurn(misses, quietFor)) {
+            const observedThisTurn = this.spinnerObservedForTurn.get(sessionId) === snapshot.since
+            if (!spinnerAbsenceEndsTurn(misses, quietFor, observedThisTurn)) {
                 continue
             }
             this.spinnerMisses.delete(sessionId)
+            this.spinnerObservedForTurn.delete(sessionId)
             console.debug(`[tabby-ai] adapter [${sessionId.slice(0, 8)}] spinner gone for ${misses} polls, quiet ${quietFor}ms → turn over`)
             this.zone.run(() => this.bus.publish({
                 sessionId,

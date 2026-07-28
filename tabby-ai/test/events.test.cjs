@@ -135,22 +135,31 @@ assert.equal(turn.liveStatus, null, 'the new turn must not inherit the old capti
 const misses = SPINNER_MISSES_TO_END_TURN
 const quiet = SPINNER_QUIET_MS_TO_END_TURN
 
-assert.equal(spinnerAbsenceEndsTurn(misses, quiet), true, 'both thresholds met')
-assert.equal(spinnerAbsenceEndsTurn(misses + 10, quiet + 10_000), true)
+assert.equal(spinnerAbsenceEndsTurn(misses, quiet, true), true, 'both thresholds met')
+assert.equal(spinnerAbsenceEndsTurn(misses + 10, quiet + 10_000, true), true)
 
 // One flaky read must not end a turn — claude repaints differentially and a poll
 // can land mid-repaint.
-assert.equal(spinnerAbsenceEndsTurn(1, quiet), false)
-assert.equal(spinnerAbsenceEndsTurn(misses - 1, quiet), false, 'one poll short')
+assert.equal(spinnerAbsenceEndsTurn(1, quiet, true), false)
+assert.equal(spinnerAbsenceEndsTurn(misses - 1, quiet, true), false, 'one poll short')
 
 // The dangerous false positive: a prompt was just submitted and the first
 // spinner frame has not been painted yet. Reading that as a finished turn would
 // drop the session to idle the moment it started working.
-assert.equal(spinnerAbsenceEndsTurn(misses, 0), false, 'prompt just submitted')
-assert.equal(spinnerAbsenceEndsTurn(misses, quiet - 1), false, 'one ms short')
+assert.equal(spinnerAbsenceEndsTurn(misses, 0, true), false, 'prompt just submitted')
+assert.equal(spinnerAbsenceEndsTurn(misses, quiet - 1, true), false, 'one ms short')
 // ...which is the same guard that keeps a tool call alive, since every hook
 // event restarts the quiet window.
-assert.equal(spinnerAbsenceEndsTurn(100, 500), false, 'tool call reported 500ms ago')
+assert.equal(spinnerAbsenceEndsTurn(100, 500, true), false, 'tool call reported 500ms ago')
+
+// A submitted prompt can spend several seconds waiting for its first response
+// without ever painting a spinner. Absence is only evidence that work ended
+// after this exact working turn previously showed one.
+assert.equal(
+    spinnerAbsenceEndsTurn(misses + 100, quiet + 60_000, false),
+    false,
+    'never-observed spinner must not turn an in-flight prompt idle',
+)
 
 // --- summary clamp ---
 assert.equal(clampSummary('  edit:   auth.ts  '), 'edit: auth.ts')

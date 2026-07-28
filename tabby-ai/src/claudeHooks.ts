@@ -74,10 +74,25 @@ export function translateClaudeHook (sessionId: string, payload: unknown, ts: nu
             }
         case 'Notification': {
             const message = String(p['message'] ?? '')
-            return {
-                ...base,
-                kind: /permission/i.test(message) ? 'permission-request' : 'notification',
-                summary: message || 'needs your input',
+            switch (p['notification_type']) {
+                case 'idle_prompt':
+                    return { ...base, kind: 'turn-completed', summary: message || 'idle' }
+                case 'permission_prompt':
+                    return { ...base, kind: 'permission-request', summary: message || 'permission needed' }
+                case 'elicitation_dialog':
+                    return { ...base, kind: 'question-request', summary: message || 'input needed' }
+                case 'auth_success':
+                case 'elicitation_complete':
+                case 'elicitation_response':
+                    return null
+                default:
+                    // Compatibility with Claude versions whose Notification
+                    // payload predates notification_type.
+                    return {
+                        ...base,
+                        kind: /permission/i.test(message) ? 'permission-request' : 'notification',
+                        summary: message || 'needs your input',
+                    }
             }
         }
         case 'Stop':
