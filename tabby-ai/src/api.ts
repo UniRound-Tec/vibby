@@ -75,6 +75,9 @@ export interface AiCliMetadata {
 
     /** Target-native cwd. WSL paths must not be put in SessionOptions.cwd on Windows. */
     targetCwd?: string|null
+
+    /** Cached C-drive mount captured during WSL scan for synchronous hook injection after restoration. */
+    windowsMountRoot?: string|null
 }
 
 export interface DetectedCli {

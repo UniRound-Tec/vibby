@@ -6,16 +6,21 @@ import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
+import { DetectedCli } from '../api'
 import {
     PI_HOOK_DROP_DIR_ENV,
     PI_HOOK_ENDPOINT_ENV,
+    PI_HOOK_LOG_ENV,
     PI_HOOK_SESSION_ENV,
+    PI_EXTENSION_FILE_NAME,
     buildPiExtensionSource,
+    injectPiExtensionArgs,
+    piHookEnvironment,
     piWslDistroFromArgs,
+    withoutStalePiHookArgs,
 } from '../piHooks'
 import { SHIM_DIR_PREFIX } from '../paths'
 import {
-    appendWslenv,
     translateWindowsPathForWsl,
     translateWindowsPathWithMountRoot,
 } from '../runtimeTargets'
@@ -28,7 +33,6 @@ import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalC
 const KIND = 'pi'
 const EXIT_GRACE_MS = 500
 const TEMP_DIR_PREFIX = 'vibby-pi-'
-const EXTENSION_FILE_NAME = 'vibby-extension.ts'
 
 const PASSTHROUGH_SUBCOMMANDS = [
     'install',
@@ -54,56 +58,15 @@ function sessionAppeared (tab: TerminalTabComponent): boolean {
     return !!tab.session
 }
 
-function withoutStaleHookArgs (args: string[]): string[] {
-    const clean: string[] = []
-    for (let i = 0; i < args.length; i++) {
-        if (
-            args[i] === '-e' ||
-            args[i] === '--extension'
-        ) {
-            i++
-        } else if (
-            args[i].startsWith('--extension=')
-        ) {
-            continue
-        } else {
-            clean.push(args[i])
-        }
-    }
-    return clean
-}
-
 function withoutStaleHookEnv (env: Record<string, string>): Record<string, string> {
     return Object.fromEntries(
         Object.entries(env).filter(([key]) =>
             key !== PI_HOOK_ENDPOINT_ENV &&
             key !== PI_HOOK_DROP_DIR_ENV &&
-            key !== PI_HOOK_SESSION_ENV,
+            key !== PI_HOOK_SESSION_ENV &&
+            key !== PI_HOOK_LOG_ENV,
         ),
     )
-}
-
-/**
- * Windows npm shims wrap the real CLI in `cmd.exe /c pi.cmd <args>` or
- * `powershell.exe -File pi.ps1 <args>`. The `-e` extension flag must be
- * inserted after the shim's CLI path, not at the very front of the wrapped
- * argument list, or cmd/PowerShell never passes it to Pi.
- */
-function injectPiExtensionArgs (wrappedArgs: string[], extensionPath: string): string[] {
-    // wsl.exe --distribution <distro> --cd <cwd> --exec <executable> <args>
-    if (wrappedArgs.length >= 6 && wrappedArgs[0] === '--distribution' && wrappedArgs[4] === '--exec') {
-        return [...wrappedArgs.slice(0, 6), '-e', extensionPath, ...wrappedArgs.slice(6)]
-    }
-    // cmd.exe /c <cli-path> <args>
-    if (wrappedArgs.length >= 2 && wrappedArgs[0] === '/c') {
-        return [wrappedArgs[0], wrappedArgs[1], '-e', extensionPath, ...wrappedArgs.slice(2)]
-    }
-    // powershell.exe -NoProfile -ExecutionPolicy Bypass -File <cli-path> <args>
-    if (wrappedArgs.length >= 4 && wrappedArgs[2] === '-File') {
-        return [...wrappedArgs.slice(0, 4), '-e', extensionPath, ...wrappedArgs.slice(4)]
-    }
-    // direct executable launch
-    return ['-e', extensionPath, ...wrappedArgs]
 }
 
 /**
@@ -114,9 +77,9 @@ function injectPiExtensionArgs (wrappedArgs: string[], extensionPath: string): s
 @Injectable({ providedIn: 'root' })
 export class PiAdapterService {
     private armed = new WeakSet<TerminalTabComponent>()
+    private arming = new WeakSet<TerminalTabComponent>()
     private watchedSplits = new WeakSet<SplitTabComponent>()
     private runs = new WeakMap<TerminalTabComponent, PiRun>()
-    private panes = new Map<string, TerminalTabComponent>()
 
     constructor (
         private app: AppService,
@@ -152,13 +115,19 @@ export class PiAdapterService {
     }
 
     private async arm (tab: TerminalTabComponent): Promise<void> {
-        if (this.armed.has(tab)) {
+        if (this.armed.has(tab) || this.arming.has(tab)) {
             return
         }
         const direct = tab.profile.type === 'ai-cli'
         const kind = direct ? tab.profile.options['aiCli']?.kind : KIND
         if (kind !== KIND) {
             return
+        }
+        if (direct) {
+            // Also sanitize already-running restored tabs so their next
+            // recovery token cannot keep a dead temporary extension path.
+            tab.profile.options.args = withoutStalePiHookArgs([...tab.profile.options.args])
+            tab.profile.options.env = withoutStaleHookEnv({ ...tab.profile.options.env })
         }
         const detected = direct ? null : this.scanner.scanResults.find(item =>
             item.entry.id === KIND &&
@@ -171,11 +140,42 @@ export class PiAdapterService {
         if (tab.session) {
             return
         }
-        this.armed.add(tab)
+        this.arming.add(tab)
         try {
-            await this.ingress.start()
+            await this.configure(tab, direct, detected)
+        } finally {
+            this.arming.delete(tab)
+        }
+    }
+
+    private async configure (
+        tab: TerminalTabComponent,
+        direct: boolean,
+        detected: DetectedCli|null,
+    ): Promise<void> {
+        const sessionId = crypto.randomUUID()
+        const originalArgs = withoutStalePiHookArgs([...tab.profile.options.args])
+        const originalEnv = withoutStaleHookEnv({ ...tab.profile.options.env })
+        if (direct) {
+            // Remove only Vibby's stale extension before the first await. A
+            // restored PTY may spawn while scanner/ingress startup is pending.
+            tab.profile.options.args = originalArgs
+            tab.profile.options.env = originalEnv
+        }
+
+        const aiCli = tab.profile.options['aiCli']
+        const targetId = aiCli?.targetId
+        const storedMountRoot = aiCli?.windowsMountRoot
+        const wrappedWslDistro = piWslDistroFromArgs(originalArgs)
+        try {
+            await Promise.all([
+                this.ingress.start(),
+                wrappedWslDistro && !storedMountRoot
+                    ? this.scanner.ensureScanned()
+                    : Promise.resolve(),
+            ])
         } catch (error) {
-            console.warn('[tabby-ai] Pi hook ingress unavailable', error)
+            console.warn('[tabby-ai] Pi hook prerequisites unavailable', error)
             return
         }
         if (sessionAppeared(tab)) {
@@ -183,11 +183,6 @@ export class PiAdapterService {
             return
         }
 
-        const sessionId = crypto.randomUUID()
-        const originalArgs = withoutStaleHookArgs([...tab.profile.options.args])
-        const originalEnv = withoutStaleHookEnv({ ...tab.profile.options.env })
-        const targetId = tab.profile.options['aiCli']?.targetId
-        const wrappedWslDistro = piWslDistroFromArgs(originalArgs)
         const wslTarget = direct
             ? this.scanner.runtimeTargets.find(target =>
                 target.type === 'wsl' &&
@@ -198,7 +193,13 @@ export class PiAdapterService {
                 ),
             )
             : null
-        if (direct && wrappedWslDistro && !wslTarget) {
+        const mountRoot = wslTarget?.type === 'wsl'
+            ? wslTarget.windowsMountRoot ?? storedMountRoot
+            : storedMountRoot
+        if (wslTarget?.type === 'wsl' && aiCli && !aiCli.windowsMountRoot) {
+            aiCli.windowsMountRoot = wslTarget.windowsMountRoot
+        }
+        if (direct && wrappedWslDistro && !wslTarget && !mountRoot) {
             console.warn(`[tabby-ai] WSL target metadata unavailable for ${wrappedWslDistro}; Pi will launch without full monitoring`)
             return
         }
@@ -213,11 +214,11 @@ export class PiAdapterService {
             return
         }
 
-        const extensionPath = path.join(tempRoot, EXTENSION_FILE_NAME)
+        const extensionPath = path.join(tempRoot, PI_EXTENSION_FILE_NAME)
         try {
             fs.writeFileSync(
                 extensionPath,
-                buildPiExtensionSource('', tempRoot, sessionId),
+                buildPiExtensionSource(),
                 { mode: 0o600 },
             )
         } catch (error) {
@@ -226,47 +227,55 @@ export class PiAdapterService {
             return
         }
 
-        const injectedEnv: Record<string, string> = {
-            [PI_HOOK_ENDPOINT_ENV]: this.ingress.piEndpointFor(sessionId),
-        }
+        const endpoint = this.ingress.piEndpointFor(sessionId)
         const logPath = path.join(tempRoot, 'vibby-pi-extension.log')
 
-        if (wslTarget?.type === 'wsl') {
-            const translatedExtension = wslTarget.windowsMountRoot
-                ? translateWindowsPathWithMountRoot(wslTarget.windowsMountRoot, extensionPath)
-                : await translateWindowsPathForWsl(wslTarget, extensionPath)
+        if (wrappedWslDistro) {
+            const translatedExtension = mountRoot
+                ? translateWindowsPathWithMountRoot(mountRoot, extensionPath)
+                : wslTarget?.type === 'wsl'
+                    ? await translateWindowsPathForWsl(wslTarget, extensionPath)
+                    : null
             if (sessionAppeared(tab) || !translatedExtension) {
                 this.removeTempRoot(tempRoot)
-                console.warn(`[tabby-ai] WSL path translation unavailable in ${wslTarget.distro}; Pi will launch without full monitoring`)
+                console.warn(`[tabby-ai] WSL path translation unavailable in ${wrappedWslDistro}; Pi will launch without full monitoring`)
                 return
             }
 
-            const translatedDrop = wslTarget.windowsMountRoot
-                ? translateWindowsPathWithMountRoot(wslTarget.windowsMountRoot, tempRoot)
-                : await translateWindowsPathForWsl(wslTarget, tempRoot)
+            const translatedDrop = mountRoot
+                ? translateWindowsPathWithMountRoot(mountRoot, tempRoot)
+                : wslTarget?.type === 'wsl'
+                    ? await translateWindowsPathForWsl(wslTarget, tempRoot)
+                    : null
             if (sessionAppeared(tab) || !translatedDrop) {
                 this.removeTempRoot(tempRoot)
-                console.warn(`[tabby-ai] WSL hook bridge unavailable in ${wslTarget.distro}; Pi will launch without full monitoring`)
+                console.warn(`[tabby-ai] WSL hook bridge unavailable in ${wrappedWslDistro}; Pi will launch without full monitoring`)
                 return
             }
 
-            injectedEnv[PI_HOOK_DROP_DIR_ENV] = translatedDrop
-            injectedEnv[PI_HOOK_SESSION_ENV] = sessionId
-            injectedEnv['WSLENV'] = appendWslenv(
-                originalEnv['WSLENV'] || process.env.WSLENV,
-                [PI_HOOK_DROP_DIR_ENV, PI_HOOK_SESSION_ENV],
+            const inheritedWslenv = Object.prototype.hasOwnProperty.call(originalEnv, 'WSLENV')
+                ? originalEnv['WSLENV']
+                : process.env.WSLENV ?? ''
+            const wslEnv = piHookEnvironment(
+                endpoint,
+                translatedDrop,
+                sessionId,
+                {
+                    ...originalEnv,
+                    WSLENV: inheritedWslenv,
+                },
+                path.posix.join(translatedDrop, 'vibby-pi-extension.log'),
             )
-            injectedEnv['VIBBY_PI_LOG_PATH'] = path.posix.join(translatedDrop, 'vibby-pi-extension.log')
             this.ingress.registerFileDrop(sessionId, tempRoot, 'pi')
 
             if (direct) {
                 tab.profile.options.args = injectPiExtensionArgs(originalArgs, translatedExtension)
-                tab.profile.options.env = { ...originalEnv, ...injectedEnv }
+                tab.profile.options.env = wslEnv
             }
         } else {
             if (direct) {
                 tab.profile.options.args = injectPiExtensionArgs(originalArgs, extensionPath)
-                tab.profile.options.env = { ...originalEnv, ...injectedEnv, VIBBY_PI_LOG_PATH: logPath }
+                tab.profile.options.env = piHookEnvironment(endpoint, null, undefined, originalEnv, logPath)
             }
         }
 
@@ -278,7 +287,7 @@ export class PiAdapterService {
                     detected!,
                     shimDirectory,
                     ['-e', extensionPath],
-                    { [PI_HOOK_ENDPOINT_ENV]: this.ingress.piEndpointFor(sessionId), VIBBY_PI_LOG_PATH: logPath },
+                    piHookEnvironment(endpoint, null, undefined, {}, logPath),
                     PASSTHROUGH_SUBCOMMANDS,
                 )
             } catch (error) {
@@ -297,8 +306,8 @@ export class PiAdapterService {
             disposed: false,
         }
         this.runs.set(tab, run)
+        this.armed.add(tab)
         this.directory.bind({ sessionId, kind: KIND, pane: tab })
-        this.panes.set(sessionId, tab)
 
         if (direct) {
             this.zone.run(() => this.bus.publish({
@@ -345,7 +354,6 @@ export class PiAdapterService {
         if (run.tempRoot) {
             this.removeTempRoot(run.tempRoot)
         }
-        this.panes.delete(run.sessionId)
         this.ingress.unregisterFileDrop(run.sessionId)
         this.directory.unbind(run.sessionId)
         this.zone.run(() => this.bus.dropSession(run.sessionId))

@@ -373,6 +373,7 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
             case 'session-started': return this.label('session start')
             case 'prompt-submitted': return this.label('prompt sent')
             case 'thinking': return this.label('thinking')
+            case 'responding': return this.label('working')
             case 'tool-call': return this.label('tool call')
             case 'tool-result': return this.label('tool result')
             case 'permission-request': return this.label('approval')

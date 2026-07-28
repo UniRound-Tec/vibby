@@ -246,6 +246,7 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
                 version: cli.version,
                 targetId: cli.target.id,
                 targetCwd: targetCwd ?? null,
+                windowsMountRoot: cli.target.type === 'wsl' ? cli.target.windowsMountRoot : null,
             },
         }
     }

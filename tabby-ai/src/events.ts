@@ -14,6 +14,7 @@ export type AiEventKind =
     'session-started' |
     'prompt-submitted' |
     'thinking' |
+    'responding' |
     'tool-call' |
     'tool-result' |
     'permission-request' |
@@ -101,6 +102,7 @@ export function stateAfter (kind: AiEventKind): AiSessionState | null {
         case 'session-started': return 'idle'
         case 'prompt-submitted': return 'working'
         case 'thinking': return 'working'
+        case 'responding': return 'working'
         case 'tool-call': return 'working'
         case 'tool-result': return 'working'
         case 'permission-request': return 'needs-you'

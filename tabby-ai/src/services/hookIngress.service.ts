@@ -85,6 +85,11 @@ export class HookIngressService {
         this.port = null
         this.starting = null
         this.codexProjectors.clear()
+        this.dropRegistrations.clear()
+        if (this.dropPoller) {
+            clearInterval(this.dropPoller)
+            this.dropPoller = null
+        }
     }
 
     get running (): boolean {

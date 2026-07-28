@@ -77,7 +77,7 @@ export const CLI_INSTALL_RECIPES: Readonly<Partial<Record<string, Partial<Record
             command: 'npm install -g --ignore-scripts @earendil-works/pi-coding-agent',
             sourceUrl: 'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md',
             support: 'ready',
-            note: 'Requires Node.js and npm. Bash from Git for Windows is needed by pi shell tools.',
+            note: 'Requires Node.js 22.19.0 or newer and npm. Bash from Git for Windows is needed by pi shell tools.',
         },
         macos: {
             command: 'curl -fsSL https://pi.dev/install.sh | sh',

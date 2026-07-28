@@ -21,6 +21,7 @@ import {
     CODEX_WSL_PROFILE_INSTALLED_RECORD,
     codexWslProfileInstallScript,
 } from '../codexHooks'
+import { supportsPiMonitoring } from '../piCapabilities'
 
 const WINDOWS = process.platform === 'win32'
 const PROBE_TIMEOUT = 2000
@@ -205,7 +206,9 @@ export class CliScannerService {
             const version = await this.probeVersion(entry, command, launcher)
             const monitoring = entry.id === 'codex'
                 ? await this.probeCodexMonitoring(command, launcher)
-                : entry.tier
+                : entry.id === 'pi'
+                    ? supportsPiMonitoring(version) ? 'full' : 'launch'
+                    : entry.tier
             return { entry, target, command, launcher, version, monitoring }
         } catch (e) {
             this.logger.warn(`Failed to detect ${entry.id}:`, e)
@@ -247,7 +250,9 @@ export class CliScannerService {
                 const version = await this.probeWslVersion(target, entry, command)
                 const monitoring = entry.id === 'codex'
                     ? await this.probeWslCodexMonitoring(target, command)
-                    : entry.tier
+                    : entry.id === 'pi'
+                        ? supportsPiMonitoring(version) ? 'full' : 'launch'
+                        : entry.tier
                 return {
                     entry,
                     target,
