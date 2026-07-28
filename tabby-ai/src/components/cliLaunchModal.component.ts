@@ -8,6 +8,7 @@ export interface CliLaunchOptions {
     name: string
     cwd: string
     args: string[]
+    rawArguments: string
     targetId: string
 }
 
@@ -16,6 +17,38 @@ export interface CliLaunchTargetOption {
     label: string
     detail: string
     type: 'native'|'wsl'
+    wslDistribution?: string
+}
+
+export function wslPickerRoot (distribution: string): string {
+    // The legacy share remains the most reliable defaultPath for Windows'
+    // Common Item Dialog. \\wsl.localhost is readable but some dialog builds
+    // fail to open when it is supplied as the initial folder.
+    return `\\\\wsl$\\${distribution}`
+}
+
+export function linuxPathFromWslPicker (
+    distribution: string,
+    selectedPath: string,
+): string|null {
+    const normalized = selectedPath
+        .replace(/\//g, '\\')
+        .replace(/^\\\\\?\\UNC\\/i, '\\\\')
+        .replace(/\\+$/, '')
+    const roots = [
+        `\\\\wsl.localhost\\${distribution}`,
+        `\\\\wsl$\\${distribution}`,
+    ]
+    for (const root of roots) {
+        if (normalized.toLowerCase() === root.toLowerCase()) {
+            return '/'
+        }
+        const prefix = `${root}\\`
+        if (normalized.toLowerCase().startsWith(prefix.toLowerCase())) {
+            return `/${normalized.slice(prefix.length).replace(/\\/g, '/')}`
+        }
+    }
+    return null
 }
 
 /** @hidden */
@@ -49,9 +82,17 @@ export class CliLaunchModalComponent {
     ) { }
 
     async pickWorkingDirectory (): Promise<void> {
-        const cwd = await this.platform.pickDirectory()
+        const target = this.targets.find(item => item.id === this.selectedTargetId)
+        const distribution = target?.type === 'wsl' ? target.wslDistribution : null
+        const cwd = await this.platform.pickDirectory(
+            undefined,
+            undefined,
+            distribution ? wslPickerRoot(distribution) : undefined,
+        )
         if (cwd) {
-            this.cwd = cwd
+            this.cwd = distribution
+                ? linuxPathFromWslPicker(distribution, cwd) ?? cwd
+                : cwd
         }
     }
 
@@ -66,6 +107,7 @@ export class CliLaunchModalComponent {
                 name: this.name.trim(),
                 cwd: this.cwd.trim(),
                 args: args as string[],
+                rawArguments: this.arguments,
                 targetId: this.selectedTargetId,
             } satisfies CliLaunchOptions)
         } catch {

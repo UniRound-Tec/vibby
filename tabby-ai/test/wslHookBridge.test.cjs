@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const {
     DROP_FILE_LIMIT,
     dropFileSessionId,
+    selectWslHookTransport,
     sortDropFiles,
     wslDropHookCommand,
 } = require('../.test-build/wslHookBridge.js')
@@ -32,6 +33,26 @@ assert.equal(dropFileSessionId(`${SESSION}.aB3xY9.json.json`), null, 'double ext
 assert.equal(dropFileSessionId('.aB3xY9.json'), null, 'empty session')
 assert.equal(dropFileSessionId(`${'x'.repeat(65)}.aB3xY9.json`), null, 'session id too long')
 assert.equal(dropFileSessionId('desktop.ini'), null)
+
+// WSL binfmt interop can be true during distro cold-start and disappear once
+// systemd-binfmt settles. The durable /mnt/c file lane must win whenever both
+// transports appear available.
+assert.equal(
+    selectWslHookTransport({
+        dropAvailable: true,
+        curlAvailable: true,
+        interop: true,
+    }),
+    'file',
+)
+assert.equal(
+    selectWslHookTransport({
+        dropAvailable: false,
+        curlAvailable: true,
+        interop: true,
+    }),
+    'curl',
+)
 
 // --- ordering ---
 const sorted = sortDropFiles([

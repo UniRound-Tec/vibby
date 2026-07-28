@@ -16,7 +16,7 @@ import {
 import {
     translateWindowsPathForWsl, translateWindowsPathWithMountRoot, windowsExecutableRunsInWsl,
 } from '../runtimeTargets'
-import { wslDropHookCommand } from '../wslHookBridge'
+import { selectWslHookTransport, wslDropHookCommand } from '../wslHookBridge'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
@@ -244,20 +244,24 @@ export class ClaudeAdapterService {
                 return
             }
             settingsArgument = translatedSettings
-            if (interopWorks && translatedCurl) {
+            const transport = selectWslHookTransport({
+                dropAvailable: !!translatedDrop,
+                curlAvailable: !!translatedCurl,
+                interop: interopWorks,
+            })
+            if (transport === 'file') {
                 fs.writeFileSync(
                     settingsPath,
-                    JSON.stringify(this.settingsFor(sessionId, quoteSh(translatedCurl)), null, 2),
-                    { mode: 0o600 },
-                )
-            } else if (translatedDrop) {
-                fs.writeFileSync(
-                    settingsPath,
-                    JSON.stringify(this.settingsWithCommand(wslDropHookCommand(translatedDrop, sessionId)), null, 2),
+                    JSON.stringify(this.settingsWithCommand(wslDropHookCommand(translatedDrop!, sessionId)), null, 2),
                     { mode: 0o600 },
                 )
                 this.ingress.registerFileDrop(sessionId, dropDir)
-                console.warn(`[tabby-ai] ${wslTarget.distro} cannot execute Windows binaries (binfmt interop); Claude hooks fall back to file delivery`)
+            } else if (transport === 'curl') {
+                fs.writeFileSync(
+                    settingsPath,
+                    JSON.stringify(this.settingsFor(sessionId, quoteSh(translatedCurl!)), null, 2),
+                    { mode: 0o600 },
+                )
             } else {
                 try {
                     fs.unlinkSync(settingsPath)

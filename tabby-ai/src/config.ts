@@ -31,6 +31,8 @@ export class AiConfigProvider extends ConfigProvider {
             floatingWindow: {
                 enabled: false,
             },
+            /** Last launch form values, keyed by CLI kind. */
+            launchHistory: {},
             codex: {
                 /** Set once the hook-trust-bypass notice has been shown */
                 trustBypassAcknowledged: false,

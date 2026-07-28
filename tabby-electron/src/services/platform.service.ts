@@ -347,12 +347,17 @@ export class ElectronPlatformService extends PlatformService {
         })
     }
 
-    async pickDirectory (title?: string, buttonLabel?: string): Promise<string | null> {
+    async pickDirectory (
+        title?: string,
+        buttonLabel?: string,
+        defaultPath?: string,
+    ): Promise<string | null> {
         const result = await this.electron.dialog.showOpenDialog(
             this.hostWindow.getWindow(),
             {
                 title,
                 buttonLabel,
+                defaultPath,
                 properties: ['openDirectory', 'showHiddenFiles'],
             },
         )

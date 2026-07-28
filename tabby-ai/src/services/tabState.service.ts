@@ -83,7 +83,7 @@ export class AiTabStateService {
             // undefined at runtime, but the element type says otherwise
             const aiPane = aiPanes.length > 0 ? aiPanes[0] : null
             const group = aiPane
-                ? this.label('AI sessions')
+                ? this.label('Sessions')
                 : this.label('Terminals')
             // label only where the group changes, so an interleaved tab order
             // still reads correctly instead of lying about what follows

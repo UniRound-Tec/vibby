@@ -267,7 +267,11 @@ export abstract class PlatformService {
     abstract setErrorHandler (handler: (_: any) => void): void
     abstract popupContextMenu (menu: MenuItemOptions[], event?: MouseEvent): void
     abstract showMessageBox (options: MessageBoxOptions): Promise<MessageBoxResult>
-    abstract pickDirectory (): Promise<string | null>
+    abstract pickDirectory (
+        title?: string,
+        buttonLabel?: string,
+        defaultPath?: string,
+    ): Promise<string | null>
     abstract quit (): void
 }
 

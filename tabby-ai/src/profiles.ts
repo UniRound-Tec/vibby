@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core'
 import { DomSanitizer } from '@angular/platform-browser'
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap'
 import * as shellQuote from 'shell-quote'
-import { ProfileProvider, NewTabParameters, Profile, PartialProfile, AppService, SplitTabComponent, TranslateService } from 'tabby-core'
+import { ProfileProvider, NewTabParameters, Profile, PartialProfile, AppService, ConfigService, SplitTabComponent, TranslateService } from 'tabby-core'
 import { TerminalTabComponent, SessionOptions } from 'tabby-local'
 
 import { AiCliMetadata, DetectedCli } from './api'
@@ -16,6 +16,13 @@ import { preferredRuntimeTarget, wslLaunchCommand } from './runtimeTargets'
 
 export interface AiCliProfile extends Profile {
     options: SessionOptions & { aiCli: AiCliMetadata }
+}
+
+interface RememberedCliLaunch {
+    name: string
+    cwd: string
+    arguments: string
+    targetId: string
 }
 
 @Injectable({ providedIn: 'root' })
@@ -53,6 +60,7 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
         private modal: NgbModal,
         private sanitizer: DomSanitizer,
         private translate: TranslateService,
+        private config: ConfigService,
     ) {
         super()
     }
@@ -105,9 +113,16 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
 
     async configureForLaunch (profile: AiCliProfile): Promise<PartialProfile<AiCliProfile>|null> {
         const kind = profile.options.aiCli.kind
+        if (!kind) {
+            return null
+        }
         const entry = AI_CLI_REGISTRY.find(x => x.id === kind)
         const detections = this.scanner.scanResults.filter(item => item.entry.id === kind)
-        const selected = preferredRuntimeTarget(detections, profile.options.aiCli.targetId)
+        const remembered = this.rememberedLaunch(kind)
+        const selected = preferredRuntimeTarget(
+            detections,
+            remembered?.targetId ?? profile.options.aiCli.targetId,
+        )
         if (!selected) {
             return null
         }
@@ -124,6 +139,9 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
         modal.componentInstance.fallbackArguments = entry?.launchArgs?.length
             ? shellQuote.quote(entry.launchArgs)
             : this.translate.instant('No additional arguments')
+        modal.componentInstance.name = remembered?.name ?? ''
+        modal.componentInstance.cwd = remembered?.cwd ?? ''
+        modal.componentInstance.arguments = remembered?.arguments ?? ''
         modal.componentInstance.targets = detections.map(cli => ({
             id: cli.target.id,
             label: cli.target.type === 'wsl'
@@ -136,6 +154,7 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
                     : null,
             ].filter((value): value is string => !!value).join(' · '),
             type: cli.target.type,
+            wslDistribution: cli.target.type === 'wsl' ? cli.target.distro : undefined,
         } satisfies CliLaunchTargetOption))
         modal.componentInstance.selectedTargetId = selected.target.id
 
@@ -144,6 +163,7 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
             return null
         }
 
+        await this.rememberLaunch(kind, launchOptions)
         const customName = launchOptions.name.trim()
         const selectedCli = detections.find(item => item.target.id === launchOptions.targetId) ?? selected
         const targetCwd = launchOptions.cwd ||
@@ -160,6 +180,32 @@ export class AiCliProfileProvider extends ProfileProvider<AiCliProfile> {
                 },
             },
         }
+    }
+
+    private rememberedLaunch (kind: string): RememberedCliLaunch|null {
+        const remembered = this.config.store.aiCli.launchHistory?.[kind]
+        if (!remembered || typeof remembered !== 'object') {
+            return null
+        }
+        return {
+            name: typeof remembered.name === 'string' ? remembered.name : '',
+            cwd: typeof remembered.cwd === 'string' ? remembered.cwd : '',
+            arguments: typeof remembered.arguments === 'string' ? remembered.arguments : '',
+            targetId: typeof remembered.targetId === 'string' ? remembered.targetId : '',
+        }
+    }
+
+    private async rememberLaunch (kind: string, options: CliLaunchOptions): Promise<void> {
+        this.config.store.aiCli.launchHistory = {
+            ...this.config.store.aiCli.launchHistory,
+            [kind]: {
+                name: options.name,
+                cwd: options.cwd,
+                arguments: options.rawArguments,
+                targetId: options.targetId,
+            } satisfies RememberedCliLaunch,
+        }
+        await this.config.save()
     }
 
     getSuggestedName (profile: PartialProfile<AiCliProfile>): string|null {
