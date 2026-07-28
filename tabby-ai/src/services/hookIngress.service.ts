@@ -6,10 +6,11 @@ import { Injectable, NgZone } from '@angular/core'
 import { translateClaudeHook } from '../claudeHooks'
 import { CodexHookProjector } from '../codexHooks'
 import { DROP_FILE_LIMIT, dropFileSessionId, sortDropFiles } from '../wslHookBridge'
+import { translatePiHook } from '../piHooks'
 import { AiEventBusService } from './eventBus.service'
 
 const BODY_LIMIT = 1024 * 1024
-type HookSource = 'claude'|'codex'
+type HookSource = 'claude'|'codex'|'pi'
 
 /**
  * Cadence for the file-drop lane (WSL distros without Windows-binary
@@ -105,6 +106,13 @@ export class HookIngressService {
         return `http://127.0.0.1:${this.port}/vibby/${this.token}/codex/${sessionId}`
     }
 
+    piEndpointFor (sessionId: string): string {
+        if (!this.server) {
+            throw new Error('hook ingress is not running')
+        }
+        return `http://127.0.0.1:${this.port}/vibby/${this.token}/pi/${sessionId}`
+    }
+
     /**
      * Second lane of the ingress: hook payloads arriving as files instead of
      * HTTP requests, for WSL sessions whose distro cannot reach the loopback
@@ -171,14 +179,28 @@ export class HookIngressService {
             return // malformed, or a leftover from a session already torn down
         }
         const now = Date.now()
-        const event = registration.source === 'codex'
-            ? this.codexProjectorFor(sessionId).apply(payload, now)
-            : translateClaudeHook(sessionId, payload, now)
+        const event = this.translateHook(sessionId, payload, now, registration.source)
         if (event) {
             this.zone.run(() => this.bus.publish(event))
             if (event.kind === 'session-ended') {
                 this.codexProjectors.delete(sessionId)
             }
+        }
+    }
+
+    private translateHook (
+        sessionId: string,
+        payload: unknown,
+        ts: number,
+        source: HookSource,
+    ): ReturnType<typeof translateClaudeHook> {
+        switch (source) {
+            case 'codex':
+                return this.codexProjectorFor(sessionId).apply(payload, ts)
+            case 'pi':
+                return translatePiHook(sessionId, payload, ts)
+            default:
+                return translateClaudeHook(sessionId, payload, ts)
         }
     }
 
@@ -193,13 +215,13 @@ export class HookIngressService {
     }
 
     private handle (req: http.IncomingMessage, res: http.ServerResponse): void {
-        const match = /^\/vibby\/([0-9a-f]{32})\/(event|codex)\/([\w-]{1,64})$/.exec(req.url ?? '')
+        const match = /^\/vibby\/([0-9a-f]{32})\/(event|codex|pi)\/([\w-]{1,64})$/.exec(req.url ?? '')
         if (req.method !== 'POST' || !match || !this.tokenMatches(match[1])) {
             res.statusCode = 404
             res.end()
             return
         }
-        const source = match[2]
+        const source = match[2] as HookSource
         const sessionId = match[3]
 
         const chunks: Buffer[] = []
@@ -225,9 +247,7 @@ export class HookIngressService {
                 return
             }
             const now = Date.now()
-            const event = source === 'codex'
-                ? this.codexProjectorFor(sessionId).apply(payload, now)
-                : translateClaudeHook(sessionId, payload, now)
+            const event = this.translateHook(sessionId, payload, now, source)
             if (event) {
                 // http callbacks run outside Angular — re-enter for change detection
                 this.zone.run(() => this.bus.publish(event))

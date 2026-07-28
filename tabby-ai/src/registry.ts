@@ -47,7 +47,8 @@ export const AI_CLI_REGISTRY: AiCliRegistryEntry[] = [
         versionArgs: ['--version'],
         versionPattern: VERSION,
         icon: require('./icons/pi.svg'),
-        tier: 'launch',
+        tier: 'full',
+        docsUrl: 'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/README.md',
     },
     {
         id: 'github-copilot',
