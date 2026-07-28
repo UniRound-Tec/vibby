@@ -96,11 +96,19 @@ export function lastEventCaptionFor (facts: SessionFacts): Caption {
 /**
  * One line for somewhere with room for one — the side rail.
  *
- * The scraped status line wins over the last hook event when both are there:
- * it is lower confidence but strictly fresher, and a caption that has stopped
- * moving reads as a session that has stopped working.
+ * Structured tool activity wins while it is the latest hook event: the rail is
+ * the user's at-a-glance view of what the CLI is doing, and a continuously
+ * repainted spinner must not hide `web`, `edit: auth.ts`, and similar captions.
+ *
+ * For every other event, the scraped status line wins. It is lower confidence
+ * but fresher, and a caption that has stopped moving reads as a session that
+ * has stopped working.
  */
 export function captionFor (facts: SessionFacts): Caption {
+    const eventKind = facts.snapshot?.lastEvent?.kind
+    if (eventKind === 'tool-call' || eventKind === 'tool-result') {
+        return lastEventCaptionFor(facts)
+    }
     const live = facts.snapshot?.liveStatus
     if (live) {
         return { text: live }

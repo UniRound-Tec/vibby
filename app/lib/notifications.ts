@@ -2,6 +2,7 @@ import { app, ipcMain, nativeImage, NativeImage, Notification, WebContents } fro
 
 import {
     AI_NOTIFICATION_CHANNELS,
+    AiNotificationCliKind,
     AiNotificationPlatform,
     AiNotificationRequest,
     normalizeAiNotificationRequest,
@@ -14,11 +15,20 @@ import type { Window } from './window'
  * stays legible on a notification surface of any colour. Linux daemons show
  * nothing without an icon, and Windows falls back to the shortcut's icon.
  */
-let cachedIcon: NativeImage | null = null
+const cachedIcons = new Map<AiNotificationCliKind | null, NativeImage>()
 
-function icon (): NativeImage {
-    cachedIcon ??= nativeImage.createFromPath(`${app.getAppPath()}/assets/tray.png`)
-    return cachedIcon
+function icon (cliKind: AiNotificationCliKind | null): NativeImage {
+    const cached = cachedIcons.get(cliKind)
+    if (cached) {
+        return cached
+    }
+    const asset = cliKind ? `notifications/${cliKind}.png` : 'tray.png'
+    let image = nativeImage.createFromPath(`${app.getAppPath()}/assets/${asset}`)
+    if (image.isEmpty() && cliKind) {
+        image = icon(null)
+    }
+    cachedIcons.set(cliKind, image)
+    return image
 }
 
 /** Anything that is not Windows or macOS notifies through libnotify. */
@@ -85,7 +95,7 @@ export class AiNotificationHub {
         const notification = new Notification({
             title: request.title,
             body: request.body,
-            icon: icon(),
+            icon: icon(request.cliKind),
             silent: presentation.silent,
             urgency: presentation.urgency,
             timeoutType: presentation.timeoutType,

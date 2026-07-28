@@ -3,7 +3,10 @@ import { AppService, ConfigService, HostWindowService, TranslateService } from '
 import { AiEventBusService, AiAttentionPulse } from './eventBus.service'
 import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { AiSessionNavigatorService } from './sessionNavigator.service'
-import { activatedSessionId, AiNotificationReason } from '../notifications'
+import {
+    activatedSessionId, AiNotificationReason, normalizeAiNotificationCliKind,
+    shouldDeliverAiNotification,
+} from '../notifications'
 
 /** needs-you can flap (permission bursts) — don't spam per session */
 const THROTTLE_MS = 5000
@@ -43,13 +46,6 @@ export class AiAttentionService {
     }
 
     private onPulse (pulse: AiAttentionPulse): void {
-        const events = this.config.store.aiCli.events
-        if (!events.notifications) {
-            return
-        }
-        if (pulse.to === 'idle' && !events.notifyOnIdle) {
-            return
-        }
         if (pulse.to === 'working') {
             return
         }
@@ -57,16 +53,17 @@ export class AiAttentionService {
         // say so: a new AiSessionState would fail here rather than go unnoticed.
         const reason: AiNotificationReason = pulse.to
 
-        const pane = this.sessions.forSession(pulse.sessionId)?.pane ?? null
+        const binding = this.sessions.forSession(pulse.sessionId)
+        const pane = binding?.pane ?? null
         const topTab = pane ? this.navigator.topTabFor(pane) : null
-
-        // don't self-interrupt: the user is already looking at this session
-        if (document.hasFocus() && topTab && this.app.activeTab === topTab) {
-            return
-        }
-
         const now = Date.now()
-        if (now - (this.lastNotified.get(pulse.sessionId) ?? 0) < THROTTLE_MS) {
+        if (!shouldDeliverAiNotification({
+            notificationsEnabled: this.config.store.aiCli.events.notifications,
+            notifyOnIdle: this.config.store.aiCli.events.notifyOnIdle,
+            reason,
+            viewingSession: document.hasFocus() && !!topTab && this.app.activeTab === topTab,
+            throttled: now - (this.lastNotified.get(pulse.sessionId) ?? 0) < THROTTLE_MS,
+        })) {
             return
         }
         this.lastNotified.set(pulse.sessionId, now)
@@ -76,6 +73,7 @@ export class AiAttentionService {
         window.vibbyAiNotifications?.notify({
             sessionId: pulse.sessionId,
             reason,
+            cliKind: normalizeAiNotificationCliKind(binding?.kind),
             title,
             body: pulse.event.summary,
         })

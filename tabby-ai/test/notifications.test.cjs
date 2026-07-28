@@ -8,7 +8,28 @@ const {
     activatedSessionId,
     normalizeAiNotificationRequest,
     notificationPresentation,
+    shouldDeliverAiNotification,
 } = require('../.test-build/notifications.js')
+
+// --- delivery policy: foreground sessions still deserve their completion ---
+const decision = overrides => shouldDeliverAiNotification({
+    notificationsEnabled: true,
+    notifyOnIdle: true,
+    reason: 'idle',
+    viewingSession: false,
+    throttled: false,
+    ...overrides,
+})
+
+assert.equal(
+    decision({ viewingSession: true }),
+    true,
+    'done must notify even while the user is viewing that session',
+)
+assert.equal(decision({ notificationsEnabled: false }), false)
+assert.equal(decision({ notifyOnIdle: false }), false)
+assert.equal(decision({ throttled: true }), false)
+assert.equal(decision({ reason: 'needs-you', notifyOnIdle: false }), true)
 
 // --- presentation: a blocked session is loud and sticky, a finished one is not ---
 const win = reason => notificationPresentation(reason, 'win32')
@@ -23,11 +44,11 @@ for (const blocking of ['needs-you', 'error']) {
     assert.equal(mac(blocking).bounceDock, true, blocking)
 }
 
-// A turn ending is an FYI: it arrives on every single answer, so it must not
-// make noise, jump the dock, or stay on screen.
-assert.equal(win('idle').silent, true)
-assert.equal(win('idle').timeoutType, 'default')
-assert.equal(linux('idle').urgency, 'low')
+// A turn ending should be audible even while the user is looking elsewhere,
+// but it still uses the platform's normal timeout and does not bounce the dock.
+assert.equal(win('idle').silent, false)
+assert.equal(win('idle').timeoutType, 'never', 'done must remain in Notification Center')
+assert.equal(linux('idle').urgency, 'critical', 'done must remain until dismissed')
 assert.equal(mac('idle').bounceDock, false)
 assert.equal(linux('idle').bounceDock, false)
 assert.equal(win('needs-you').bounceDock, false, 'no dock outside macOS')
@@ -43,6 +64,7 @@ assert.equal(mac('needs-you').timeoutType, undefined)
 const valid = {
     sessionId: 'session-1',
     reason: 'needs-you',
+    cliKind: 'claude-code',
     title: 'codex — src',
     body: 'command: git status',
 }
@@ -62,6 +84,11 @@ assert.equal(normalizeAiNotificationRequest({ ...valid, title: '' }), null)
 assert.equal(normalizeAiNotificationRequest({ ...valid, reason: 'working' }), null,
     'only the three post-working outcomes are notifiable')
 assert.equal(normalizeAiNotificationRequest({ ...valid, reason: undefined }), null)
+assert.deepEqual(
+    normalizeAiNotificationRequest({ ...valid, cliKind: 'unknown-cli' }),
+    { ...valid, cliKind: null },
+    'an unknown CLI falls back to the Vibby icon rather than crossing IPC',
+)
 
 // a toast is one line, so control characters and runaway CLI output are tamed
 assert.equal(

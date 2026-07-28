@@ -64,6 +64,22 @@ assert.deepEqual(
     'dashboard: keeps the event line, it shows liveStatus separately',
 )
 
+// A structured tool event is the high-confidence "what it is doing" signal
+// promised by the rail. Claude keeps repainting the same spinner while a tool
+// such as WebSearch runs, so the low-confidence spinner must not hide it.
+const webSearch = facts({
+    sessionId: 's',
+    snapshot: snap('working', {
+        lastEvent: { kind: 'tool-call', summary: 'web' },
+        liveStatus: 'Thundering… (2m 11s)',
+    }),
+})
+assert.deepEqual(
+    captionFor(webSearch),
+    { text: 'web' },
+    'rail: tool call must remain visible over the spinner',
+)
+
 // falls back to the last event when the spinner is not running
 const idle = facts({ sessionId: 's', snapshot: snap('idle', { lastEvent: { summary: 'done' } }) })
 assert.deepEqual(captionFor(idle), { text: 'done' })

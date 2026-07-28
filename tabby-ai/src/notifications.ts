@@ -24,22 +24,58 @@ export const NOTIFICATION_SESSION_ID_MAX_LENGTH = 128
  */
 export type AiNotificationReason = 'needs-you' | 'error' | 'idle'
 
+export type AiNotificationCliKind = 'claude-code' | 'codex' | 'opencode'
+
+export const AI_NOTIFICATION_CLI_KINDS: readonly AiNotificationCliKind[] = [
+    'claude-code',
+    'codex',
+    'opencode',
+]
+
 export interface AiNotificationRequest {
     sessionId: string
     reason: AiNotificationReason
+    cliKind: AiNotificationCliKind | null
     title: string
     body: string
+}
+
+export interface AiNotificationDecisionInput {
+    notificationsEnabled: boolean
+    notifyOnIdle: boolean
+    reason: AiNotificationReason
+    viewingSession: boolean
+    throttled: boolean
+}
+
+/**
+ * Renderer-side delivery policy. Kept pure so foreground/background behavior
+ * cannot silently drift while the platform-specific toast code stays unchanged.
+ */
+export function shouldDeliverAiNotification (
+    input: AiNotificationDecisionInput,
+): boolean {
+    if (!input.notificationsEnabled || input.throttled) {
+        return false
+    }
+    if (input.reason === 'idle' && !input.notifyOnIdle) {
+        return false
+    }
+    // Foreground visibility is intentionally not a veto. A completion or
+    // attention transition is useful even while the terminal is visible:
+    // the OS toast is the consistent acknowledgement that the turn changed.
+    return true
 }
 
 /** `process.platform`, narrowed to what we ship. */
 export type AiNotificationPlatform = 'win32' | 'darwin' | 'linux'
 
 export interface AiNotificationPresentation {
-    /** A finished turn should not make noise; a blocked one should. */
+    /** Every attention transition is audible. */
     silent: boolean
     /** Linux only. 'critical' survives until dismissed instead of fading. */
     urgency?: 'low' | 'normal' | 'critical'
-    /** Windows only. 'never' parks the toast in Action Center. */
+    /** Windows only. 'never' parks the toast in Notification Center. */
     timeoutType?: 'default' | 'never'
     /** macOS only, and only when the user is actually needed. */
     bounceDock: boolean
@@ -64,10 +100,17 @@ declare global {
 
 const REASONS: readonly AiNotificationReason[] = ['needs-you', 'error', 'idle']
 
+export function normalizeAiNotificationCliKind (value: unknown): AiNotificationCliKind | null {
+    return typeof value === 'string' &&
+        AI_NOTIFICATION_CLI_KINDS.includes(value as AiNotificationCliKind)
+        ? value as AiNotificationCliKind
+        : null
+}
+
 /**
  * A session that stopped working either wants something (`needs-you`), broke
- * (`error`), or simply finished its turn (`idle`). The first two are worth
- * making persistent and audible; the last one is a quiet FYI.
+ * (`error`), or simply finished its turn (`idle`). Every case is audible and
+ * persistent; only blocking cases bounce the macOS dock.
  */
 export function notificationPresentation (
     reason: AiNotificationReason,
@@ -75,16 +118,14 @@ export function notificationPresentation (
 ): AiNotificationPresentation {
     const blocking = reason !== 'idle'
     const presentation: AiNotificationPresentation = {
-        silent: !blocking,
+        silent: false,
         bounceDock: platform === 'darwin' && blocking,
     }
     if (platform === 'linux') {
-        // Without this a "needs you" toast fades after a few seconds and the
-        // one message the user had to see is the one they miss.
-        presentation.urgency = blocking ? 'critical' : 'low'
+        presentation.urgency = 'critical'
     }
     if (platform === 'win32') {
-        presentation.timeoutType = blocking ? 'never' : 'default'
+        presentation.timeoutType = 'never'
     }
     return presentation
 }
@@ -128,6 +169,7 @@ export function normalizeAiNotificationRequest (
     return {
         sessionId,
         reason: reason as AiNotificationReason,
+        cliKind: normalizeAiNotificationCliKind(value.cliKind),
         title,
         // an empty summary is normal — the title alone still says who wants you
         body: body ?? '',
