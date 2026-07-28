@@ -26,10 +26,10 @@ assert.equal(
 )
 assert.equal(
     selectLookupResult([
-        'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\gemini',
-        'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\gemini.cmd',
+        'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\opencode',
+        'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\opencode.cmd',
     ].join('\r\n'), true),
-    'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\gemini.cmd',
+    'C:\\Users\\Jesse\\AppData\\Roaming\\npm\\opencode.cmd',
     'Windows npm command shims take precedence over extensionless shell scripts',
 )
 

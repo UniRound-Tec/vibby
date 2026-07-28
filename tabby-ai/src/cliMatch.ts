@@ -49,9 +49,9 @@ export function looksInvoked (token: string): boolean {
 
 /**
  * Launchers whose arguments are scripts being run. A package marker inside an
- * argument only means something under one of these — `grep openhands-ai README`
+ * argument only means something under one of these — `grep @openai/codex README`
  * and `rg @openai/codex docs` mention a marker without running anything.
- * Shells are deliberately absent: `bash -c "grep openhands-ai file"` carries the
+ * Shells are deliberately absent: `bash -c "grep @openai/codex file"` carries the
  * whole inner command as a single argument token.
  */
 function isRuntimeLauncher (token: string): boolean {
@@ -76,8 +76,8 @@ export function matchCli (processes: MatchableProcess[], registry: AiCliRegistry
             //    for a CLI installed as an npm/pipx entry point. Executed
             //    means argv[0] itself, or, under a script runtime, the
             //    script/module argument: the first token that is not a flag.
-            //    Later arguments are data — `python train.py --dataset
-            //    openhands_cli` must not become an OpenHands session — and anywhere
+            //    Later arguments are data — `node server.js --plugin
+            //    @openai/codex-helper` must not become a Codex session — and anywhere
             //    else the marker is merely being talked about
             //    (`rg @openai/codex docs`).
             const markers = entry.runtimeMarkers?.map(marker => marker.toLowerCase()) ?? []

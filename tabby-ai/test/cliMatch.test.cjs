@@ -17,16 +17,13 @@ const REGISTRY = [
     { id: 'cursor-agent', binaries: ['cursor-agent'], runtimeMarkers: ['cursor-agent'] },
     { id: 'cline', binaries: ['cline'], runtimeMarkers: ['/node_modules/cline/', '@cline/cli'] },
     { id: 'qwen-code', binaries: ['qwen'], runtimeMarkers: ['@qwen-code/qwen-code'] },
-    { id: 'goose', binaries: ['goose'], runtimeMarkers: ['aaif-goose/goose', 'block/goose'] },
     { id: 'kimi-code', binaries: ['kimi'], runtimeMarkers: ['@moonshot-ai/kimi-code', 'moonshotai/kimi-code'] },
     { id: 'grok-build', binaries: ['grok'], runtimeMarkers: ['@xai-official/grok', 'xai-org/grok-build'] },
     { id: 'kiro-cli', binaries: ['kiro-cli'], runtimeMarkers: ['kiro-cli'] },
     { id: 'kilo-code', binaries: ['kilo'], runtimeMarkers: ['@kilocode/cli'] },
     { id: 'crush', binaries: ['crush'], runtimeMarkers: ['@charmland/crush', 'charmbracelet/crush'] },
-    { id: 'openhands', binaries: ['openhands'], runtimeMarkers: ['openhands-ai', 'openhands_cli'] },
     { id: 'factory-droid', binaries: ['droid'], runtimeMarkers: ['/node_modules/droid/', '@factory-ai/droid'] },
     { id: 'devin-cli', binaries: ['devin'], runtimeMarkers: ['devin-cli'] },
-    { id: 'continue-cli', binaries: ['cn'], runtimeMarkers: ['@continuedev/cli', 'continuedev/continue'] },
     { id: 'amp', binaries: ['amp'], runtimeMarkers: ['@ampcode/cli', 'ampcode'] },
 ]
 const match = (...procs) => matchCli(procs, REGISTRY)
@@ -43,16 +40,13 @@ for (const [binary, id] of [
     ['cursor-agent', 'cursor-agent'],
     ['cline', 'cline'],
     ['qwen', 'qwen-code'],
-    ['goose', 'goose'],
     ['kimi', 'kimi-code'],
     ['grok', 'grok-build'],
     ['kiro-cli', 'kiro-cli'],
     ['kilo', 'kilo-code'],
     ['crush', 'crush'],
-    ['openhands', 'openhands'],
     ['droid', 'factory-droid'],
     ['devin', 'devin-cli'],
-    ['cn', 'continue-cli'],
     ['amp', 'amp'],
 ]) {
     assert.equal(match(proc(binary)), id, binary)
@@ -68,7 +62,6 @@ assert.equal(
     match(proc('node.exe', 'node.exe "C:\\npm\\node_modules\\@openai\\codex\\bin\\codex.js"')),
     'codex',
 )
-assert.equal(match(proc('python', 'python -m openhands_cli')), 'openhands')
 // runtime flags before the script are skipped, the script argument still counts
 assert.equal(
     match(proc('node', 'node --max-old-space-size=4096 /usr/lib/node_modules/@anthropic-ai/claude-code/cli.js')),
@@ -80,17 +73,10 @@ assert.equal(match(proc('node', 'node /home/me/bin/claude.js')), 'claude-code')
 assert.equal(match(proc('sh', 'sh /usr/local/bin/cline')), 'cline')
 assert.equal(match(proc('python', 'python ./tools/pi.py')), 'pi')
 
-// a pipx venv puts the marker in argv[0] — the interpreter path itself
-assert.equal(
-    match(proc('python', '/home/me/.local/pipx/venvs/openhands-ai/bin/python /home/me/.local/bin/openhands')),
-    'openhands',
-)
-
 // --- the false positives this all exists to prevent ---
 // a marker mentioned as data is not a marker in an executed position
-assert.equal(match(proc('grep', 'grep openhands-ai README.md')), null, 'grep openhands-ai')
 assert.equal(match(proc('rg', 'rg @openai/codex docs')), null, 'rg @openai/codex')
-assert.equal(match(proc('bash', 'bash -c "grep openhands-ai file"')), null, 'marker inside a shell -c string')
+assert.equal(match(proc('bash', 'bash -c "grep @openai/codex file"')), null, 'marker inside a shell -c string')
 assert.equal(
     match(proc('node', 'node server.js --plugin=@openai/codex-helper')),
     null,
@@ -102,19 +88,12 @@ assert.equal(
     null,
     'marker as a flag value of an unrelated script',
 )
-assert.equal(
-    match(proc('python', 'python train.py --dataset openhands_cli')),
-    null,
-    'marker as a data argument of an unrelated script',
-)
 // a bare word that happens to be a binary name is not evidence of anything
 assert.equal(match(proc('grep', 'grep claude notes.md')), null, 'grep claude')
 assert.equal(match(proc('bash', 'cd claude')), null, 'cd claude')
 assert.equal(match(proc('git', 'git commit -m claude')), null, 'git commit -m claude')
 assert.equal(match(proc('python', 'python train.py --model pi')), null, '--model pi')
 assert.equal(match(proc('node', 'node server.js --name codex')), null, '--name codex')
-assert.equal(match(proc('less', 'less openhands')), null, 'less openhands')
-assert.equal(match(proc('grep', 'grep cn README.md')), null, 'grep cn')
 assert.equal(match(proc('python', 'python train.py --name amp')), null, '--name amp')
 // ...and neither is an ordinary shell with nothing running in it
 assert.equal(match(proc('bash', 'bash')), null)

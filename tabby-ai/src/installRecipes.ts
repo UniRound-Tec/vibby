@@ -54,26 +54,6 @@ export const CLI_INSTALL_RECIPES: Readonly<Partial<Record<string, Partial<Record
             support: 'ready',
         },
     },
-    'gemini-cli': {
-        windows: {
-            command: 'npm install -g @google/gemini-cli',
-            sourceUrl: 'https://github.com/google-gemini/gemini-cli/blob/main/README.md',
-            support: 'ready',
-            note: 'Legacy CLI. Requires Node.js 20 or newer; Antigravity CLI is the current successor.',
-        },
-        macos: {
-            command: 'npm install -g @google/gemini-cli',
-            sourceUrl: 'https://github.com/google-gemini/gemini-cli/blob/main/README.md',
-            support: 'ready',
-            note: 'Legacy CLI. Requires Node.js 20 or newer; Antigravity CLI is the current successor.',
-        },
-        linux: {
-            command: 'npm install -g @google/gemini-cli',
-            sourceUrl: 'https://github.com/google-gemini/gemini-cli/blob/main/README.md',
-            support: 'ready',
-            note: 'Legacy CLI. Requires Node.js 20 or newer; Antigravity CLI is the current successor.',
-        },
-    },
     opencode: {
         windows: {
             command: 'npm install -g opencode-ai',
@@ -199,23 +179,6 @@ export const CLI_INSTALL_RECIPES: Readonly<Partial<Record<string, Partial<Record
             support: 'ready',
         },
     },
-    goose: {
-        windows: {
-            sourceUrl: 'https://github.com/aaif-goose/goose',
-            support: 'guided',
-            note: 'The official Windows x64 installer requires Git Bash, MSYS2, or WSL; it cannot run in this PowerShell terminal.',
-        },
-        macos: {
-            command: 'curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash',
-            sourceUrl: 'https://github.com/aaif-goose/goose',
-            support: 'ready',
-        },
-        linux: {
-            command: 'curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | bash',
-            sourceUrl: 'https://github.com/aaif-goose/goose',
-            support: 'ready',
-        },
-    },
     'kimi-code': {
         windows: {
             command: 'irm https://code.kimi.com/kimi-code/install.ps1 | iex',
@@ -310,23 +273,6 @@ export const CLI_INSTALL_RECIPES: Readonly<Partial<Record<string, Partial<Record
             note: 'Requires Node.js and npm.',
         },
     },
-    openhands: {
-        windows: {
-            sourceUrl: 'https://docs.openhands.dev/openhands/usage/cli/installation',
-            support: 'requires-wsl',
-            note: 'OpenHands CLI is unsupported on native Windows. Install it inside an Ubuntu WSL terminal.',
-        },
-        macos: {
-            command: 'curl -fsSL https://install.openhands.dev/install.sh | sh',
-            sourceUrl: 'https://docs.openhands.dev/openhands/usage/cli/installation',
-            support: 'ready',
-        },
-        linux: {
-            command: 'curl -fsSL https://install.openhands.dev/install.sh | sh',
-            sourceUrl: 'https://docs.openhands.dev/openhands/usage/cli/installation',
-            support: 'ready',
-        },
-    },
     'factory-droid': {
         windows: {
             command: 'irm https://app.factory.ai/cli/windows | iex',
@@ -363,23 +309,6 @@ export const CLI_INSTALL_RECIPES: Readonly<Partial<Record<string, Partial<Record
             sourceUrl: 'https://cli.devin.ai/reference/commands',
             support: 'ready',
             note: 'Requires eligible Devin Enterprise or Windsurf Enterprise access.',
-        },
-    },
-    'continue-cli': {
-        windows: {
-            command: 'irm https://raw.githubusercontent.com/continuedev/continue/main/extensions/cli/scripts/install.ps1 | iex',
-            sourceUrl: 'https://docs.continue.dev/cli/quickstart',
-            support: 'ready',
-        },
-        macos: {
-            command: 'curl -fsSL https://raw.githubusercontent.com/continuedev/continue/main/extensions/cli/scripts/install.sh | bash',
-            sourceUrl: 'https://docs.continue.dev/cli/quickstart',
-            support: 'ready',
-        },
-        linux: {
-            command: 'curl -fsSL https://raw.githubusercontent.com/continuedev/continue/main/extensions/cli/scripts/install.sh | bash',
-            sourceUrl: 'https://docs.continue.dev/cli/quickstart',
-            support: 'ready',
         },
     },
     amp: {

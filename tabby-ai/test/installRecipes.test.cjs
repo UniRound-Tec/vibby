@@ -72,20 +72,16 @@ const expectedCliIds = [
     'claude-code',
     'cline',
     'codex',
-    'continue-cli',
     'crush',
     'cursor-agent',
     'devin-cli',
     'factory-droid',
-    'gemini-cli',
     'github-copilot',
-    'goose',
     'grok-build',
     'kilo-code',
     'kimi-code',
     'kiro-cli',
     'opencode',
-    'openhands',
     'pi',
     'qwen-code',
 ]
@@ -103,10 +99,8 @@ for (const cliId of expectedCliIds) {
     }
 }
 assert.equal(installRecipeFor('cursor-agent', 'windows').support, 'requires-wsl')
-assert.equal(installRecipeFor('openhands', 'windows').support, 'requires-wsl')
 assert.equal(installPlatformForTarget({ platform: 'linux' }), 'linux')
 assert.equal(installPlatformForTarget(null), null)
-assert.equal(installRecipeFor('goose', 'windows').support, 'guided')
 assert.equal('aider' in CLI_INSTALL_RECIPES, false)
 
 console.log('installRecipes.test.cjs: all assertions passed')
