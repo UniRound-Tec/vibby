@@ -12,7 +12,7 @@ import {
 import { mergeWindowsPath, parseWindowsRegistryPath, selectLookupResult } from '../binaryResolution'
 import { scanResultForProfiles } from '../scanLifecycle'
 import {
-    decodeWslOutput, isWindowsMountedWslPath, mergeWslTargets, nativeRuntimeTarget, shouldScanWslTarget,
+    decodeWslOutput, firstIpv4Address, isWindowsMountedWslPath, mergeWslTargets, nativeRuntimeTarget, shouldScanWslTarget,
     wslExecutablePath, wslLaunchCommand,
 } from '../runtimeTargets'
 import { quoteSh } from '../paths'
@@ -324,6 +324,8 @@ export class CliScannerService {
             // interop — systemd distros routinely lose the registration).
             `vibby_mount=$(wslpath -a -u 'C:\\' 2>/dev/null || true)`,
             `[ -n "$vibby_mount" ] && printf '${WSL_RECORD}%s\\t%s\\t%s\\n' __mount__ "$vibby_mount" -`,
+            `vibby_ipv4=$(hostname -I 2>/dev/null || true)`,
+            `[ -n "$vibby_ipv4" ] && printf '${WSL_RECORD}%s\\t%s\\t%s\\n' __ipv4__ "$vibby_ipv4" -`,
             `vibby_curl=$(wslpath -a -u 'C:\\Windows\\System32\\curl.exe' 2>/dev/null || true)`,
             `[ -n "$vibby_curl" ] && "$vibby_curl" --version >/dev/null 2>&1 && printf '${WSL_RECORD}%s\\t%s\\t%s\\n' __interop__ ok -`,
             functions,
@@ -343,6 +345,7 @@ export class CliScannerService {
         }
         const commands = new Map<string, string>()
         target.windowsInterop = false
+        target.ipv4Address = null
         for (const line of output?.split(/\r?\n/) ?? []) {
             const marker = line.indexOf(WSL_RECORD)
             if (marker === -1) {
@@ -355,6 +358,10 @@ export class CliScannerService {
             }
             if (id === '__interop__') {
                 target.windowsInterop = true
+                continue
+            }
+            if (id === '__ipv4__') {
+                target.ipv4Address = firstIpv4Address(resolved)
                 continue
             }
             if (id && resolved && windowsPath && !isWindowsMountedWslPath(windowsPath) && !commands.has(id)) {

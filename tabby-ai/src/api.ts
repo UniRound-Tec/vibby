@@ -25,6 +25,11 @@ export interface WslCliRuntimeTarget {
     windowsMountRoot?: string|null
     /** Whether the distro can execute Windows binaries (binfmt interop), probed during the scan */
     windowsInterop?: boolean
+    /**
+     * Address reachable from the Windows host in WSL2 NAT mode. Captured while
+     * scanning so launch-time adapters never race PTY spawn on another wsl.exe.
+     */
+    ipv4Address?: string|null
 }
 
 export type CliRuntimeTarget = NativeCliRuntimeTarget | WslCliRuntimeTarget

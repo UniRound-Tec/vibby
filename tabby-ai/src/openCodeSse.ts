@@ -13,6 +13,27 @@ export interface OpenCodeSseOptions {
 
 const RECONNECT_DELAYS_MS = [250, 500, 1000, 2000, 5000]
 const REQUEST_TIMEOUT_MS = 5000
+const MONITOR_PORT_MIN = 49152
+const MONITOR_PORT_MAX = 65536
+
+export function selectOpenCodeMonitorPort (
+    reserved: ReadonlySet<number>,
+    randomInt = (min: number, max: number): number =>
+        min + Math.floor(Math.random() * (max - min)),
+): number|null {
+    for (let attempt = 0; attempt < 64; attempt++) {
+        const candidate = randomInt(MONITOR_PORT_MIN, MONITOR_PORT_MAX)
+        if (
+            Number.isInteger(candidate) &&
+            candidate >= MONITOR_PORT_MIN &&
+            candidate < MONITOR_PORT_MAX &&
+            !reserved.has(candidate)
+        ) {
+            return candidate
+        }
+    }
+    return null
+}
 
 /**
  * Minimal SSE framing decoder. OpenCode sends JSON in data: fields; comments,
@@ -116,8 +137,8 @@ export class OpenCodeSseClient {
         })
 
         const url = new URL('/event', this.options.endpoint)
-        if (this.options.directory) {
-            url.searchParams.set('directory', this.options.directory)
+        if (this.apiDirectory) {
+            url.searchParams.set('directory', this.apiDirectory)
         }
         const headers: http.OutgoingHttpHeaders = {
             Accept: 'text/event-stream',
@@ -182,8 +203,8 @@ export class OpenCodeSseClient {
     private getJson (pathname: string): Promise<unknown> {
         return new Promise((resolve, reject) => {
             const url = new URL(pathname, this.options.endpoint)
-            if (this.options.directory) {
-                url.searchParams.set('directory', this.options.directory)
+            if (this.apiDirectory) {
+                url.searchParams.set('directory', this.apiDirectory)
             }
             const headers: http.OutgoingHttpHeaders = { Accept: 'application/json' }
             if (this.authorization) {
@@ -218,6 +239,19 @@ export class OpenCodeSseClient {
             return null
         }
         return `Basic ${Buffer.from(`${this.options.username}:${this.options.password}`).toString('base64')}`
+    }
+
+    /**
+     * The launch shell/WSL resolves ~/... before the dedicated OpenCode server
+     * starts. Re-sending that shorthand through the HTTP API does not expand
+     * it: OpenCode creates a different ".../~" project event scope instead.
+     * Omitting the query keeps the server's already-resolved working directory.
+     */
+    private get apiDirectory (): string|null {
+        const directory = this.options.directory?.trim()
+        return directory && directory !== '~' && !directory.startsWith('~/')
+            ? directory
+            : null
     }
 
     private onDisconnected (request: http.ClientRequest): void {

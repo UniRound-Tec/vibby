@@ -46,6 +46,23 @@ export function appendWslenv (value: string|undefined, names: string[]): string 
     return entries.join(':')
 }
 
+export function firstIpv4Address (value: string): string|null {
+    for (const candidate of value.split(/\s+/)) {
+        const octets = candidate.split('.')
+        if (
+            octets.length === 4 &&
+            octets.every(octet =>
+                /^\d{1,3}$/.test(octet) &&
+                Number(octet) >= 0 &&
+                Number(octet) <= 255,
+            )
+        ) {
+            return candidate
+        }
+    }
+    return null
+}
+
 export function wslExecutablePath (environment = process.env): string {
     // win32 join explicitly: this is a Windows path by definition, and the
     // pure-module tests run on Linux CI where the platform default is posix
@@ -268,7 +285,7 @@ export function wslIpv4Address (
                     resolve(null)
                     return
                 }
-                resolve(stdout.split(/\s+/).find(value => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)) ?? null)
+                resolve(firstIpv4Address(stdout))
             },
         )
     })

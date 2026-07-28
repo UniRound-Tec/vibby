@@ -1,6 +1,10 @@
 const assert = require('node:assert/strict')
 const http = require('node:http')
-const { OpenCodeSseClient, SseDecoder } = require('../.test-build/openCodeSse.js')
+const {
+    OpenCodeSseClient,
+    SseDecoder,
+    selectOpenCodeMonitorPort,
+} = require('../.test-build/openCodeSse.js')
 
 const decoded = []
 const decoder = new SseDecoder(data => decoded.push(data))
@@ -9,6 +13,13 @@ decoder.push('\r\ndata: second\r\n\r\n')
 decoder.push('data: tail')
 decoder.finish()
 assert.deepEqual(decoded, ['first\nsecond', 'tail'])
+
+const candidates = [50000, 50000, 50001]
+assert.equal(
+    selectOpenCodeMonitorPort(new Set([50000]), () => candidates.shift()),
+    50001,
+    'WSL launch selects a port synchronously without yielding the PTY race'
+)
 
 const waitFor = async (predicate, timeout = 4000) => {
     const deadline = Date.now() + timeout
@@ -99,8 +110,10 @@ const waitFor = async (predicate, timeout = 4000) => {
     assert.equal(unauthorizedRequests, 1, 'fatal authentication failures must not reconnect')
 
     let noAuthHeader
+    const noAuthRequestUrls = []
     const noAuthServer = http.createServer((req, res) => {
         noAuthHeader = req.headers.authorization
+        noAuthRequestUrls.push(req.url)
         if (req.url.startsWith('/session/status')) {
             res.setHeader('Content-Type', 'application/json')
             res.end('{}')
@@ -114,6 +127,10 @@ const waitFor = async (predicate, timeout = 4000) => {
     const noAuthEvents = []
     const noAuthClient = new OpenCodeSseClient({
         endpoint: `http://127.0.0.1:${noAuthPort}`,
+        // WSL resolves this shell shorthand before OpenCode starts. Sending it
+        // again as an API directory creates a different "/home/user/~" event
+        // scope, which receives only server.connected.
+        directory: '~',
         onEvent: event => noAuthEvents.push(event),
         onStatuses: () => null,
     })
@@ -122,6 +139,11 @@ const waitFor = async (predicate, timeout = 4000) => {
     noAuthClient.stop()
     await new Promise(resolve => noAuthServer.close(resolve))
     assert.equal(noAuthHeader, undefined)
+    assert.equal(
+        noAuthRequestUrls.every(url => !url.includes('directory=')),
+        true,
+        'shell home shorthand must use the dedicated server default event scope'
+    )
 
     console.log('opencodeSse.test.cjs: all assertions passed')
 })().catch(error => {

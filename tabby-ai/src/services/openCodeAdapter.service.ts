@@ -8,9 +8,9 @@ import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
 import { OpenCodeEventProjector } from '../opencodeEvents'
-import { OpenCodeSseClient } from '../openCodeSse'
+import { OpenCodeSseClient, selectOpenCodeMonitorPort } from '../openCodeSse'
 import { SHIM_DIR_PREFIX } from '../paths'
-import { usesMirroredWslNetworking, wslIpv4Address } from '../runtimeTargets'
+import { usesMirroredWslNetworking } from '../runtimeTargets'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { RuntimeCliDetectorService } from './runtimeCliDetector.service'
@@ -131,6 +131,7 @@ export class OpenCodeAdapterService {
     private armed = new WeakSet<TerminalTabComponent>()
     private watchedSplits = new WeakSet<SplitTabComponent>()
     private runs = new WeakMap<TerminalTabComponent, OpenCodeRun>()
+    private monitorPorts = new Set<number>()
 
     constructor (
         private app: AppService,
@@ -224,25 +225,47 @@ export class OpenCodeAdapterService {
         const wslTarget = direct
             ? this.scanner.runtimeTargets.find(target => target.id === targetId && target.type === 'wsl')
             : null
-        if (wslTarget?.type === 'wsl' && wslTarget.wslVersion !== 1 && !usesMirroredWslNetworking()) {
-            host = await wslIpv4Address(wslTarget) ?? ''
+        if (
+            wslTarget?.type === 'wsl' &&
+            wslTarget.wslVersion !== 1 &&
+            !usesMirroredWslNetworking()
+        ) {
+            host = wslTarget.ipv4Address ?? ''
             if (!host) {
-                console.warn(`[tabby-ai] could not resolve WSL address for ${wslTarget.distro}; full listening skipped`)
+                console.warn(`[tabby-ai] no scan-time WSL address for ${wslTarget.distro}; full listening skipped`)
                 return
             }
         }
 
         let port = 0
-        try {
-            port = await allocatePort()
-        } catch (error) {
-            console.warn('[tabby-ai] could not allocate OpenCode monitor port', error)
-            return
+        if (wslTarget?.type === 'wsl') {
+            port = selectOpenCodeMonitorPort(this.monitorPorts) ?? 0
+            if (!port) {
+                console.warn('[tabby-ai] could not select an OpenCode WSL monitor port')
+                return
+            }
+        } else {
+            try {
+                for (let attempt = 0; attempt < 8 && !port; attempt++) {
+                    const candidate = await allocatePort()
+                    if (!this.monitorPorts.has(candidate)) {
+                        port = candidate
+                    }
+                }
+            } catch (error) {
+                console.warn('[tabby-ai] could not allocate OpenCode monitor port', error)
+                return
+            }
+            if (!port) {
+                console.warn('[tabby-ai] could not reserve a unique OpenCode monitor port')
+                return
+            }
         }
         if (tab.session) {
             console.warn('[tabby-ai] OpenCode session spawned before monitor injection; full listening skipped')
             return
         }
+        this.monitorPorts.add(port)
 
         const sessionId = crypto.randomUUID()
         const monitorArgs = ['--hostname', host, '--port', String(port)]
@@ -270,6 +293,7 @@ export class OpenCodeAdapterService {
                 )
             }
         } catch (error) {
+            this.monitorPorts.delete(port)
             if (tempRoot) {
                 this.removeTempRoot(tempRoot)
             }
@@ -387,6 +411,7 @@ export class OpenCodeAdapterService {
         }
         run.disposed = true
         this.stopClient(run)
+        this.monitorPorts.delete(run.port)
         run.shim?.remove()
         if (run.tempRoot) {
             this.removeTempRoot(run.tempRoot)

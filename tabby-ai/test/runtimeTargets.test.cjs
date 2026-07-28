@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const {
     appendWslenv,
     decodeWslOutput,
+    firstIpv4Address,
     isWindowsMountedWslPath,
     mergeWslTargets,
     nativeRuntimeTarget,
@@ -23,8 +24,14 @@ assert.equal(nativeRuntimeTarget('freebsd'), null)
 assert.equal(wslTargetId('Ubuntu Dev'), 'wsl:Ubuntu%20Dev')
 assert.equal(
     appendWslenv('PATH/l:EXISTING/u', ['existing', 'VIBBY_DROP', 'VIBBY_SESSION']),
-    'PATH/l:EXISTING/u:VIBBY_DROP:VIBBY_SESSION',
+    'PATH/l:EXISTING/u:VIBBY_DROP:VIBBY_SESSION'
 )
+assert.equal(
+    firstIpv4Address('172.27.234.203 fe80::1 192.168.50.2'),
+    '172.27.234.203',
+    'the scan must retain a WSL address before the launch-time PTY race begins'
+)
+assert.equal(firstIpv4Address('fe80::1 not-an-address'), null)
 
 assert.deepEqual(parseWslNames('\uFEFFUbuntu-22.04\r\nDebian\r\n'), ['Ubuntu-22.04', 'Debian'])
 assert.deepEqual(
