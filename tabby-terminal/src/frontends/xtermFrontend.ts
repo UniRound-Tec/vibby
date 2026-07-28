@@ -15,6 +15,7 @@ import { CanvasAddon } from '@xterm/addon-canvas'
 import { BaseTerminalProfile } from '../api/interfaces'
 import { getXtermBackgroundColor } from '../helpers'
 import { generatePalette } from '../generatePalette'
+import { CursorShowDebouncer, SynchronizedOutputBuffer } from './synchronizedOutput'
 import './xterm.css'
 
 const COLOR_NAMES = [
@@ -25,6 +26,8 @@ const COLOR_NAMES = [
 // How many times to recreate the WebGL renderer after a lost GPU context
 // before giving up and letting xterm fall back to its DOM renderer.
 const MAX_WEBGL_RECOVERY_ATTEMPTS = 3
+const SYNCHRONIZED_OUTPUT_TIMEOUT = 1000
+const CURSOR_SHOW_DEBOUNCE = 50
 
 class FlowControl {
     private blocked = false
@@ -34,10 +37,85 @@ class FlowControl {
     private highWatermark = 10
     private bytesWritten = 0
     private bytesThreshold = 1024 * 128
+    private synchronizedOutput = new SynchronizedOutputBuffer()
+    private synchronizedOutputTimeout?: ReturnType<typeof setTimeout>
+    private cursorShowDebouncer = new CursorShowDebouncer()
+    private cursorShowTimeout?: ReturnType<typeof setTimeout>
+    private writeQueue = Promise.resolve()
 
     constructor (private xterm: Terminal) { }
 
     async write (data: string) {
+        const previousRevision = this.cursorShowDebouncer.revision
+        const cursorFiltered = this.cursorShowDebouncer.push(data)
+        this.updateCursorShowTimeout(
+            previousRevision !== this.cursorShowDebouncer.revision,
+        )
+        const chunks = cursorFiltered.flatMap(chunk => this.synchronizedOutput.push(chunk))
+        this.updateSynchronizedOutputTimeout()
+        await this.enqueue(chunks)
+    }
+
+    dispose (): void {
+        if (this.synchronizedOutputTimeout) {
+            clearTimeout(this.synchronizedOutputTimeout)
+            delete this.synchronizedOutputTimeout
+        }
+        if (this.cursorShowTimeout) {
+            clearTimeout(this.cursorShowTimeout)
+            delete this.cursorShowTimeout
+        }
+    }
+
+    private updateCursorShowTimeout (visibilityChanged: boolean): void {
+        if (!visibilityChanged) {
+            return
+        }
+        if (this.cursorShowTimeout) {
+            clearTimeout(this.cursorShowTimeout)
+            delete this.cursorShowTimeout
+        }
+        if (this.cursorShowDebouncer.pending) {
+            this.cursorShowTimeout = setTimeout(() => {
+                delete this.cursorShowTimeout
+                const chunks = this.cursorShowDebouncer.release()
+                    .flatMap(chunk => this.synchronizedOutput.push(chunk))
+                this.updateSynchronizedOutputTimeout()
+                void this.enqueue(chunks)
+            }, CURSOR_SHOW_DEBOUNCE)
+        }
+    }
+
+    private updateSynchronizedOutputTimeout (): void {
+        if (!this.synchronizedOutput.pending) {
+            if (this.synchronizedOutputTimeout) {
+                clearTimeout(this.synchronizedOutputTimeout)
+                delete this.synchronizedOutputTimeout
+            }
+            return
+        }
+        if (!this.synchronizedOutputTimeout) {
+            this.synchronizedOutputTimeout = setTimeout(() => {
+                delete this.synchronizedOutputTimeout
+                const chunks = this.synchronizedOutput.flush()
+                void this.enqueue(chunks)
+            }, SYNCHRONIZED_OUTPUT_TIMEOUT)
+        }
+    }
+
+    private enqueue (chunks: string[]): Promise<void> {
+        const operation = this.writeQueue.then(() => this.writeChunks(chunks))
+        this.writeQueue = operation.catch(() => undefined)
+        return operation
+    }
+
+    private async writeChunks (chunks: string[]): Promise<void> {
+        for (const chunk of chunks) {
+            await this.writeChunk(chunk)
+        }
+    }
+
+    private async writeChunk (data: string): Promise<void> {
         if (this.blocked) {
             await firstValueFrom(this.blocked$.pipe(filter(x => !x)))
         }
@@ -412,6 +490,7 @@ export class XTermFrontend extends Frontend {
         super.destroy()
         this.webGLAddon?.dispose()
         this.canvasAddon?.dispose()
+        this.flowControl.dispose()
         this.xterm.dispose()
     }
 
