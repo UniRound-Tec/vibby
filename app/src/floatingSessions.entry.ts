@@ -10,7 +10,13 @@ import {
 } from '../../tabby-ai/src/floatingSessions'
 import './floatingSessions.api'
 
-const icons = new Map(AI_CLI_REGISTRY.map(entry => [entry.id, entry.icon]))
+const icons = new Map(AI_CLI_REGISTRY.map(entry => [
+    entry.id,
+    {
+        source: entry.icon,
+        mode: entry.iconMode ?? 'monochrome',
+    },
+]))
 
 let snapshot: FloatingSessionWindowSnapshot = {
     colorScheme: 'dark',
@@ -115,7 +121,8 @@ function renderIcon (session: FloatingSessionSnapshot): HTMLElement {
     const icon = icons.get(session.kind)
     if (icon) {
         const image = element('img')
-        image.src = icon
+        image.src = icon.source
+        image.classList.add(icon.mode)
         image.alt = ''
         container.appendChild(image)
     } else {

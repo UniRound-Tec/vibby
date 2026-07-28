@@ -178,8 +178,14 @@ button {
     object-fit: contain;
 }
 
-:root[data-color-scheme='light'] .session-icon img {
+.session-icon img.monochrome {
+    filter: brightness(0) invert(1);
+    opacity: .86;
+}
+
+:root[data-color-scheme='light'] .session-icon img.monochrome {
     filter: brightness(.28);
+    opacity: 1;
 }
 
 .session-icon-fallback {

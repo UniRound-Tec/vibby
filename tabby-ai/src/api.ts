@@ -56,6 +56,9 @@ export interface AiCliRegistryEntry {
     /** Inline SVG */
     icon: string
 
+    /** Brand icons keep their own colours; monochrome icons follow the UI theme. */
+    iconMode?: 'brand' | 'monochrome'
+
     /** 'full' = event adapter available (M2+); 'launch' = launch only */
     tier: 'full' | 'launch'
 
