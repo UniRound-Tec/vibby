@@ -1,13 +1,21 @@
-# Vibby
+<p align="center">
+  <img src="docs/readme/wordmark.png" alt="Vibby" width="220">
+</p>
 
-**为 AI 编程 CLI 特化的终端。**
+<p align="center">
+  <strong>为 AI 编程 CLI 特化的终端。</strong>
+</p>
+
+<p align="center">
+  <a href="./README.md">English</a>
+  ·
+  <a href="https://github.com/UniRound-Tec/vibby/releases">下载</a>
+</p>
 
 Vibby 会自动发现本机上的 AI CLI，一键开会话，实时看每个会话在干什么，并在需要人出手时提醒你。它基于 [Tabby](https://github.com/Eugeny/tabby) 二次开发，保留熟悉的终端能力（SSH、串口、分屏、主题、配置集），并加上一等公民的 AI 会话看板。
 
-[English](./README.md)
-
 <p align="center">
-  <img src="docs/readme/dashboard.png" alt="Vibby 会话看板（模拟数据）" width="900">
+  <img src="docs/readme/dashboard.zh-CN.png" alt="Vibby 会话看板（模拟数据）" width="900">
 </p>
 
 <p align="center">
@@ -23,6 +31,23 @@ Vibby 会自动发现本机上的 AI CLI，一键开会话，实时看每个会�
 - **监听**：用原生 hooks / 适配器拿状态，而不是硬解析 TUI
 - **呈现**：Waiting / Working / Idle / Error 四态 + 实况字幕
 - **置顶**：可选悬浮窗，切去做别的事时仍能余光盯着 agent
+
+## 和其他终端比什么
+
+| | Vibby | Tabby | Windows Terminal / iTerm2 / Kitty | Warp | IDE 内置终端（VS Code / Cursor） |
+|---|:---:|:---:|:---:|:---:|:---:|
+| 本地 / SSH / 串口 / 分屏 | ✅ | ✅ | ✅（各有侧重） | ✅ | ✅（本地 / 远程） |
+| 主题与配置集 | ✅ | ✅ | ✅ | ✅ | 有限 |
+| 自动发现 AI CLI | ✅ | — | — | — | — |
+| 一键启动 Claude / Codex / OpenCode / Pi… | ✅ | — | — | — | — |
+| 会话实况（等你 / 运行 / 空闲 / 异常） | ✅ | — | — | — | — |
+| 基于 hooks / SSE 的监听（不靠扒 TUI） | ✅ | — | — | — | — |
+| agent 需要人时桌面通知 | ✅ | — | — | 部分 | 部分 |
+| 多会话悬浮窗 | ✅ | — | — | — | — |
+| 内置对话 / 提示词 AI | — | — | — | ✅ | ✅ |
+| 绑死在 IDE 窗口里 | — | — | — | — | ✅ |
+
+Vibby 不打算替代 Warp 的提示词 AI，也不替代编辑器里的 agent 面板。它是你已经在用的那些 CLI agent 的 **PTY 宿主**——让多个会话同时跑时，不用靠切 tab 猜谁卡住了。
 
 ## 监听能力
 

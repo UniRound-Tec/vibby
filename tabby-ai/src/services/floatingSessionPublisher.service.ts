@@ -26,6 +26,7 @@ import { RuntimeCliDetectorService } from './runtimeCliDetector.service'
 import { AiEventBusService } from './eventBus.service'
 import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { AiSessionNavigatorService } from './sessionNavigator.service'
+import { isReadmeDemo, readmeDemoFloatingSessions } from '../readmeDemo'
 
 const PUBLISH_AUDIT_MS = 75
 
@@ -88,10 +89,12 @@ export class FloatingSessionPublisherService {
         if (!this.config.store || !bridge) {
             return
         }
-        const sessions = this.projectSessions()
+        const sessions = isReadmeDemo()
+            ? readmeDemoFloatingSessions(this.bootstrapData.windowID)
+            : this.projectSessions()
         bridge.replaceSource({
             sourceWindowId: this.bootstrapData.windowID,
-            enabled: !!this.config.store.aiCli.floatingWindow.enabled,
+            enabled: isReadmeDemo() ? true : !!this.config.store.aiCli.floatingWindow.enabled,
             colorScheme: this.colorScheme(),
             sessions,
         })

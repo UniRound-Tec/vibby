@@ -24,6 +24,13 @@ import { AiEventBusService } from '../services/eventBus.service'
 import { AiSessionDirectoryService } from '../services/sessionDirectory.service'
 import { RuntimeCliDetectorService } from '../services/runtimeCliDetector.service'
 import { preferredRuntimeTarget } from '../runtimeTargets'
+import {
+    formatDemoClock,
+    formatDemoDuration,
+    isReadmeDemo,
+    readmeDemoActivity,
+    readmeDemoSessions,
+} from '../readmeDemo'
 
 export interface AiSessionRow {
     topTab: BaseTabComponent
@@ -260,11 +267,74 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
         this.counters = [...counts.entries()]
             .sort((a, b) => DISPLAY_STATE_RANK[a[0]] - DISPLAY_STATE_RANK[b[0]])
             .map(([state, count]) => ({ state, count, label: this.label(stateLabelKey(state)) }))
+        if (isReadmeDemo()) {
+            this.applyReadmeDemo()
+        }
         this.cdr.markForCheck()
+    }
+
+    /** Synthetic sessions for README screenshots — keeps the real Launch strip. */
+    private applyReadmeDemo (): void {
+        const now = Date.now()
+        const stubPane = {} as TerminalTabComponent
+        const stubTab = {} as BaseTabComponent
+        this.rows = readmeDemoSessions().map(session => ({
+            topTab: stubTab,
+            pane: stubPane,
+            kind: session.kind,
+            sessionId: session.id,
+            snapshot: null,
+            state: session.state,
+            runtimeDetected: false,
+            icon: this.iconForKind(session.kind),
+            stateLabel: session.stateLabel,
+            name: session.name,
+            caption: session.caption,
+            live: session.live,
+            duration: formatDemoDuration(session.ageMs),
+        }))
+        this.sessionPage = 0
+        for (const row of this.rows) {
+            if (row.sessionId) {
+                this.sessionNames.set(row.sessionId, row.name)
+            }
+        }
+        const activity = readmeDemoActivity()
+        this.recent = activity.map(item => ({
+            sessionId: item.sessionId,
+            ts: now - item.ageMs,
+            kind: item.kind,
+            confidence: 'high' as const,
+            summary: item.summary,
+        }))
+        this.eventRows = activity.map(item => ({
+            event: this.recent.find(event => event.sessionId === item.sessionId && event.summary === item.summary)!,
+            time: formatDemoClock(item.ageMs, now),
+            dot: item.state,
+            who: item.who,
+            kindLabel: item.kindLabel,
+            summary: item.summary,
+        }))
+        this.activityPage = 0
+        const counts = new Map<AiDisplayState, number>()
+        for (const row of this.rows) {
+            counts.set(row.state, (counts.get(row.state) ?? 0) + 1)
+        }
+        this.counters = [...counts.entries()]
+            .sort((a, b) => DISPLAY_STATE_RANK[a[0]] - DISPLAY_STATE_RANK[b[0]])
+            .map(([state, count]) => ({ state, count, label: this.label(stateLabelKey(state)) }))
+
+        if (!this.configService.store.aiCli.floatingWindow.enabled) {
+            this.configService.store.aiCli.floatingWindow.enabled = true
+            this.configService.save()
+        }
     }
 
     /** Recomputes only the duration column — the rest of the row is event-driven */
     private updateDurations (): void {
+        if (isReadmeDemo()) {
+            return
+        }
         this.now = Date.now()
         for (const row of this.rows) {
             row.duration = this.durationFor(row)
@@ -346,6 +416,9 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
 
     rename (row: AiSessionRow, event: MouseEvent): void {
         event.stopPropagation()
+        if (isReadmeDemo()) {
+            return
+        }
         this.app.renameTab(row.pane)
     }
 
@@ -404,6 +477,9 @@ export class DashboardTabComponent extends BaseTabComponent implements AfterView
     }
 
     focusRow (row: AiSessionRow): void {
+        if (isReadmeDemo()) {
+            return
+        }
         this.app.selectTab(row.topTab)
         if (row.topTab instanceof SplitTabComponent) {
             row.topTab.focus(row.pane)

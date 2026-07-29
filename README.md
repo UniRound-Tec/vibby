@@ -1,10 +1,18 @@
-# Vibby
+<p align="center">
+  <img src="docs/readme/wordmark.png" alt="Vibby" width="220">
+</p>
 
-**A terminal built for AI coding CLIs.**
+<p align="center">
+  <strong>A terminal built for AI coding CLIs.</strong>
+</p>
+
+<p align="center">
+  <a href="./README.zh-CN.md">简体中文</a>
+  ·
+  <a href="https://github.com/UniRound-Tec/vibby/releases">Download</a>
+</p>
 
 Vibby discovers the AI agents on your machine, launches them in one click, watches what each session is doing, and nudges you when something needs a human. It is a fork of [Tabby](https://github.com/Eugeny/tabby) with a first-class AI session dashboard — the rest of the terminal stays familiar: SSH, serial, splits, themes, profiles.
-
-[简体中文](./README.zh-CN.md)
 
 <p align="center">
   <img src="docs/readme/dashboard.png" alt="Vibby dashboard with mock AI sessions" width="900">
@@ -23,6 +31,23 @@ Running several Claude / Codex / OpenCode / Pi sessions at once turns into tab b
 - **Listen** to session state with native hooks / adapters — not by scraping TUI noise
 - **Surface** Waiting / Working / Idle / Error with live captions
 - **Pin** a floating window so you can keep an eye on agents while you work elsewhere
+
+## Compared with other terminals
+
+| | Vibby | Tabby | Windows Terminal / iTerm2 / Kitty | Warp | IDE terminal (VS Code / Cursor) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Local / SSH / serial / splits | ✅ | ✅ | ✅ (varies) | ✅ | ✅ (local / remote) |
+| Themes & profiles | ✅ | ✅ | ✅ | ✅ | Limited |
+| Auto-discover AI CLIs | ✅ | — | — | — | — |
+| One-click launch Claude / Codex / OpenCode / Pi… | ✅ | — | — | — | — |
+| Live session state (Waiting / Working / Idle / Error) | ✅ | — | — | — | — |
+| Hook / SSE based monitoring (not TUI scraping) | ✅ | — | — | — | — |
+| Desktop notify when an agent needs you | ✅ | — | — | Partial | Partial |
+| Floating multi-session glance window | ✅ | — | — | — | — |
+| Built-in chat / prompt AI | — | — | — | ✅ | ✅ |
+| Bound to an IDE window | — | — | — | — | ✅ |
+
+Vibby is not trying to replace Warp’s prompt AI or your editor’s agent panel. It is the **PTY host** for the CLI agents you already run — so you can keep several of them honest without alt-tabbing through tabs.
 
 ## Monitoring
 
