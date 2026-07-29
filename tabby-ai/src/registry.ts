@@ -115,7 +115,7 @@ export const AI_CLI_REGISTRY: AiCliRegistryEntry[] = [
         versionArgs: ['--version'],
         versionPattern: VERSION,
         icon: require('./icons/kimi-code.svg'),
-        tier: 'launch',
+        tier: 'full',
         docsUrl: 'https://moonshotai.github.io/kimi-code/',
     },
     {

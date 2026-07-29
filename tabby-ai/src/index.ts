@@ -19,6 +19,7 @@ import { ClaudeAdapterService } from './services/claudeAdapter.service'
 import { OpenCodeAdapterService } from './services/openCodeAdapter.service'
 import { CodexAdapterService } from './services/codexAdapter.service'
 import { PiAdapterService } from './services/piAdapter.service'
+import { KimiAdapterService } from './services/kimiAdapter.service'
 import { AiAttentionService } from './services/attention.service'
 import { AiTabStateService } from './services/tabState.service'
 import { RuntimeCliDetectorService } from './services/runtimeCliDetector.service'
@@ -72,6 +73,7 @@ export default class AiModule {
         openCodeAdapter: OpenCodeAdapterService,
         codexAdapter: CodexAdapterService,
         piAdapter: PiAdapterService,
+        kimiAdapter: KimiAdapterService,
         attention: AiAttentionService,
         tabState: AiTabStateService,
         runtimeDetector: RuntimeCliDetectorService,
@@ -90,6 +92,7 @@ export default class AiModule {
         openCodeAdapter.activate()
         codexAdapter.activate()
         piAdapter.activate()
+        kimiAdapter.activate()
         runtimeDetector.activate()
         attention.activate()
         tabState.activate()

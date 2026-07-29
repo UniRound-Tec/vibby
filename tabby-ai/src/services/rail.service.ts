@@ -20,6 +20,7 @@ const EMPTY_STATE_CLASS = 'vibby-rail-empty'
  */
 @Injectable({ providedIn: 'root' })
 export class RailService {
+    private emptyState: HTMLDivElement | null = null
     private demoCards: HTMLElement[] = []
 
     constructor (
