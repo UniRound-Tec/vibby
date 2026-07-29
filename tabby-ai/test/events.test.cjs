@@ -67,6 +67,7 @@ assert.equal(stateAfter('thinking'), 'working')
 assert.equal(stateAfter('responding'), 'working')
 assert.equal(stateAfter('permission-request'), 'needs-you')
 assert.equal(stateAfter('notification'), 'needs-you')
+assert.equal(stateAfter('request-resolved'), 'working')
 assert.equal(stateAfter('turn-completed'), 'idle')
 assert.equal(stateAfter('session-ended'), null)
 assert.equal(stateAfter('process-exited'), 'error')
@@ -110,13 +111,24 @@ assert.equal(isAttentionTransition('idle', 'needs-you'), false)
 assert.equal(isAttentionTransition('needs-you', 'idle'), false)
 assert.equal(isAttentionTransition(null, 'working'), false)
 
-// --- liveStatus: rides along while working, dies when work stops ---
+// --- a structured boundary invalidates the older scraped caption ---
 let live = reduceSnapshot(null, ev('prompt-submitted', { ts: 1000 }))
 live = { ...live, liveStatus: 'Spelunking… (4s · ↓ 2 tokens)' }
 live = reduceSnapshot(live, ev('tool-call', { ts: 2000 }))
-assert.equal(live.liveStatus, 'Spelunking… (4s · ↓ 2 tokens)', 'spinner survives tool calls')
+assert.equal(live.liveStatus, null, 'a pre-tool spinner must not survive the tool boundary')
 live = reduceSnapshot(live, ev('turn-completed', { ts: 3000 }))
 assert.equal(live.liveStatus, null, 'spinner must not outlive the working state')
+
+// A result remains the history event while its projected activity becomes the
+// live session description.
+const result = reduceSnapshot(null, ev('tool-result', {
+    summary: 'web done',
+    projectedActivity: { kind: 'thinking', summary: 'thinking' },
+}))
+assert.equal(result.lastEvent.kind, 'tool-result')
+assert.equal(result.lastEvent.summary, 'web done')
+assert.equal(result.activity.kind, 'thinking')
+assert.equal(result.activity.summary, 'thinking')
 
 // --- a second turn starts with no caption, so an identical one still shows ---
 // Codex captions repeat verbatim between turns once the elapsed-time suffix is

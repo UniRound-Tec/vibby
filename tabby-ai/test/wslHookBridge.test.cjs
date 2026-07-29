@@ -4,6 +4,7 @@ const {
     dropFileSessionId,
     selectWslHookTransport,
     sortDropFiles,
+    windowsDropHookCommand,
     wslDropHookCommand,
 } = require('../.test-build/wslHookBridge.js')
 
@@ -22,6 +23,15 @@ assert.equal(
     wslDropHookCommand(`/mnt/c/Users/o'brien/drop`, SESSION).includes(`'/mnt/c/Users/o'\\''brien/drop/`),
     true,
 )
+
+const windowsCommand = windowsDropHookCommand(
+    `C:\\Users\\o'brien\\AppData\\Local\\Temp\\vibby-hooks-Ab12Cd\\drop`,
+    SESSION,
+)
+assert.ok(windowsCommand.startsWith('powershell.exe -NoLogo -NoProfile -NonInteractive'))
+assert.ok(windowsCommand.includes(`$s='${SESSION}'`))
+assert.ok(windowsCommand.includes(`C:\\Users\\o''brien\\AppData`), 'PowerShell quote is escaped')
+assert.ok(windowsCommand.includes('[IO.File]::Move'), 'final rename makes the file atomic')
 
 // --- drop file names ---
 // mktemp fills XXXXXX with [A-Za-z0-9]; the poller must take exactly what the

@@ -70,14 +70,15 @@ export function stateLabelKey (state: AiDisplayState): string {
  * state returned by displayStateFor().
  */
 export function activityLabelKey (facts: SessionFacts): string {
-    switch (facts.snapshot?.lastEvent?.kind) {
+    switch ((facts.snapshot?.activity ?? facts.snapshot?.lastEvent)?.kind) {
         case 'session-started': return _('🚀 Ready to roll')
         case 'prompt-submitted': return _('🚀 Getting started')
         case 'thinking': return _('🧠 Thinking')
         case 'responding': return _('✍️ Writing back')
         case 'tool-call':
-        case 'tool-result':
             return _('🛠️ On it')
+        case 'tool-result':
+            return _('🧠 Thinking')
         case 'permission-request': return _('🔐 Needs your okay')
         case 'question-request': return _('💬 Has a question')
         case 'retrying': return _('🔄 Trying again')
@@ -208,24 +209,30 @@ export function lastEventCaptionFor (facts: SessionFacts): Caption {
 /**
  * One line for somewhere with room for one — the side rail.
  *
- * Structured tool activity wins while it is the latest hook event: the rail is
- * the user's at-a-glance view of what the CLI is doing, and a continuously
- * repainted spinner must not hide `web`, `edit: auth.ts`, and similar captions.
+ * Structured active-tool activity wins: the rail is the user's at-a-glance
+ * view of what the CLI is doing, and a continuously repainted spinner must not
+ * hide `web`, `edit: auth.ts`, and similar captions.
  *
- * For every other event, the scraped status line wins. It is lower confidence
- * but fresher, and a caption that has stopped moving reads as a session that
- * has stopped working.
+ * Tool results remain in lastEvent for the dashboard timeline, but their
+ * projected activity is thinking (or another still-active parallel tool).
+ * For non-tool activity the scraped status line wins when available.
  */
 export function captionFor (facts: SessionFacts): Caption {
-    const eventKind = facts.snapshot?.lastEvent?.kind
-    if (eventKind === 'tool-call' || eventKind === 'tool-result') {
-        return lastEventCaptionFor(facts)
+    const activity = facts.snapshot?.activity ?? facts.snapshot?.lastEvent
+    if (activity?.kind === 'tool-call') {
+        return eventCaptionFor(activity)
     }
     const live = facts.snapshot?.liveStatus
     if (live) {
         return { text: live }
     }
-    return lastEventCaptionFor(facts)
+    if (!activity?.summary) {
+        return { text: '' }
+    }
+    const caption = eventCaptionFor(activity)
+    return 'key' in caption && caption.key === activityLabelKey(facts)
+        ? { text: '' }
+        : caption
 }
 
 /** Worst of several panes — what a split tab shows on its single card */

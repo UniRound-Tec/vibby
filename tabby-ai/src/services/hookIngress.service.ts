@@ -3,7 +3,7 @@ import * as http from 'http'
 import * as crypto from 'crypto'
 import * as path from 'path'
 import { Injectable, NgZone } from '@angular/core'
-import { translateClaudeHook } from '../claudeHooks'
+import { ClaudeHookProjector, translateClaudeHook } from '../claudeHooks'
 import { CodexHookProjector } from '../codexHooks'
 import { DROP_FILE_LIMIT, dropFileSessionId, sortDropFiles } from '../wslHookBridge'
 import { translatePiHook } from '../piHooks'
@@ -44,6 +44,7 @@ export class HookIngressService {
     private port: number | null = null
     private token = crypto.randomBytes(16).toString('hex')
     private starting: Promise<void> | null = null
+    private claudeProjectors = new Map<string, ClaudeHookProjector>()
     private codexProjectors = new Map<string, CodexHookProjector>()
     private dropRegistrations = new Map<string, { dir: string, source: HookSource }>()
     private dropPoller: ReturnType<typeof setInterval> | null = null
@@ -84,6 +85,7 @@ export class HookIngressService {
         this.server = null
         this.port = null
         this.starting = null
+        this.claudeProjectors.clear()
         this.codexProjectors.clear()
         this.dropRegistrations.clear()
         if (this.dropPoller) {
@@ -136,11 +138,16 @@ export class HookIngressService {
 
     unregisterFileDrop (sessionId: string): void {
         this.dropRegistrations.delete(sessionId)
+        this.claudeProjectors.delete(sessionId)
         this.codexProjectors.delete(sessionId)
         if (!this.dropRegistrations.size && this.dropPoller) {
             clearInterval(this.dropPoller)
             this.dropPoller = null
         }
+    }
+
+    claudeHasActiveTools (sessionId: string): boolean {
+        return this.claudeProjectors.get(sessionId)?.hasActiveTools ?? false
     }
 
     private pollDropDirs (): void {
@@ -188,6 +195,7 @@ export class HookIngressService {
         if (event) {
             this.zone.run(() => this.bus.publish(event))
             if (event.kind === 'session-ended') {
+                this.claudeProjectors.delete(sessionId)
                 this.codexProjectors.delete(sessionId)
             }
         }
@@ -205,7 +213,7 @@ export class HookIngressService {
             case 'pi':
                 return translatePiHook(sessionId, payload, ts)
             default:
-                return translateClaudeHook(sessionId, payload, ts)
+                return this.claudeProjectorFor(sessionId).apply(payload, ts)
         }
     }
 
@@ -257,6 +265,7 @@ export class HookIngressService {
                 // http callbacks run outside Angular — re-enter for change detection
                 this.zone.run(() => this.bus.publish(event))
                 if (event.kind === 'session-ended') {
+                    this.claudeProjectors.delete(sessionId)
                     this.codexProjectors.delete(sessionId)
                 }
             }
@@ -268,6 +277,15 @@ export class HookIngressService {
         if (!projector) {
             projector = new CodexHookProjector(sessionId)
             this.codexProjectors.set(sessionId, projector)
+        }
+        return projector
+    }
+
+    private claudeProjectorFor (sessionId: string): ClaudeHookProjector {
+        let projector = this.claudeProjectors.get(sessionId)
+        if (!projector) {
+            projector = new ClaudeHookProjector(sessionId)
+            this.claudeProjectors.set(sessionId, projector)
         }
         return projector
     }

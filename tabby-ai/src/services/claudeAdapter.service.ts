@@ -5,8 +5,15 @@ import * as crypto from 'crypto'
 import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
+import { BaseSession } from 'tabby-terminal'
 
-import { WslCliRuntimeTarget } from '../api'
+import { DetectedCli, WslCliRuntimeTarget } from '../api'
+import {
+    CLAUDE_HOOK_EVENTS,
+    CLAUDE_HOOK_SESSION_ENV,
+    CLAUDE_HOOK_TEMP_ENV,
+    claudeHookRecovery,
+} from '../claudeHooks'
 import { claudeEnvironmentOverrides } from '../claudeEnvironment'
 import { spinnerAbsenceEndsTurn } from '../events'
 import {
@@ -16,14 +23,14 @@ import {
 import {
     translateWindowsPathForWsl, translateWindowsPathWithMountRoot, windowsExecutableRunsInWsl,
 } from '../runtimeTargets'
-import { selectWslHookTransport, wslDropHookCommand } from '../wslHookBridge'
+import {
+    selectWslHookTransport, windowsDropHookCommand, wslDropHookCommand,
+} from '../wslHookBridge'
 import { CliScannerService } from './cliScanner.service'
 import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
 import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalCliShim.service'
-
-const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'Notification', 'Stop', 'SessionEnd']
 
 /**
  * claude's own status line: `✻ Flambéing… (17s · ↓ 1.2k tokens · esc to interrupt)`.
@@ -155,13 +162,17 @@ export class ClaudeAdapterService {
         if (this.armed.has(tab)) {
             return
         }
-        const isDirectLaunch = tab.profile.type === 'ai-cli'
-        const kind = isDirectLaunch
-            ? tab.profile.options['aiCli']?.kind
-            : 'claude-code'
+        const { isDirectLaunch, kind } = this.launchIdentity(tab)
         // Adapter ownership is explicit: future full-tier CLIs get their own
         // event translator while reusing TerminalCliShimService.
         if (kind !== 'claude-code') {
+            return
+        }
+        // During renderer recovery the tab exists before its PTY session is
+        // reattached. Recovery markers are therefore the primary signal: if
+        // we wait for tab.session, this method can mistake the recovering tab
+        // for a fresh launch and replace the route used by the live process.
+        if (this.claimExistingRun(tab, kind)) {
             return
         }
         const detected = isDirectLaunch
@@ -194,7 +205,16 @@ export class ClaudeAdapterService {
             return
         }
         const { injectDir, settingsPath } = written
+        const dropDir = path.join(injectDir, DROP_DIR_NAME)
+        try {
+            fs.mkdirSync(dropDir, { recursive: true })
+        } catch (error) {
+            console.warn('[tabby-ai] could not create Claude hook drop directory', error)
+            return
+        }
         let settingsArgument = settingsPath
+        let shim: TerminalCliShimInstallation|null = null
+        let fileDropRegistered = false
 
         const targetId = tab.profile.options['aiCli']?.targetId
         const wslTarget = isDirectLaunch
@@ -202,10 +222,6 @@ export class ClaudeAdapterService {
             : null
         if (wslTarget?.type === 'wsl') {
             const curlPath = path.join(process.env.WINDIR ?? 'C:\\Windows', 'System32', 'curl.exe')
-            const dropDir = path.join(injectDir, DROP_DIR_NAME)
-            try {
-                fs.mkdirSync(dropDir, { recursive: true })
-            } catch { /* path translation still works; only writes would fail */ }
 
             const mountRoot = wslTarget.windowsMountRoot
             const bridge = mountRoot
@@ -256,6 +272,7 @@ export class ClaudeAdapterService {
                     { mode: 0o600 },
                 )
                 this.ingress.registerFileDrop(sessionId, dropDir)
+                fileDropRegistered = true
             } else if (transport === 'curl') {
                 fs.writeFileSync(
                     settingsPath,
@@ -269,8 +286,83 @@ export class ClaudeAdapterService {
                 console.warn(`[tabby-ai] WSL hook bridge unavailable in ${wslTarget.distro}; Claude will launch without full monitoring`)
                 return
             }
+        } else {
+            const command = process.platform === 'win32'
+                ? windowsDropHookCommand(dropDir, sessionId)
+                : wslDropHookCommand(dropDir, sessionId)
+            try {
+                fs.writeFileSync(
+                    settingsPath,
+                    JSON.stringify(this.settingsWithCommand(command), null, 2),
+                    { mode: 0o600 },
+                )
+            } catch (error) {
+                console.warn('[tabby-ai] could not write native Claude file-drop hook', error)
+                return
+            }
+            this.ingress.registerFileDrop(sessionId, dropDir)
+            fileDropRegistered = true
         }
 
+        const installedShim = this.installLaunchSettings({
+            tab, isDirectLaunch, detected, injectDir, settingsPath, settingsArgument, sessionId,
+        })
+        if (installedShim === false) {
+            return
+        }
+        shim = installedShim
+
+        // empty string beats any inherited value in mergeEnv and reads as unset
+        const persistedEnv = Object.fromEntries(
+            Object.entries(tab.profile.options.env).filter(([key]) =>
+                key !== CLAUDE_HOOK_SESSION_ENV && key !== CLAUDE_HOOK_TEMP_ENV,
+            ),
+        )
+        const recoveryEnv: Record<string, string> = fileDropRegistered ? {
+            [CLAUDE_HOOK_SESSION_ENV]: sessionId,
+            [CLAUDE_HOOK_TEMP_ENV]: path.basename(injectDir),
+        } : {}
+        tab.profile.options.env = {
+            ...persistedEnv,
+            ...claudeEnvironmentOverrides(),
+            ...recoveryEnv,
+        }
+        this.markRecoveryStateChanged(tab)
+
+        this.registerRun(tab, sessionId, kind, settingsPath, shim)
+    }
+
+    private claimExistingRun (tab: TerminalTabComponent, kind: string): boolean {
+        if (this.restoreRun(tab, kind)) {
+            this.armed.add(tab)
+            return true
+        }
+        if (!tab.session) {
+            return false
+        }
+        this.armed.add(tab)
+        console.warn('[tabby-ai] live Claude session has no recoverable hook route; full listening skipped')
+        return true
+    }
+
+    private launchIdentity (tab: TerminalTabComponent): { isDirectLaunch: boolean, kind: string|undefined } {
+        const isDirectLaunch = tab.profile.type === 'ai-cli'
+        return {
+            isDirectLaunch,
+            kind: isDirectLaunch ? tab.profile.options['aiCli']?.kind : 'claude-code',
+        }
+    }
+
+    private installLaunchSettings (input: {
+        tab: TerminalTabComponent
+        isDirectLaunch: boolean
+        detected: DetectedCli|null
+        injectDir: string
+        settingsPath: string
+        settingsArgument: string
+        sessionId: string
+    }): TerminalCliShimInstallation|null|false {
+        const { tab, isDirectLaunch, detected, injectDir, settingsPath, settingsArgument, sessionId } = input
         if (isDirectLaunch) {
             const args = tab.profile.options.args.slice()
             for (let i = args.length - 2; i >= 0; i--) {
@@ -280,47 +372,101 @@ export class ClaudeAdapterService {
             }
             args.push('--settings', settingsArgument)
             tab.profile.options.args = args
-        } else {
-            const shimDirectory = path.join(injectDir, `${SHIM_DIR_PREFIX}${process.pid}-${sessionId}`)
+            return null
+        }
+
+        const shimDirectory = path.join(injectDir, `${SHIM_DIR_PREFIX}${process.pid}-${sessionId}`)
+        try {
+            const shim = this.terminalShim.install(
+                tab,
+                detected!,
+                shimDirectory,
+                ['--settings', settingsPath],
+            )
+            this.shimInstallations.set(tab, shim)
+            return shim
+        } catch (error) {
             try {
-                this.shimInstallations.set(tab, this.terminalShim.install(
-                    tab,
-                    detected!,
-                    shimDirectory,
-                    ['--settings', settingsPath],
-                ))
-            } catch (error) {
-                try {
-                    fs.unlinkSync(settingsPath)
-                } catch { /* already gone */ }
-                console.error('[tabby-ai] could not install terminal CLI shim, session will use process detection', error)
-                return
-            }
+                fs.unlinkSync(settingsPath)
+            } catch { /* already gone */ }
+            this.ingress.unregisterFileDrop(sessionId)
+            console.error('[tabby-ai] could not install terminal CLI shim, session will use process detection', error)
+            return false
         }
+    }
 
-        // empty string beats any inherited value in mergeEnv and reads as unset
-        tab.profile.options.env = {
-            ...tab.profile.options.env,
-            ...claudeEnvironmentOverrides(),
+    private restoreRun (tab: TerminalTabComponent, kind: string): boolean {
+        const recovery = claudeHookRecovery(tab.profile.options.env)
+        if (!recovery) {
+            return false
         }
+        const injectDir = path.join(os.tmpdir(), recovery.tempName)
+        const resolved = path.resolve(injectDir)
+        const dropDir = path.join(resolved, DROP_DIR_NAME)
+        if (
+            path.dirname(resolved) !== path.resolve(os.tmpdir()) ||
+            !isHookDirName(path.basename(resolved)) ||
+            !fs.existsSync(dropDir)
+        ) {
+            return false
+        }
+        const settingsName = readDirOrEmpty(resolved).find(name =>
+            name.endsWith(`-${recovery.sessionId}.json`),
+        )
+        if (!settingsName) {
+            return false
+        }
+        this.ingress.registerFileDrop(recovery.sessionId, dropDir)
+        this.registerRun(
+            tab,
+            recovery.sessionId,
+            kind,
+            path.join(resolved, settingsName),
+            null,
+        )
+        console.info(`[tabby-ai] restored Claude hook route [${recovery.sessionId.slice(0, 8)}]`)
+        return true
+    }
 
+    private registerRun (
+        tab: TerminalTabComponent,
+        sessionId: string,
+        kind: string,
+        settingsPath: string,
+        shim: TerminalCliShimInstallation|null,
+    ): void {
         this.directory.bind({ sessionId, kind, pane: tab })
         this.panes.set(sessionId, tab)
         this.startScraper()
 
-        tab.sessionChanged$.subscribe(session => {
-            console.debug(`[tabby-ai] adapter [${sessionId.slice(0, 8)}] sessionChanged: ${session ? 'live' : 'null'}`)
-            session?.destroyed$.subscribe(() => {
+        let currentSession: BaseSession|null = tab.session
+        const attachSession = (session: BaseSession|null): void => {
+            if (!session) {
+                return
+            }
+            session.destroyed$.subscribe(() => {
                 console.debug(`[tabby-ai] adapter [${sessionId.slice(0, 8)}] session destroyed`)
                 this.onSessionDown(sessionId)
             })
+        }
+        attachSession(currentSession)
+        tab.sessionChanged$.subscribe(session => {
+            if (session === currentSession) {
+                return
+            }
+            currentSession = session
+            console.debug(`[tabby-ai] adapter [${sessionId.slice(0, 8)}] sessionChanged: ${session ? 'live' : 'null'}`)
+            attachSession(session)
         })
         tab.destroyed$.subscribe(() => {
             try {
                 fs.unlinkSync(settingsPath)
             } catch { /* already gone */ }
+            // unregister also drops the stateful projector. It is safe for the
+            // rare curl fallback, where no file registration exists.
             this.ingress.unregisterFileDrop(sessionId)
-            this.shimInstallations.get(tab)?.remove()
+            shim?.remove()
+            this.shimInstallations.delete(tab)
             this.panes.delete(sessionId)
             this.directory.unbind(sessionId)
             this.spinnerMisses.delete(sessionId)
@@ -328,6 +474,13 @@ export class ClaudeAdapterService {
             this.stopScraperIfIdle()
             this.zone.run(() => this.bus.dropSession(sessionId))
         })
+    }
+
+    private markRecoveryStateChanged (tab: TerminalTabComponent): void {
+        const recoveryTab = tab as unknown as {
+            recoveryStateChangedHint: { next: () => void }
+        }
+        recoveryTab.recoveryStateChangedHint.next()
     }
 
     /**
@@ -439,6 +592,13 @@ export class ClaudeAdapterService {
             this.spinnerMisses.set(sessionId, misses)
             const quietFor = Date.now() - (snapshot.lastEvent?.ts ?? snapshot.since)
             const observedThisTurn = this.spinnerObservedForTurn.get(sessionId) === snapshot.since
+            // A structured PreToolUse without its matching result means the
+            // tool is still authoritative. Status rows can disappear while a
+            // long Bash/WebSearch/agent call owns the screen; absence is not
+            // evidence that the turn ended.
+            if (this.ingress.claudeHasActiveTools(sessionId)) {
+                continue
+            }
             if (!spinnerAbsenceEndsTurn(misses, quietFor, observedThisTurn)) {
                 continue
             }
@@ -501,7 +661,7 @@ export class ClaudeAdapterService {
 
     private settingsWithCommand (command: string): unknown {
         const hooks: Record<string, unknown> = {}
-        for (const event of HOOK_EVENTS) {
+        for (const event of CLAUDE_HOOK_EVENTS) {
             hooks[event] = [{ hooks: [{ type: 'command', command, timeout: 10 }] }]
         }
         return { hooks }

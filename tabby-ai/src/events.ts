@@ -49,6 +49,16 @@ export interface AiEvent {
      * native root/child sessions share one Vibby pane. Claude leaves it unset.
      */
     projectedState?: AiSessionState
+
+    /**
+     * What the session is doing after this event has been recorded. This keeps
+     * instantaneous history such as `tool-result` out of the live activity
+     * slot while preserving it in the feed.
+     */
+    projectedActivity?: {
+        kind: AiEventKind
+        summary: string
+    }
 }
 
 export interface AiSessionSnapshot {
@@ -61,11 +71,14 @@ export interface AiSessionSnapshot {
 
     lastEvent: AiEvent | null
 
+    /** Current activity, which can differ from the most recent history event. */
+    activity?: AiEvent | null
+
     /**
      * Low-confidence live caption scraped from the CLI's own status line
-     * (e.g. claude's `Flambéing… (17s · ↓ 1.2k tokens)`). Survives events that
-     * keep the session working — the spinner keeps running across tool calls —
-     * and is dropped the moment the state leaves `working`.
+     * (e.g. claude's `Flambéing… (17s · ↓ 1.2k tokens)`). A structured event
+     * clears it because that event is a newer activity boundary; the scraper
+     * can publish a fresh status afterward.
      */
     liveStatus?: string | null
 }
@@ -90,7 +103,16 @@ export function clampSummary (text: string): string {
 export function sanitizeEvent (event: AiEvent): AiEvent {
     const safe = { ...event } as AiEvent & { raw?: unknown }
     delete safe.raw
-    return { ...safe, summary: clampSummary(event.summary) }
+    return {
+        ...safe,
+        summary: clampSummary(event.summary),
+        ...event.projectedActivity ? {
+            projectedActivity: {
+                ...event.projectedActivity,
+                summary: clampSummary(event.projectedActivity.summary),
+            },
+        } : {},
+    }
 }
 
 /**
@@ -107,7 +129,7 @@ export function stateAfter (kind: AiEventKind): AiSessionState | null {
         case 'tool-result': return 'working'
         case 'permission-request': return 'needs-you'
         case 'question-request': return 'needs-you'
-        case 'request-resolved': return null
+        case 'request-resolved': return 'working'
         case 'retrying': return 'working'
         case 'notification': return 'needs-you'
         case 'turn-completed': return 'idle'
@@ -120,12 +142,24 @@ export function stateAfter (kind: AiEventKind): AiSessionState | null {
 export function reduceSnapshot (prev: AiSessionSnapshot | null, event: AiEvent): AiSessionSnapshot {
     const prevState = prev?.state ?? null
     const nextState = event.projectedState ?? stateAfter(event.kind) ?? prevState ?? 'idle'
+    const activity = event.projectedActivity
+        ? {
+            ...event,
+            kind: event.projectedActivity.kind,
+            summary: event.projectedActivity.summary,
+            projectedActivity: undefined,
+        }
+        : event
     return {
         sessionId: event.sessionId,
         state: nextState,
         since: prevState === nextState && prev ? prev.since : event.ts,
         lastEvent: event,
-        liveStatus: nextState === 'working' ? prev?.liveStatus ?? null : null,
+        activity,
+        // Every structured event is a newer activity boundary. Keeping a
+        // spinner scraped before a tool call/result makes the rail lie about
+        // what is happening after that boundary.
+        liveStatus: null,
     }
 }
 

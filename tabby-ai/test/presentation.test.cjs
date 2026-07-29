@@ -39,6 +39,16 @@ assert.equal(
     })),
     '🛠️ On it',
 )
+assert.equal(
+    activityLabelKey(facts({
+        sessionId: 's',
+        snapshot: snap('working', {
+            lastEvent: { kind: 'tool-result', summary: 'web done' },
+            activity: { kind: 'thinking', summary: 'thinking' },
+        }),
+    })),
+    '🧠 Thinking',
+)
 
 assert.equal(
     activityLabelKey(facts({
@@ -95,6 +105,25 @@ assert.deepEqual(
     captionFor(webSearch),
     { text: '🌐 web' },
     'rail: tool call must remain visible over the spinner',
+)
+
+const completedWebSearch = facts({
+    sessionId: 's',
+    snapshot: snap('working', {
+        lastEvent: { kind: 'tool-result', summary: 'web done' },
+        activity: { kind: 'thinking', summary: 'thinking' },
+        liveStatus: 'Wandering… (13s)',
+    }),
+})
+assert.deepEqual(
+    captionFor(completedWebSearch),
+    { text: 'Wandering… (13s)' },
+    'a completed tool cannot hide the subsequent live reasoning status',
+)
+assert.deepEqual(
+    lastEventCaptionFor(completedWebSearch),
+    { text: '🌐 web done' },
+    'the completed tool remains available in the history feed',
 )
 
 // falls back to the last event when the spinner is not running

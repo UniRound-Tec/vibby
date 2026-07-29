@@ -50,6 +50,26 @@ export function wslDropHookCommand (dropDirPosix: string, sessionId: string): st
     return `f=$(mktemp ${template}) && cat > "$f" && mv "$f" "$f.json"`
 }
 
+function quotePowerShellSingle (value: string): string {
+    return `'${value.replace(/'/g, '\'\'')}'`
+}
+
+/** Atomic file-drop command for native Windows Claude hooks. */
+export function windowsDropHookCommand (dropDir: string, sessionId: string): string {
+    const directory = quotePowerShellSingle(dropDir)
+    const session = quotePowerShellSingle(sessionId)
+    const script = [
+        `$d=${directory}`,
+        `$s=${session}`,
+        '$n=[IO.Path]::GetRandomFileName().Replace(\'.\',\'\').Substring(0,6)',
+        '$f=[IO.Path]::Combine($d,$s+\'.\'+$n)',
+        '$u=[Text.UTF8Encoding]::new($false)',
+        '[IO.File]::WriteAllText($f,[Console]::In.ReadToEnd(),$u)',
+        '[IO.File]::Move($f,$f+\'.json\')',
+    ].join(';')
+    return `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { ${script} }"`
+}
+
 /** Session a drop file belongs to, or null for anything the command did not write */
 export function dropFileSessionId (name: string): string | null {
     return DROP_FILE_RE.exec(name)?.[1] ?? null
