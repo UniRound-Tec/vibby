@@ -104,6 +104,31 @@ assert.deepEqual(
     ['--distribution', 'Ubuntu', '--cd', '~', '--exec', '/usr/bin/pi', '-e', '/mnt/c/Temp/vibby-extension.ts', '--model', 'test'],
     'WSL wrapper',
 )
+assert.deepEqual(
+    injectPiExtensionArgs(
+        [
+            '--distribution', 'Ubuntu',
+            '--cd', '~',
+            '--exec',
+            '/usr/bin/env',
+            'PATH=/home/jesse/.nvm/versions/node/v22.22.3/bin:/usr/bin',
+            '/home/jesse/.nvm/versions/node/v22.22.3/bin/pi',
+            '--model', 'test',
+        ],
+        '/mnt/c/Temp/vibby-extension.ts',
+    ),
+    [
+        '--distribution', 'Ubuntu',
+        '--cd', '~',
+        '--exec',
+        '/usr/bin/env',
+        'PATH=/home/jesse/.nvm/versions/node/v22.22.3/bin:/usr/bin',
+        '/home/jesse/.nvm/versions/node/v22.22.3/bin/pi',
+        '-e', '/mnt/c/Temp/vibby-extension.ts',
+        '--model', 'test',
+    ],
+    'WSL env PATH wrapper',
+)
 
 // Hot restoration removes Vibby's dead temp extension without touching user extensions.
 assert.deepEqual(

@@ -1,5 +1,6 @@
 import { AiEvent } from './events'
 import { quoteSh } from './paths'
+import { wslExecProgramIndex } from './runtimeTargets'
 
 export const CODEX_HOOK_ENDPOINT_ENV = 'VIBBY_CODEX_HOOK_ENDPOINT'
 export const CODEX_HOOK_DROP_DIR_ENV = 'VIBBY_CODEX_HOOK_DROP_DIR'
@@ -73,8 +74,9 @@ export const CODEX_PROFILE_NAME = 'vibby'
 
 /**
  * Injects Codex-only arguments without leaking them into the WSL launcher.
- * A WSL profile is `wsl.exe ... --exec <codex> <codex args>`, so its insertion
- * point is after the executable rather than at the beginning of argv.
+ * A WSL profile is `wsl.exe ... --exec [env PATH=...] <codex> <codex args>`,
+ * so its insertion point is after the real executable rather than at the
+ * beginning of argv.
  */
 export function injectCodexLaunchArgs (
     args: string[],
@@ -84,14 +86,14 @@ export function injectCodexLaunchArgs (
     if (!wsl) {
         return [...injected, ...args]
     }
-    const exec = args.indexOf('--exec')
-    if (exec < 0 || !args[exec + 1]) {
+    const program = wslExecProgramIndex(args)
+    if (program < 0) {
         return null
     }
     return [
-        ...args.slice(0, exec + 2),
+        ...args.slice(0, program + 1),
         ...injected,
-        ...args.slice(exec + 2),
+        ...args.slice(program + 1),
     ]
 }
 

@@ -30,6 +30,12 @@ export interface WslCliRuntimeTarget {
      * scanning so launch-time adapters never race PTY spawn on another wsl.exe.
      */
     ipv4Address?: string|null
+    /**
+     * Login/interactive shell PATH from the same -i -l scan that found CLIs.
+     * WSL `--exec` skips the profile, so `#!/usr/bin/env node` would otherwise
+     * resolve to a stale system Node while the script itself lives under nvm.
+     */
+    shellPath?: string|null
 }
 
 export type CliRuntimeTarget = NativeCliRuntimeTarget | WslCliRuntimeTarget

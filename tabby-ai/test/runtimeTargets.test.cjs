@@ -10,6 +10,7 @@ const {
     preferredRuntimeTarget,
     shouldScanWslTarget,
     usesMirroredWslNetworking,
+    wslExecProgramIndex,
     wslLaunchCommand,
     wslTargetId,
 } = require('../.test-build/runtimeTargets.js')
@@ -103,6 +104,46 @@ assert.deepEqual(
         ],
     },
 )
+assert.deepEqual(
+    wslLaunchCommand(
+        {
+            ...targets[0],
+            shellPath: '/home/me/.nvm/versions/node/v22.22.3/bin:/usr/bin:/bin',
+        },
+        '/home/me/.nvm/versions/node/v22.22.3/bin/codex',
+        ['--help'],
+        '~',
+        { WINDIR: 'D:\\Windows' },
+    ),
+    {
+        command: 'D:\\Windows\\System32\\wsl.exe',
+        args: [
+            '--distribution', 'Ubuntu Dev',
+            '--cd', '~',
+            '--exec',
+            '/usr/bin/env',
+            'PATH=/home/me/.nvm/versions/node/v22.22.3/bin:/usr/bin:/bin',
+            '/home/me/.nvm/versions/node/v22.22.3/bin/codex',
+            '--help',
+        ],
+    },
+    'login-shell PATH must wrap WSL --exec so shebangs resolve nvm node',
+)
+
+assert.equal(
+    wslExecProgramIndex([
+        '--distribution', 'Ubuntu', '--cd', '~', '--exec', '/usr/bin/codex', '--help',
+    ]),
+    5,
+)
+assert.equal(
+    wslExecProgramIndex([
+        '--distribution', 'Ubuntu', '--cd', '~', '--exec',
+        '/usr/bin/env', 'PATH=/home/me/.nvm/bin:/usr/bin', '/home/me/.nvm/bin/codex', '--help',
+    ]),
+    7,
+)
+assert.equal(wslExecProgramIndex(['--distribution', 'Ubuntu']), -1)
 assert.equal(isWindowsMountedWslPath('C:\\Users\\Jesse\\bin\\codex'), true)
 assert.equal(isWindowsMountedWslPath('\\\\wsl.localhost\\Ubuntu\\home\\jesse\\codex'), false)
 assert.equal(usesMirroredWslNetworking('C:\\Users\\Me', () => '[wsl2]\nnetworkingMode=mirrored\n'), true)

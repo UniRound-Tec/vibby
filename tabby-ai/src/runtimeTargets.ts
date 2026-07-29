@@ -172,6 +172,10 @@ export function wslLaunchCommand (
     environment = process.env,
 ): { command: string, args: string[] } {
     const targetCwd = cwd?.trim()
+    const shellPath = target.shellPath?.trim()
+    const execArgs = shellPath
+        ? ['/usr/bin/env', `PATH=${shellPath}`, executable, ...args]
+        : [executable, ...args]
     return {
         command: wslExecutablePath(environment),
         args: [
@@ -180,10 +184,29 @@ export function wslLaunchCommand (
             '--cd',
             targetCwd ? targetCwd : '~',
             '--exec',
-            executable,
-            ...args,
+            ...execArgs,
         ],
     }
+}
+
+/**
+ * Index of the real Linux program after `--exec`, skipping the optional
+ * `/usr/bin/env PATH=...` wrapper that restores login-shell PATH for shebangs.
+ */
+export function wslExecProgramIndex (args: string[]): number {
+    const exec = args.indexOf('--exec')
+    if (exec < 0 || !args[exec + 1]) {
+        return -1
+    }
+    if (
+        args[exec + 1] === '/usr/bin/env' &&
+        typeof args[exec + 2] === 'string' &&
+        args[exec + 2].startsWith('PATH=') &&
+        args[exec + 3]
+    ) {
+        return exec + 3
+    }
+    return exec + 1
 }
 
 export function isWindowsMountedWslPath (windowsPath: string): boolean {

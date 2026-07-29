@@ -1,5 +1,5 @@
 import { AiEvent } from './events'
-import { appendWslenv } from './runtimeTargets'
+import { appendWslenv, wslExecProgramIndex } from './runtimeTargets'
 
 export const PI_HOOK_ENDPOINT_ENV = 'VIBBY_PI_HOOK_ENDPOINT'
 export const PI_HOOK_DROP_DIR_ENV = 'VIBBY_PI_HOOK_DROP_DIR'
@@ -113,11 +113,20 @@ export function piHookRecovery (
  * Inserts Pi's extension argument after any platform launcher.
  *
  * Windows npm packages may resolve to cmd or PowerShell shims; WSL profiles
- * wrap the Linux executable with wsl.exe. macOS/Linux take the direct branch.
+ * wrap the Linux executable with wsl.exe (optionally via `/usr/bin/env PATH=`).
+ * macOS/Linux take the direct branch.
  */
 export function injectPiExtensionArgs (wrappedArgs: string[], extensionPath: string): string[] {
     if (wrappedArgs.length >= 6 && wrappedArgs[0] === '--distribution' && wrappedArgs[4] === '--exec') {
-        return [...wrappedArgs.slice(0, 6), '-e', extensionPath, ...wrappedArgs.slice(6)]
+        const program = wslExecProgramIndex(wrappedArgs)
+        if (program >= 0) {
+            return [
+                ...wrappedArgs.slice(0, program + 1),
+                '-e',
+                extensionPath,
+                ...wrappedArgs.slice(program + 1),
+            ]
+        }
     }
     if (wrappedArgs.length >= 2 && wrappedArgs[0].toLowerCase() === '/c') {
         return [wrappedArgs[0], wrappedArgs[1], '-e', extensionPath, ...wrappedArgs.slice(2)]

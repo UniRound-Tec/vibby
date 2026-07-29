@@ -43,6 +43,29 @@ assert.deepEqual(
     'Codex arguments must be inserted after the WSL --exec executable',
 )
 assert.deepEqual(
+    injectCodexLaunchArgs(
+        [
+            '--distribution', 'Ubuntu-22.04',
+            '--cd', '~',
+            '--exec',
+            '/usr/bin/env',
+            'PATH=/home/jesse/.nvm/versions/node/v22.22.3/bin:/usr/bin',
+            '/home/jesse/.nvm/versions/node/v22.22.3/bin/codex',
+        ],
+        injectedArgs,
+        true,
+    ),
+    [
+        '--distribution', 'Ubuntu-22.04',
+        '--cd', '~',
+        '--exec',
+        '/usr/bin/env',
+        'PATH=/home/jesse/.nvm/versions/node/v22.22.3/bin:/usr/bin',
+        '/home/jesse/.nvm/versions/node/v22.22.3/bin/codex',
+    ].concat(injectedArgs),
+    'Codex arguments must follow the real CLI after the env PATH wrapper',
+)
+assert.deepEqual(
     injectCodexLaunchArgs([], injectedArgs, false),
     injectedArgs,
     'native Codex arguments remain direct process arguments',
