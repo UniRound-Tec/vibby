@@ -57,7 +57,9 @@ Vibby is not trying to replace Warp’s prompt AI or your editor’s agent panel
 | **Codex CLI** | Full monitoring when hooks are available |
 | **OpenCode** | Full monitoring via local SSE |
 | **pi** | Full monitoring via extension hooks (`≥ 0.82.1`) |
-| GitHub Copilot CLI, Cursor Agent, Cline, Qwen Code, Kimi Code, Grok Build, Kiro, Kilo, Crush, Factory Droid, Devin, Amp, Antigravity, … | Detect + one-click launch |
+| **Kimi Code** | Full monitoring via injected hooks |
+| **Grok Build** | Full monitoring via a permanent hook bridge |
+| GitHub Copilot CLI, Cursor Agent, Cline, Qwen Code, Kiro, Kilo, Crush, Factory Droid, Devin, Amp, Antigravity, … | Detect + one-click launch |
 
 Cards marked **Listening** are fully monitored. Everything else can still be launched; Vibby just will not invent state it cannot see.
 

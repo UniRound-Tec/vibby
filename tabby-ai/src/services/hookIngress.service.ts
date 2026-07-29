@@ -8,10 +8,11 @@ import { CodexHookProjector } from '../codexHooks'
 import { DROP_FILE_LIMIT, dropFileSessionId, sortDropFiles } from '../wslHookBridge'
 import { translatePiHook } from '../piHooks'
 import { translateKimiHook } from '../kimiHooks'
+import { translateGrokHook } from '../grokHooks'
 import { AiEventBusService } from './eventBus.service'
 
 const BODY_LIMIT = 1024 * 1024
-type HookSource = 'claude'|'codex'|'pi'|'kimi'
+type HookSource = 'claude'|'codex'|'pi'|'kimi'|'grok'
 
 /**
  * Cadence for the file-drop lane (WSL distros without Windows-binary
@@ -128,6 +129,13 @@ export class HookIngressService {
         return `http://127.0.0.1:${this.port}/vibby/${this.token}/kimi/${sessionId}`
     }
 
+    grokEndpointFor (sessionId: string): string {
+        if (!this.server) {
+            throw new Error('hook ingress is not running')
+        }
+        return `http://127.0.0.1:${this.port}/vibby/${this.token}/grok/${sessionId}`
+    }
+
     /**
      * Second lane of the ingress: hook payloads arriving as files instead of
      * HTTP requests, for WSL sessions whose distro cannot reach the loopback
@@ -222,6 +230,8 @@ export class HookIngressService {
                 return translatePiHook(sessionId, payload, ts)
             case 'kimi':
                 return translateKimiHook(sessionId, payload, ts)
+            case 'grok':
+                return translateGrokHook(sessionId, payload, ts)
             default:
                 return this.claudeProjectorFor(sessionId).apply(payload, ts)
         }
@@ -238,7 +248,7 @@ export class HookIngressService {
     }
 
     private handle (req: http.IncomingMessage, res: http.ServerResponse): void {
-        const match = /^\/vibby\/([0-9a-f]{32})\/(event|codex|pi|kimi)\/([\w-]{1,64})$/.exec(req.url ?? '')
+        const match = /^\/vibby\/([0-9a-f]{32})\/(event|codex|pi|kimi|grok)\/([\w-]{1,64})$/.exec(req.url ?? '')
         if (req.method !== 'POST' || !match || !this.tokenMatches(match[1])) {
             res.statusCode = 404
             res.end()

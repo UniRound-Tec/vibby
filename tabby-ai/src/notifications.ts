@@ -24,13 +24,14 @@ export const NOTIFICATION_SESSION_ID_MAX_LENGTH = 128
  */
 export type AiNotificationReason = 'needs-you' | 'error' | 'idle'
 
-export type AiNotificationCliKind = 'claude-code' | 'codex' | 'opencode' | 'kimi-code'
+export type AiNotificationCliKind = 'claude-code' | 'codex' | 'opencode' | 'kimi-code' | 'grok-build'
 
 export const AI_NOTIFICATION_CLI_KINDS: readonly AiNotificationCliKind[] = [
     'claude-code',
     'codex',
     'opencode',
     'kimi-code',
+    'grok-build',
 ]
 
 export interface AiNotificationRequest {

@@ -57,7 +57,9 @@ Vibby 不打算替代 Warp 的提示词 AI，也不替代编辑器里的 agent �
 | **Codex CLI** | 完整监听（hooks 可用时） |
 | **OpenCode** | 完整监听（本地 SSE） |
 | **pi** | 完整监听（扩展 hooks，需 `≥ 0.82.1`） |
-| GitHub Copilot CLI、Cursor Agent、Cline、Qwen Code、Kimi Code、Grok Build、Kiro、Kilo、Crush、Factory Droid、Devin、Amp、Antigravity 等 | 可探测 + 一键启动 |
+| **Kimi Code** | 完整监听（自动注入 hooks） |
+| **Grok Build** | 完整监听（常驻 hook 桥） |
+| GitHub Copilot CLI、Cursor Agent、Cline、Qwen Code、Kiro、Kilo、Crush、Factory Droid、Devin、Amp、Antigravity 等 | 可探测 + 一键启动 |
 
 标有 **已接入（Listening）** 的卡片表示完整监听。其余仍可启动，只是不会伪造看不到的状态。
 

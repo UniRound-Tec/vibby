@@ -126,7 +126,7 @@ export const AI_CLI_REGISTRY: AiCliRegistryEntry[] = [
         versionArgs: ['--version'],
         versionPattern: VERSION,
         icon: require('./icons/grok-build.svg'),
-        tier: 'launch',
+        tier: 'full',
         docsUrl: 'https://docs.x.ai/build/overview',
     },
     {
