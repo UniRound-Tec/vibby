@@ -54,7 +54,14 @@ function quotePowerShellSingle (value: string): string {
     return `'${value.replace(/'/g, '\'\'')}'`
 }
 
-/** Atomic file-drop command for native Windows Claude hooks. */
+/**
+ * Atomic file-drop command for native Windows Claude hooks.
+ *
+ * stdin is copied as raw bytes and never decoded. `[Console]::In` decodes with
+ * the console code page, and CLIs spawn hooks under the system default — on a
+ * CP936 machine that read a `你好` prompt's UTF-8 bytes as GBK and delivered
+ * `浣犲ソ` to the rail.
+ */
 export function windowsDropHookCommand (dropDir: string, sessionId: string): string {
     const directory = quotePowerShellSingle(dropDir)
     const session = quotePowerShellSingle(sessionId)
@@ -63,8 +70,10 @@ export function windowsDropHookCommand (dropDir: string, sessionId: string): str
         `$s=${session}`,
         '$n=[IO.Path]::GetRandomFileName().Replace(\'.\',\'\').Substring(0,6)',
         '$f=[IO.Path]::Combine($d,$s+\'.\'+$n)',
-        '$u=[Text.UTF8Encoding]::new($false)',
-        '[IO.File]::WriteAllText($f,[Console]::In.ReadToEnd(),$u)',
+        '$i=[Console]::OpenStandardInput()',
+        '$m=New-Object IO.MemoryStream',
+        '$i.CopyTo($m)',
+        '[IO.File]::WriteAllBytes($f,$m.ToArray())',
         '[IO.File]::Move($f,$f+\'.json\')',
     ].join(';')
     return `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { ${script} }"`

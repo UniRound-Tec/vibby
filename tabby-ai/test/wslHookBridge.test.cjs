@@ -32,6 +32,11 @@ assert.ok(windowsCommand.startsWith('powershell.exe -NoLogo -NoProfile -NonInter
 assert.ok(windowsCommand.includes(`$s='${SESSION}'`))
 assert.ok(windowsCommand.includes(`C:\\Users\\o''brien\\AppData`), 'PowerShell quote is escaped')
 assert.ok(windowsCommand.includes('[IO.File]::Move'), 'final rename makes the file atomic')
+// regression: [Console]::In decodes stdin with the console code page, and CLIs
+// spawn hooks under the system default — a CP936 machine turned a `你好` prompt
+// into `浣犲ソ`. The payload must cross as raw bytes.
+assert.ok(!windowsCommand.includes('[Console]::In.'), 'stdin is never decoded')
+assert.ok(windowsCommand.includes('[IO.File]::WriteAllBytes'), 'payload is written as bytes')
 
 // --- drop file names ---
 // mktemp fills XXXXXX with [A-Za-z0-9]; the poller must take exactly what the
