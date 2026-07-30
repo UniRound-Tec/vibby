@@ -66,8 +66,6 @@ export const GROK_HOOK_EVENTS = [
     'SessionEnd',
 ] as const
 
-export type GrokHookEvent = typeof GROK_HOOK_EVENTS[number]
-
 /**
  * Hook timeout, seconds. Grok defaults `Stop`/`SubagentStop` to 600 because
  * those are commonly build gates; the bridge only forwards a payload, so it
@@ -227,7 +225,10 @@ export function grokHookEnvironment (
         injected.push(GROK_HOOK_ENDPOINT_ENV)
     }
     if (options.wsl) {
-        env.WSLENV = appendWslenv(existingEnv.WSLENV ?? process.env.WSLENV, injected)
+        const inheritedWslenv = Object.prototype.hasOwnProperty.call(existingEnv, 'WSLENV')
+            ? existingEnv.WSLENV
+            : process.env.WSLENV
+        env.WSLENV = appendWslenv(inheritedWslenv, injected)
     }
     return env
 }

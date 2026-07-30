@@ -31,8 +31,6 @@ export const KIMI_HOOK_EVENTS = [
     'SubagentStop',
 ] as const
 
-export type KimiHookEvent = typeof KIMI_HOOK_EVENTS[number]
-
 export interface KimiHookRecovery {
     sessionId: string
     tempName: string
@@ -134,7 +132,10 @@ export function kimiHookEnvironment (
         [KIMI_HOOK_TEMP_ENV]: tempName,
     }
     if (options.wsl) {
-        env.WSLENV = appendWslenv(existingEnv.WSLENV ?? process.env.WSLENV, [
+        const inheritedWslenv = Object.prototype.hasOwnProperty.call(existingEnv, 'WSLENV')
+            ? existingEnv.WSLENV
+            : process.env.WSLENV
+        env.WSLENV = appendWslenv(inheritedWslenv, [
             KIMI_CODE_HOME_ENV,
             KIMI_HOOK_SESSION_ENV,
             KIMI_HOOK_TEMP_ENV,

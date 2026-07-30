@@ -93,13 +93,17 @@ function grokWslDistroFromArgs (args: string[]): string|null {
         args[0] === '--distribution' &&
         args[4] === '--exec'
     ) {
-        return args[1]?.trim() || null
+        return args[1].trim() || null
     }
     return null
 }
 
 function nativeGrokHome (): string {
-    return process.env.GROK_HOME?.trim() || path.join(os.homedir(), '.grok')
+    const configured = process.env.GROK_HOME?.trim()
+    if (configured) {
+        return configured
+    }
+    return path.join(os.homedir(), '.grok')
 }
 
 function runWsl (distro: string, args: string[], timeout = 8000): Promise<string|null> {
@@ -116,7 +120,7 @@ function runWsl (distro: string, args: string[], timeout = 8000): Promise<string
             (error, stdout, stderr) => {
                 if (error) {
                     console.warn(
-                        `[tabby-ai] WSL helper failed distro=${distro} status=${(error as { status?: number }).status ?? '?'} stderr=${(stderr ?? '').slice(0, 300)}`,
+                        `[tabby-ai] WSL helper failed distro=${distro} status=${(error as { status?: number }).status ?? '?'} stderr=${stderr.slice(0, 300)}`,
                     )
                     resolve(null)
                     return
@@ -372,7 +376,7 @@ export class GrokAdapterService {
                 ),
             )
             : null
-        const wantsWsl = !!(wslTarget || wrappedWslDistro || targetId?.startsWith('wsl:'))
+        const wantsWsl = Boolean(wslTarget ?? wrappedWslDistro ?? targetId?.startsWith('wsl:'))
         if (wantsWsl && !wslTarget) {
             console.warn(`[tabby-ai] WSL target metadata unavailable for Grok (${wrappedWslDistro ?? targetId}); full support skipped`)
             return
@@ -409,7 +413,7 @@ export class GrokAdapterService {
             return
         }
 
-        let transport: { dropDir?: string|null, endpoint?: string|null }
+        let transport: { dropDir?: string|null, endpoint?: string|null } = { dropDir }
         let fileDropRegistered = false
 
         if (wslTarget?.type === 'wsl') {
@@ -424,7 +428,6 @@ export class GrokAdapterService {
                 aiCli.windowsMountRoot = wslTarget.windowsMountRoot
             }
         } else {
-            transport = { dropDir }
             this.ingress.registerFileDrop(sessionId, dropDir, 'grok')
             fileDropRegistered = true
         }
@@ -528,7 +531,10 @@ export class GrokAdapterService {
         if (!recovery) {
             return false
         }
-        const dropDir = String(tab.profile.options.env?.[GROK_HOOK_DROP_ENV] ?? '')
+        const env = tab.profile.options.env
+        const dropDir = Object.prototype.hasOwnProperty.call(env, GROK_HOOK_DROP_ENV)
+            ? env[GROK_HOOK_DROP_ENV]
+            : ''
         // Only the drop lane survives a reload: the endpoint carries the port
         // of an ingress that no longer exists. Windows paths are what the
         // poller reads, so a translated WSL path cannot be restored from here.

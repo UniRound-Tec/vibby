@@ -8,7 +8,7 @@ import { AiDisplayState } from './presentation'
 
 export function isReadmeDemo (): boolean {
     try {
-        if (typeof process !== 'undefined' && process.env?.VIBBY_README_DEMO === '1') {
+        if (typeof process !== 'undefined' && process.env.VIBBY_README_DEMO === '1') {
             return true
         }
         if (typeof localStorage !== 'undefined' && localStorage.getItem('vibby-readme-demo') === '1') {
@@ -43,7 +43,7 @@ export interface ReadmeDemoActivity {
 
 export function readmeDemoLang (): 'en'|'zh' {
     try {
-        if (typeof process !== 'undefined' && process.env?.VIBBY_README_DEMO_LANG === 'zh') {
+        if (typeof process !== 'undefined' && process.env.VIBBY_README_DEMO_LANG === 'zh') {
             return 'zh'
         }
         if (typeof localStorage !== 'undefined' && localStorage.getItem('vibby-readme-demo-lang') === 'zh') {
@@ -193,7 +193,7 @@ export function readmeDemoActivity (): ReadmeDemoActivity[] {
 
 export function readmeDemoFloatingSessions (sourceWindowId: number, now = Date.now()): FloatingSessionSnapshot[] {
     const zh = readmeDemoLang() === 'zh'
-    const stateLabel: Record<string, string> = zh
+    const stateLabel: Partial<Record<AiDisplayState, string>> = zh
         ? { 'needs-you': '等待确认', working: '运行中', idle: '已完成', error: '异常' }
         : { 'needs-you': 'Waiting', working: 'Working', idle: 'Idle', error: 'Error' }
     return readmeDemoSessions().map(session => ({

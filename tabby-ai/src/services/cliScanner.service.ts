@@ -358,9 +358,10 @@ export class CliScannerService {
             if (marker === -1) {
                 continue
             }
-            const [id, resolved, windowsPath] = line.slice(marker + WSL_RECORD.length).split('\t')
+            const [id, resolved, windowsPath] = line.slice(marker + WSL_RECORD.length)
+                .split('\t') as [string?, string?, string?]
             if (id === '__mount__') {
-                target.windowsMountRoot = resolved || null
+                target.windowsMountRoot = resolved ? resolved : null
                 continue
             }
             if (id === '__interop__') {
@@ -368,11 +369,12 @@ export class CliScannerService {
                 continue
             }
             if (id === '__ipv4__') {
-                target.ipv4Address = firstIpv4Address(resolved)
+                target.ipv4Address = resolved ? firstIpv4Address(resolved) : null
                 continue
             }
             if (id === '__path__') {
-                target.shellPath = resolved?.trim() || null
+                const shellPath = resolved?.trim()
+                target.shellPath = shellPath ? shellPath : null
                 continue
             }
             if (id && resolved && windowsPath && !isWindowsMountedWslPath(windowsPath) && !commands.has(id)) {

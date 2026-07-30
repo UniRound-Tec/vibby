@@ -7,8 +7,7 @@ import { Injectable, NgZone } from '@angular/core'
 import { AppService, BaseTabComponent, SplitTabComponent } from 'tabby-core'
 import { TerminalTabComponent } from 'tabby-local'
 
-import { DetectedCli } from '../api'
-import type { WslCliRuntimeTarget } from '../api'
+import type { DetectedCli, WslCliRuntimeTarget } from '../api'
 import {
     KIMI_CODE_HOME_ENV,
     KIMI_DROP_DIR_NAME,
@@ -139,7 +138,7 @@ function runWsl (distro: string, args: string[], timeout = 8000): Promise<string
             (error, stdout, stderr) => {
                 if (error) {
                     console.warn(
-                        `[tabby-ai] WSL helper failed distro=${distro} status=${(error as { status?: number }).status ?? '?'} stderr=${(stderr ?? '').slice(0, 300)}`,
+                        `[tabby-ai] WSL helper failed distro=${distro} status=${(error as { status?: number }).status ?? '?'} stderr=${stderr.slice(0, 300)}`,
                     )
                     resolve(null)
                     return
@@ -284,7 +283,7 @@ export class KimiAdapterService {
                 ),
             )
             : null
-        const wantsWsl = !!(wslTarget || wrappedWslDistro || targetId?.startsWith('wsl:'))
+        const wantsWsl = Boolean(wslTarget ?? wrappedWslDistro ?? targetId?.startsWith('wsl:'))
         if (wantsWsl && !wslTarget) {
             console.warn(`[tabby-ai] WSL target metadata unavailable for Kimi (${wrappedWslDistro ?? targetId}); full support skipped`)
             return
@@ -307,8 +306,7 @@ export class KimiAdapterService {
         }
 
         const tempName = path.basename(tempRoot)
-        let hookCommand: string
-        let homeForEnv: string
+        let hookHome = { command: '', home: '' }
         let fileDropRegistered = false
         let shim: TerminalCliShimInstallation|null = null
 
@@ -318,18 +316,19 @@ export class KimiAdapterService {
                 this.removeTempRoot(tempRoot)
                 return
             }
-            hookCommand = prepared.hookCommand
-            homeForEnv = prepared.home
+            hookHome = { command: prepared.hookCommand, home: prepared.home }
             fileDropRegistered = prepared.fileDropRegistered
             if (aiCli && !aiCli.windowsMountRoot) {
                 aiCli.windowsMountRoot = wslTarget.windowsMountRoot
             }
         } else {
             linkNativeHome(tempRoot, realKimiHome())
-            hookCommand = process.platform === 'win32'
-                ? windowsDropHookCommand(dropDir, sessionId)
-                : wslDropHookCommand(dropDir, sessionId)
-            homeForEnv = tempRoot
+            hookHome = {
+                command: process.platform === 'win32'
+                    ? windowsDropHookCommand(dropDir, sessionId)
+                    : wslDropHookCommand(dropDir, sessionId),
+                home: tempRoot,
+            }
             this.ingress.registerFileDrop(sessionId, dropDir, 'kimi')
             fileDropRegistered = true
         }
@@ -342,7 +341,7 @@ export class KimiAdapterService {
                 : readUserConfig(realKimiHome())
             fs.writeFileSync(
                 path.join(tempRoot, 'config.toml'),
-                buildKimiConfigToml(userConfig, hookCommand),
+                buildKimiConfigToml(userConfig, hookHome.command),
                 { mode: 0o600 },
             )
         } catch (error) {
@@ -363,7 +362,7 @@ export class KimiAdapterService {
         }
 
         const injectedEnv = kimiHookEnvironment(
-            homeForEnv,
+            hookHome.home,
             sessionId,
             tempName,
             originalEnv,
@@ -381,7 +380,7 @@ export class KimiAdapterService {
                     shimDirectory,
                     [],
                     {
-                        [KIMI_CODE_HOME_ENV]: homeForEnv,
+                        [KIMI_CODE_HOME_ENV]: hookHome.home,
                         [KIMI_HOOK_SESSION_ENV]: sessionId,
                         [KIMI_HOOK_TEMP_ENV]: tempName,
                     },
