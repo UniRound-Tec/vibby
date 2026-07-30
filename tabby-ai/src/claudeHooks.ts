@@ -54,6 +54,18 @@ export function claudeHookRecovery (
     return { sessionId, tempName }
 }
 
+/** Drop recovery markers copied by Duplicate so a fresh arm cannot steal the live sessionId. */
+export function withoutStaleClaudeHookEnv (
+    env: Record<string, string>,
+): Record<string, string> {
+    return Object.fromEntries(
+        Object.entries(env).filter(([key]) =>
+            key !== CLAUDE_HOOK_SESSION_ENV &&
+            key !== CLAUDE_HOOK_TEMP_ENV,
+        ),
+    )
+}
+
 function record (value: unknown): Record<string, unknown> {
     return value && typeof value === 'object' ? value as Record<string, unknown> : {}
 }

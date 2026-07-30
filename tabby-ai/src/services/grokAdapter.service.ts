@@ -38,6 +38,7 @@ import { CliScannerService } from './cliScanner.service'
 import { HookIngressService } from './hookIngress.service'
 import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalCliShim.service'
+import { whenSplitInitialized } from '../whenSplitInitialized'
 
 const KIND = 'grok-build'
 const EXIT_GRACE_MS = 500
@@ -279,7 +280,7 @@ export class GrokAdapterService {
             if (!this.watchedSplits.has(tab)) {
                 this.watchedSplits.add(tab)
                 tab.tabAdded$.subscribe(child => this.visit(child))
-                tab.initialized$.toPromise().then(() =>
+                void whenSplitInitialized(tab).then(() =>
                     tab.getAllTabs().forEach(child => this.visit(child)),
                 )
             }

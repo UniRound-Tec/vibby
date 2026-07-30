@@ -8,6 +8,7 @@ const {
     claudeHookRecovery,
     summaryForToolCall,
     translateClaudeHook,
+    withoutStaleClaudeHookEnv,
 } = require('../.test-build/claudeHooks.js')
 
 // --- summary extraction table ---
@@ -222,5 +223,11 @@ assert.equal(claudeHookRecovery({
     [CLAUDE_HOOK_SESSION_ENV]: 'session-1',
     [CLAUDE_HOOK_TEMP_ENV]: 'vibby-hooks-not-ours',
 }), null)
+
+assert.deepEqual(withoutStaleClaudeHookEnv({
+    KEEP: '1',
+    [CLAUDE_HOOK_SESSION_ENV]: 'session-1',
+    [CLAUDE_HOOK_TEMP_ENV]: 'vibby-hooks-Ab12Cd',
+}), { KEEP: '1' })
 
 console.log('claudeHooks.test.cjs: all assertions passed')

@@ -29,6 +29,7 @@ import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
 import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalCliShim.service'
+import { whenSplitInitialized } from '../whenSplitInitialized'
 
 const KIND = 'codex'
 const SCRAPE_INTERVAL_MS = 600
@@ -177,7 +178,7 @@ export class CodexAdapterService {
             if (!this.watchedSplits.has(tab)) {
                 this.watchedSplits.add(tab)
                 tab.tabAdded$.subscribe(child => this.visit(child))
-                tab.initialized$.toPromise().then(() =>
+                void whenSplitInitialized(tab).then(() =>
                     tab.getAllTabs().forEach(child => this.visit(child)),
                 )
             }

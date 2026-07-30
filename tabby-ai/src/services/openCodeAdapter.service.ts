@@ -21,6 +21,7 @@ import { AiEventBusService } from './eventBus.service'
 import { RuntimeCliDetectorService } from './runtimeCliDetector.service'
 import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalCliShim.service'
+import { whenSplitInitialized } from '../whenSplitInitialized'
 
 const KIND = 'opencode'
 const HOST = '127.0.0.1'
@@ -181,7 +182,7 @@ export class OpenCodeAdapterService {
             if (!this.watchedSplits.has(tab)) {
                 this.watchedSplits.add(tab)
                 tab.tabAdded$.subscribe(child => this.visit(child))
-                tab.initialized$.toPromise().then(() => {
+                void whenSplitInitialized(tab).then(() => {
                     for (const child of tab.getAllTabs()) {
                         this.visit(child)
                     }

@@ -13,6 +13,7 @@ import {
     CLAUDE_HOOK_SESSION_ENV,
     CLAUDE_HOOK_TEMP_ENV,
     claudeHookRecovery,
+    withoutStaleClaudeHookEnv,
 } from '../claudeHooks'
 import { claudeEnvironmentOverrides } from '../claudeEnvironment'
 import { spinnerAbsenceEndsTurn } from '../events'
@@ -31,6 +32,7 @@ import { AiEventBusService } from './eventBus.service'
 import { HookIngressService } from './hookIngress.service'
 import { AiSessionDirectoryService } from './sessionDirectory.service'
 import { TerminalCliShimInstallation, TerminalCliShimService } from './terminalCliShim.service'
+import { whenSplitInitialized } from '../whenSplitInitialized'
 
 /**
  * claude's own status line: `✻ Flambéing… (17s · ↓ 1.2k tokens · esc to interrupt)`.
@@ -83,7 +85,10 @@ function isPidAlive (pid: number): boolean {
  *
  * Recovery tokens do persist tab.profile including our injected args,
  * which is exactly why arming strips any stale `--settings <...vibby-hooks...>`
- * pair before appending a fresh one.
+ * pair before appending a fresh one. Duplicate tabs also copy recovery env
+ * markers, but not `restoreFromPTYID` — only true PTY restores may reclaim
+ * an existing sessionId, otherwise the clone would steal the original pane's
+ * directory binding.
  */
 @Injectable({ providedIn: 'root' })
 export class ClaudeAdapterService {
@@ -144,7 +149,7 @@ export class ClaudeAdapterService {
                 // recovered children never emit tabAdded$ (recoverContainer calls
                 // attachTabView directly) — sweep once recovery has finished,
                 // which is still before any child's frontend-ready spawn
-                tab.initialized$.toPromise().then(() => {
+                void whenSplitInitialized(tab).then(() => {
                     for (const child of tab.getAllTabs()) {
                         this.visit(child)
                     }
@@ -169,12 +174,12 @@ export class ClaudeAdapterService {
             return
         }
         // During renderer recovery the tab exists before its PTY session is
-        // reattached. Recovery markers are therefore the primary signal: if
-        // we wait for tab.session, this method can mistake the recovering tab
-        // for a fresh launch and replace the route used by the live process.
+        // reattached. `restoreFromPTYID` is the gate that separates that case
+        // from Duplicate, which copies recovery env but must get a new route.
         if (this.claimExistingRun(tab, kind)) {
             return
         }
+        tab.profile.options.env = withoutStaleClaudeHookEnv({ ...tab.profile.options.env })
         const detected = isDirectLaunch
             ? null
             : this.scanner.scanResults.find(item =>
@@ -312,18 +317,12 @@ export class ClaudeAdapterService {
         }
         shim = installedShim
 
-        // empty string beats any inherited value in mergeEnv and reads as unset
-        const persistedEnv = Object.fromEntries(
-            Object.entries(tab.profile.options.env).filter(([key]) =>
-                key !== CLAUDE_HOOK_SESSION_ENV && key !== CLAUDE_HOOK_TEMP_ENV,
-            ),
-        )
         const recoveryEnv: Record<string, string> = fileDropRegistered ? {
             [CLAUDE_HOOK_SESSION_ENV]: sessionId,
             [CLAUDE_HOOK_TEMP_ENV]: path.basename(injectDir),
         } : {}
         tab.profile.options.env = {
-            ...persistedEnv,
+            ...withoutStaleClaudeHookEnv({ ...tab.profile.options.env }),
             ...claudeEnvironmentOverrides(),
             ...recoveryEnv,
         }
@@ -333,7 +332,13 @@ export class ClaudeAdapterService {
     }
 
     private claimExistingRun (tab: TerminalTabComponent, kind: string): boolean {
-        if (this.restoreRun(tab, kind)) {
+        // Duplicate copies recovery env without restoreFromPTYID. Reclaiming
+        // then would bind the same sessionId to the new pane and unbind the
+        // still-live original (AiSessionDirectoryService is 1:1 on sessionId).
+        if (
+            tab.profile.options.restoreFromPTYID &&
+            this.restoreRun(tab, kind)
+        ) {
             this.armed.add(tab)
             return true
         }
