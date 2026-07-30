@@ -29,14 +29,23 @@ const windowsCommand = windowsDropHookCommand(
     SESSION,
 )
 assert.ok(windowsCommand.startsWith('powershell.exe -NoLogo -NoProfile -NonInteractive'))
-assert.ok(windowsCommand.includes(`$s='${SESSION}'`))
-assert.ok(windowsCommand.includes(`C:\\Users\\o''brien\\AppData`), 'PowerShell quote is escaped')
-assert.ok(windowsCommand.includes('[IO.File]::Move'), 'final rename makes the file atomic')
+assert.ok(!windowsCommand.includes('$'), 'Git Bash cannot expand PowerShell variables in the outer command')
+assert.match(
+    windowsCommand,
+    /^powershell\.exe [-A-Za-z0-9+/= ]+$/,
+    'the shell-facing command contains only inert argv characters',
+)
+const encodedWindowsScript = /-EncodedCommand ([A-Za-z0-9+/=]+)$/.exec(windowsCommand)?.[1]
+assert.ok(encodedWindowsScript, 'PowerShell source is carried by -EncodedCommand')
+const windowsScript = Buffer.from(encodedWindowsScript, 'base64').toString('utf16le')
+assert.ok(windowsScript.includes(`$s='${SESSION}'`))
+assert.ok(windowsScript.includes(`C:\\Users\\o''brien\\AppData`), 'PowerShell quote is escaped')
+assert.ok(windowsScript.includes('[IO.File]::Move'), 'final rename makes the file atomic')
 // regression: [Console]::In decodes stdin with the console code page, and CLIs
 // spawn hooks under the system default — a CP936 machine turned a `你好` prompt
 // into `浣犲ソ`. The payload must cross as raw bytes.
-assert.ok(!windowsCommand.includes('[Console]::In.'), 'stdin is never decoded')
-assert.ok(windowsCommand.includes('[IO.File]::WriteAllBytes'), 'payload is written as bytes')
+assert.ok(!windowsScript.includes('[Console]::In.'), 'stdin is never decoded')
+assert.ok(windowsScript.includes('[IO.File]::WriteAllBytes'), 'payload is written as bytes')
 
 // --- drop file names ---
 // mktemp fills XXXXXX with [A-Za-z0-9]; the poller must take exactly what the

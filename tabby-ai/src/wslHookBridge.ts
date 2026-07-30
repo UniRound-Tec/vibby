@@ -55,6 +55,19 @@ function quotePowerShellSingle (value: string): string {
 }
 
 /**
+ * Windows PowerShell expects -EncodedCommand payloads as UTF-16LE.
+ *
+ * Vibby's hook settings remain in shell form so the same transport can carry
+ * POSIX file-drop commands. Current Windows Claude releases may put that
+ * command through Git Bash, so exposing `$variables` in the outer command lets
+ * Bash expand them before PowerShell starts. Base64 keeps the shell-facing
+ * command inert without changing the hook schema to exec form.
+ */
+function encodePowerShellCommand (script: string): string {
+    return Buffer.from(script, 'utf16le').toString('base64')
+}
+
+/**
  * Atomic file-drop command for native Windows Claude hooks.
  *
  * stdin is copied as raw bytes and never decoded. `[Console]::In` decodes with
@@ -76,7 +89,8 @@ export function windowsDropHookCommand (dropDir: string, sessionId: string): str
         '[IO.File]::WriteAllBytes($f,$m.ToArray())',
         '[IO.File]::Move($f,$f+\'.json\')',
     ].join(';')
-    return `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "& { ${script} }"`
+    const encoded = encodePowerShellCommand(`& { ${script} }`)
+    return `powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encoded}`
 }
 
 /** Session a drop file belongs to, or null for anything the command did not write */
